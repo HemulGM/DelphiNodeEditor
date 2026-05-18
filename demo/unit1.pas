@@ -1,44 +1,38 @@
-unit Unit1;
-
-{$mode objfpc}{$H+}
+﻿unit Unit1;
 
 interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ExtCtrls,
-  ComCtrls, Menus, LazNodeEditor, LCLIntf, LCLType, types;
+  ComCtrls, Menus, LazNodeEditor, types;
 
 type
 
   { TMathExprNode — кастомная нода с exec-пинами и values }
   TMathExprNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single;
-      AWidth: Integer = 200; AHeight: Integer = 160); override;
+    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 200; AHeight: Integer = 160); override;
     procedure SetupPins; override;
   end;
 
   { TMultiplyNode }
   TMultiplyNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single;
-      AWidth: Integer = 180; AHeight: Integer = 130); override;
+    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 130); override;
     procedure SetupPins; override;
   end;
 
   { TStringNode — нода со строковым значением }
   TStringNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single;
-      AWidth: Integer = 180; AHeight: Integer = 100); override;
+    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 100); override;
     procedure SetupPins; override;
   end;
 
   { TBranchNode — нода с exec-пинами }
   TBranchNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single;
-      AWidth: Integer = 180; AHeight: Integer = 140); override;
+    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 140); override;
     procedure SetupPins; override;
   end;
 
@@ -49,62 +43,62 @@ type
     procedure FormResize(Sender: TObject);
   private
     { UI — Layout }
-    FTopPanel:        TPanel;
-    FBottomPanel:     TPanel;
-    FInspectorHost:   TPanel;
-    FSplitter:        TSplitter;
-    FEditor:          TLazNodeEditor;
-    FInspector:       TLazNodeInspector;
-    FStatusBar:       TStatusBar;
+    FTopPanel: TPanel;
+    FBottomPanel: TPanel;
+    FInspectorHost: TPanel;
+    FSplitter: TSplitter;
+    FEditor: TLazNodeEditor;
+    FInspector: TLazNodeInspector;
+    FStatusBar: TStatusBar;
 
     { Toolbar — File }
-    FBtnNew:          TButton;
-    FBtnSave:         TButton;
-    FBtnLoad:         TButton;
+    FBtnNew: TButton;
+    FBtnSave: TButton;
+    FBtnLoad: TButton;
 
     { Toolbar — Edit }
-    FBtnUndo:         TButton;
-    FBtnRedo:         TButton;
-    FBtnCopy:         TButton;
-    FBtnPaste:        TButton;
-    FBtnDuplicate:    TButton;
-    FBtnDelete:       TButton;
+    FBtnUndo: TButton;
+    FBtnRedo: TButton;
+    FBtnCopy: TButton;
+    FBtnPaste: TButton;
+    FBtnDuplicate: TButton;
+    FBtnDelete: TButton;
 
     { Toolbar — View }
-    FBtnFit:          TButton;
-    FBtnFrame:        TButton;
-    FBtnZoomReset:    TButton;
+    FBtnFit: TButton;
+    FBtnFrame: TButton;
+    FBtnZoomReset: TButton;
 
     { Toolbar — Graph }
-    FBtnValidate:     TButton;
-    FBtnClearSel:     TButton;
+    FBtnValidate: TButton;
+    FBtnClearSel: TButton;
 
     { Toolbar — Order }
-    FBtnBringFront:   TButton;
-    FBtnSendBack:     TButton;
+    FBtnBringFront: TButton;
+    FBtnSendBack: TButton;
 
     { Toolbar — Settings }
-    FChkSnap:         TCheckBox;
-    FEdtGridSize:     TEdit;
-    FLblGridSize:     TLabel;
+    FChkSnap: TCheckBox;
+    FEdtGridSize: TEdit;
+    FLblGridSize: TLabel;
 
     { Toolbar — Add Nodes }
-    FBtnAddFloat:     TButton;
-    FBtnAddAdd:       TButton;
-    FBtnAddMul:       TButton;
-    FBtnAddMath:      TButton;
-    FBtnAddString:    TButton;
-    FBtnAddBranch:    TButton;
-    FBtnAddReroute:   TButton;
-    FBtnAddComment:   TButton;
-    FBtnAddDefault:   TButton;
+    FBtnAddFloat: TButton;
+    FBtnAddAdd: TButton;
+    FBtnAddMul: TButton;
+    FBtnAddMath: TButton;
+    FBtnAddString: TButton;
+    FBtnAddBranch: TButton;
+    FBtnAddReroute: TButton;
+    FBtnAddComment: TButton;
+    FBtnAddDefault: TButton;
 
     { Inspector header }
-    FLblInspector:    TLabel;
+    FLblInspector: TLabel;
 
     { Dialogs }
-    FSaveDialog:      TSaveDialog;
-    FOpenDialog:      TOpenDialog;
+    FSaveDialog: TSaveDialog;
+    FOpenDialog: TOpenDialog;
 
     FDidInitialFrame: Boolean;
 
@@ -150,7 +144,7 @@ type
 
     { Helpers }
     procedure UpdateStatus;
-    function  CenterWorldPos: TPointF;
+    function CenterWorldPos: TPointF;
     procedure AddNodeAtCenter(const ANodeType: string);
   end;
 
@@ -159,7 +153,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 // =============================================================================
 // Custom node implementations
@@ -167,15 +161,14 @@ implementation
 
 { TMathExprNode }
 
-constructor TMathExprNode.Create(ATitle: string; AX, AY: Single;
-  AWidth, AHeight: Integer);
+constructor TMathExprNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
 var
   V: TNodeValue;
 begin
   inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType     := 'math_expr';
-  HeaderColor  := $004080FF;
-  BodyColor    := $00F0F8FF;
+  NodeType := 'math_expr';
+  HeaderColor := $004080FF;
+  BodyColor := $00F0F8FF;
   // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
   V := AddValue('expression', nvkString);
   V.StringValue := 'A + B * C';
@@ -197,35 +190,34 @@ procedure TMathExprNode.SetupPins;
 begin
   ClearPins;
   // Exec-пины
-  AddInput ('▶ Exec In',  'exec', pkExec, 35);
+  AddInput('▶ Exec In', 'exec', pkExec, 35);
   AddOutput('▶ Exec Out', 'exec', pkExec, 35);
   // Data-пины
-  AddInput ('A',      'float',   pkData, 75);
-  AddInput ('B',      'float',   pkData, 105);
-  AddInput ('C',      'float',   pkData, 135);
-  AddOutput('Result', 'float',   pkData, 90);
+  AddInput('A', 'float', pkData, 75);
+  AddInput('B', 'float', pkData, 105);
+  AddInput('C', 'float', pkData, 135);
+  AddOutput('Result', 'float', pkData, 90);
   // IsRequired demo
-  GetInput(1).IsRequired    := True;
-  GetInput(2).IsRequired    := True;
-  GetInput(1).DefaultValue  := '0.0';
-  GetInput(1).Tooltip       := 'First operand';
+  GetInput(1).IsRequired := True;
+  GetInput(2).IsRequired := True;
+  GetInput(1).DefaultValue := '0.0';
+  GetInput(1).Tooltip := 'First operand';
 end;
 
 { TMultiplyNode }
 
-constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single;
-  AWidth, AHeight: Integer);
+constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
 begin
   inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType    := 'multiply_node';
+  NodeType := 'multiply_node';
   HeaderColor := $0000A0FF;
 end;
 
 procedure TMultiplyNode.SetupPins;
 begin
   ClearPins;
-  AddInput ('A',      'float', pkData, 45);
-  AddInput ('B',      'float', pkData, 75);
+  AddInput('A', 'float', pkData, 45);
+  AddInput('B', 'float', pkData, 75);
   AddOutput('Result', 'float', pkData, 60);
   GetInput(0).IsRequired := True;
   GetInput(1).IsRequired := True;
@@ -233,13 +225,12 @@ end;
 
 { TStringNode }
 
-constructor TStringNode.Create(ATitle: string; AX, AY: Single;
-  AWidth, AHeight: Integer);
+constructor TStringNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
 var
   V: TNodeValue;
 begin
   inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType    := 'string_node';
+  NodeType := 'string_node';
   HeaderColor := $0000C080;
   V := AddValue('text', nvkString);
   V.StringValue := 'Hello, Node!';
@@ -253,21 +244,20 @@ end;
 
 { TBranchNode }
 
-constructor TBranchNode.Create(ATitle: string; AX, AY: Single;
-  AWidth, AHeight: Integer);
+constructor TBranchNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
 begin
   inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType    := 'branch_node';
+  NodeType := 'branch_node';
   HeaderColor := $00C04000;
 end;
 
 procedure TBranchNode.SetupPins;
 begin
   ClearPins;
-  AddInput ('▶ Exec',     'exec',    pkExec, 35);
-  AddInput ('Condition',  'boolean', pkData, 75);
-  AddOutput('▶ True',     'exec',    pkExec, 55);
-  AddOutput('▶ False',    'exec',    pkExec, 90);
+  AddInput('▶ Exec', 'exec', pkExec, 35);
+  AddInput('Condition', 'boolean', pkData, 75);
+  AddOutput('▶ True', 'exec', pkExec, 55);
+  AddOutput('▶ False', 'exec', pkExec, 90);
   GetInput(1).IsRequired := True;
 end;
 
@@ -277,13 +267,13 @@ end;
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  Caption  := 'LazNodeEditor — Full Feature Demo';
-  Width    := 1400;
-  Height   := 860;
+  Caption := 'LazNodeEditor — Full Feature Demo';
+  Width := 1400;
+  Height := 860;
   Position := poScreenCenter;
 
   FSaveDialog := TSaveDialog.Create(Self);
-  FSaveDialog.Filter     := 'JSON Graph|*.json|All Files|*.*';
+  FSaveDialog.Filter := 'JSON Graph|*.json|All Files|*.*';
   FSaveDialog.DefaultExt := 'json';
 
   FOpenDialog := TOpenDialog.Create(Self);
@@ -296,7 +286,7 @@ end;
 
 procedure TForm1.FormShow(Sender: TObject);
 begin
-  LCLIntf.ShowWindow(Form1.Handle, SW_MAXIMIZE);
+  //LCLIntf.ShowWindow(Form1.Handle, SW_MAXIMIZE);
   if not FDidInitialFrame then
   begin
     FDidInitialFrame := True;
@@ -322,7 +312,7 @@ begin
   { StatusBar }
   FStatusBar := TStatusBar.Create(Self);
   FStatusBar.Parent := Self;
-  FStatusBar.Align  := alBottom;
+  FStatusBar.Align := alBottom;
   FStatusBar.SimplePanel := False;
   FStatusBar.Panels.Add.Width := 200;  // selection
   FStatusBar.Panels.Add.Width := 180;  // nodes/links count
@@ -335,150 +325,176 @@ end;
 procedure TForm1.BuildToolbar;
 const
   BH = 26;
-  BY =  7;
+  BY = 7;
 var
   X: Integer;
 
   function Btn(const Cap: string; AWidth: Integer): TButton;
   begin
     Result := TButton.Create(Self);
-    Result.Parent  := FTopPanel;
+    Result.Parent := FTopPanel;
     Result.SetBounds(X, BY, AWidth, BH);
     Result.Caption := Cap;
     Inc(X, AWidth + 2);
   end;
 
   procedure Sep;
-  var L: TLabel;
+  var
+    L: TLabel;
   begin
     L := TLabel.Create(Self);
-    L.Parent  := FTopPanel;
+    L.Parent := FTopPanel;
     L.Caption := '│';
-    L.Left    := X;
-    L.Top     := BY + 4;
+    L.Left := X;
+    L.Top := BY + 4;
     Inc(X, 10);
   end;
 
 begin
   FTopPanel := TPanel.Create(Self);
-  FTopPanel.Parent     := Self;
-  FTopPanel.Align      := alTop;
-  FTopPanel.Height     := 42;
+  FTopPanel.Parent := Self;
+  FTopPanel.Align := alTop;
+  FTopPanel.Height := 42;
   FTopPanel.BevelOuter := bvNone;
-  FTopPanel.Color      := $00F0F0F0;
+  FTopPanel.Color := $00F0F0F0;
 
   X := 4;
 
   { File }
-  FBtnNew  := Btn('New',       60); FBtnNew.OnClick  := @ClickNew;
-  FBtnSave := Btn('Save JSON', 80); FBtnSave.OnClick := @ClickSave;
-  FBtnLoad := Btn('Load JSON', 80); FBtnLoad.OnClick := @ClickLoad;
+  FBtnNew := Btn('New', 60);
+  FBtnNew.OnClick := ClickNew;
+  FBtnSave := Btn('Save JSON', 80);
+  FBtnSave.OnClick := ClickSave;
+  FBtnLoad := Btn('Load JSON', 80);
+  FBtnLoad.OnClick := ClickLoad;
   Sep;
 
   { Edit }
-  FBtnUndo      := Btn('Undo',      56); FBtnUndo.OnClick      := @ClickUndo;
-  FBtnRedo      := Btn('Redo',      56); FBtnRedo.OnClick      := @ClickRedo;
-  FBtnCopy      := Btn('Copy',      50); FBtnCopy.OnClick      := @ClickCopy;
-  FBtnPaste     := Btn('Paste',     56); FBtnPaste.OnClick     := @ClickPaste;
-  FBtnDuplicate := Btn('Dup',       46); FBtnDuplicate.OnClick := @ClickDuplicate;
-  FBtnDelete    := Btn('Del',       42); FBtnDelete.OnClick    := @ClickDelete;
+  FBtnUndo := Btn('Undo', 56);
+  FBtnUndo.OnClick := ClickUndo;
+  FBtnRedo := Btn('Redo', 56);
+  FBtnRedo.OnClick := ClickRedo;
+  FBtnCopy := Btn('Copy', 50);
+  FBtnCopy.OnClick := ClickCopy;
+  FBtnPaste := Btn('Paste', 56);
+  FBtnPaste.OnClick := ClickPaste;
+  FBtnDuplicate := Btn('Dup', 46);
+  FBtnDuplicate.OnClick := ClickDuplicate;
+  FBtnDelete := Btn('Del', 42);
+  FBtnDelete.OnClick := ClickDelete;
   Sep;
 
   { View }
-  FBtnFit       := Btn('Fit Sel',   64); FBtnFit.OnClick       := @ClickFit;
-  FBtnFrame     := Btn('Frame All', 78); FBtnFrame.OnClick     := @ClickFrame;
-  FBtnZoomReset := Btn('Zoom 1:1',  68); FBtnZoomReset.OnClick := @ClickZoomReset;
+  FBtnFit := Btn('Fit Sel', 64);
+  FBtnFit.OnClick := ClickFit;
+  FBtnFrame := Btn('Frame All', 78);
+  FBtnFrame.OnClick := ClickFrame;
+  FBtnZoomReset := Btn('Zoom 1:1', 68);
+  FBtnZoomReset.OnClick := ClickZoomReset;
   Sep;
 
   { Order }
-  FBtnBringFront := Btn('▲ Front', 62); FBtnBringFront.OnClick := @ClickBringFront;
-  FBtnSendBack   := Btn('▼ Back',  62); FBtnSendBack.OnClick   := @ClickSendBack;
+  FBtnBringFront := Btn('▲ Front', 62);
+  FBtnBringFront.OnClick := ClickBringFront;
+  FBtnSendBack := Btn('▼ Back', 62);
+  FBtnSendBack.OnClick := ClickSendBack;
   Sep;
 
   { Graph }
-  FBtnValidate := Btn('Validate', 70); FBtnValidate.OnClick := @ClickValidate;
-  FBtnClearSel := Btn('Desel',    54); FBtnClearSel.OnClick := @ClickClearSel;
+  FBtnValidate := Btn('Validate', 70);
+  FBtnValidate.OnClick := ClickValidate;
+  FBtnClearSel := Btn('Desel', 54);
+  FBtnClearSel.OnClick := ClickClearSel;
   Sep;
 
   { Snap }
   FChkSnap := TCheckBox.Create(Self);
-  FChkSnap.Parent  := FTopPanel;
+  FChkSnap.Parent := FTopPanel;
   FChkSnap.SetBounds(X, BY + 2, 90, BH);
   FChkSnap.Caption := 'Snap Grid';
-  FChkSnap.OnChange := @ChkSnapChange;
+  FChkSnap.OnClick := ChkSnapChange;
   Inc(X, 94);
 
   FLblGridSize := TLabel.Create(Self);
-  FLblGridSize.Parent  := FTopPanel;
+  FLblGridSize.Parent := FTopPanel;
   FLblGridSize.Caption := 'Size:';
-  FLblGridSize.Left    := X;
-  FLblGridSize.Top     := BY + 6;
+  FLblGridSize.Left := X;
+  FLblGridSize.Top := BY + 6;
   Inc(X, 34);
 
   FEdtGridSize := TEdit.Create(Self);
-  FEdtGridSize.Parent   := FTopPanel;
+  FEdtGridSize.Parent := FTopPanel;
   FEdtGridSize.SetBounds(X, BY + 2, 36, BH);
-  FEdtGridSize.Text     := '40';
-  FEdtGridSize.OnChange := @EdtGridSizeChange;
+  FEdtGridSize.Text := '40';
+  FEdtGridSize.OnChange := EdtGridSizeChange;
   Inc(X, 42);
   Sep;
 
   { Add Nodes }
-  FBtnAddFloat   := Btn('+ Float',   62); FBtnAddFloat.OnClick   := @ClickAddFloat;
-  FBtnAddAdd     := Btn('+ Add',     50); FBtnAddAdd.OnClick     := @ClickAddAdd;
-  FBtnAddMul     := Btn('+ Mul',     50); FBtnAddMul.OnClick     := @ClickAddMul;
-  FBtnAddMath    := Btn('+ Math',    58); FBtnAddMath.OnClick    := @ClickAddMath;
-  FBtnAddString  := Btn('+ String',  64); FBtnAddString.OnClick  := @ClickAddString;
-  FBtnAddBranch  := Btn('+ Branch',  66); FBtnAddBranch.OnClick  := @ClickAddBranch;
-  FBtnAddReroute := Btn('+ Reroute', 70); FBtnAddReroute.OnClick := @ClickAddReroute;
-  FBtnAddComment := Btn('+ Comment', 76); FBtnAddComment.OnClick := @ClickAddComment;
-  FBtnAddDefault := Btn('+ Default', 74); FBtnAddDefault.OnClick := @ClickAddDefault;
+  FBtnAddFloat := Btn('+ Float', 62);
+  FBtnAddFloat.OnClick := ClickAddFloat;
+  FBtnAddAdd := Btn('+ Add', 50);
+  FBtnAddAdd.OnClick := ClickAddAdd;
+  FBtnAddMul := Btn('+ Mul', 50);
+  FBtnAddMul.OnClick := ClickAddMul;
+  FBtnAddMath := Btn('+ Math', 58);
+  FBtnAddMath.OnClick := ClickAddMath;
+  FBtnAddString := Btn('+ String', 64);
+  FBtnAddString.OnClick := ClickAddString;
+  FBtnAddBranch := Btn('+ Branch', 66);
+  FBtnAddBranch.OnClick := ClickAddBranch;
+  FBtnAddReroute := Btn('+ Reroute', 70);
+  FBtnAddReroute.OnClick := ClickAddReroute;
+  FBtnAddComment := Btn('+ Comment', 76);
+  FBtnAddComment.OnClick := ClickAddComment;
+  FBtnAddDefault := Btn('+ Default', 74);
+  FBtnAddDefault.OnClick := ClickAddDefault;
 end;
 
 procedure TForm1.BuildInspectorPanel;
 begin
   FInspectorHost := TPanel.Create(Self);
-  FInspectorHost.Parent     := Self;
-  FInspectorHost.Align      := alLeft;
-  FInspectorHost.Width      := 290;
+  FInspectorHost.Parent := Self;
+  FInspectorHost.Align := alLeft;
+  FInspectorHost.Width := 290;
   FInspectorHost.BevelOuter := bvNone;
-  FInspectorHost.Caption    := '';
-  FInspectorHost.Color      := $00F8F8F8;
+  FInspectorHost.Caption := '';
+  FInspectorHost.Color := $00F8F8F8;
 
   FLblInspector := TLabel.Create(Self);
-  FLblInspector.Parent     := FInspectorHost;
-  FLblInspector.Left       := 8;
-  FLblInspector.Top        := 6;
-  FLblInspector.Caption    := 'Node Inspector';
+  FLblInspector.Parent := FInspectorHost;
+  FLblInspector.Left := 8;
+  FLblInspector.Top := 6;
+  FLblInspector.Caption := 'Node Inspector';
   FLblInspector.Font.Style := [fsBold];
-  FLblInspector.Font.Size  := 10;
+  FLblInspector.Font.Size := 10;
 
   FSplitter := TSplitter.Create(Self);
   FSplitter.Parent := Self;
-  FSplitter.Align  := alLeft;
-  FSplitter.Width  := 4;
+  FSplitter.Align := alLeft;
+  FSplitter.Width := 4;
 
-  FInspector := TLazNodeInspector.Create(Self);
+  FInspector := TLazNodeInspector.Create(Self, FInspectorHost);
   FInspector.Parent := FInspectorHost;
-  FInspector.Align  := alClient;
-  FInspector.BorderSpacing.Top   := 28;
-  FInspector.BorderSpacing.Left  := 4;
-  FInspector.BorderSpacing.Right := 4;
+  FInspector.Align := alClient;
+  FInspector.Padding.Top := 28;
+  FInspector.Padding.Left := 4;
+  FInspector.Padding.Right := 4;
 end;
 
 procedure TForm1.BuildEditorArea;
 begin
   FEditor := TLazNodeEditor.Create(Self);
   FEditor.Parent := Self;
-  FEditor.Align  := alClient;
-  FEditor.Color  := $00D8D8D8;
+  FEditor.Align := alClient;
+  FEditor.Color := $00D8D8D8;
   FEditor.SnapToGrid := False;
-  FEditor.GridSize   := 40;
+  FEditor.GridSize := 40;
 
   FInspector.Editor := FEditor;
 
-  FEditor.OnSelectionChanged := @OnSelectionChanged;
-  FEditor.OnNodeChanged      := @OnNodeChanged;
+  FEditor.OnSelectionChanged := OnSelectionChanged;
+  FEditor.OnNodeChanged := OnNodeChanged;
 end;
 
 // =============================================================================
@@ -529,21 +545,24 @@ begin
   NFloat1.Title := 'Value A';
   TFloatNode(NFloat1).SetupPins;
   V := NFloat1.FindValue('value');
-  if V <> nil then V.FloatValue := 3.14;
+  if V <> nil then
+    V.FloatValue := 3.14;
   FEditor.AddNode(NFloat1);
 
   NFloat2 := FEditor.Graph.Registry.CreateNode('float', 40, 240);
   NFloat2.Title := 'Value B';
   TFloatNode(NFloat2).SetupPins;
   V := NFloat2.FindValue('value');
-  if V <> nil then V.FloatValue := 2.71;
+  if V <> nil then
+    V.FloatValue := 2.71;
   FEditor.AddNode(NFloat2);
 
   NFloat3 := FEditor.Graph.Registry.CreateNode('float', 40, 360);
   NFloat3.Title := 'Value C';
   TFloatNode(NFloat3).SetupPins;
   V := NFloat3.FindValue('value');
-  if V <> nil then V.FloatValue := 10.0;
+  if V <> nil then
+    V.FloatValue := 10.0;
   FEditor.AddNode(NFloat3);
 
   // ── Add node ───────────────────────────────────────────────────
@@ -582,22 +601,22 @@ begin
 
   // ── Comment / Frame 1 (Math block) ────────────────────────────
   NComment1 := FEditor.Graph.Registry.CreateNode('comment', 20, 80);
-  NComment1.Title       := 'Math Block';
-  NComment1.Width       := 460;
-  NComment1.Height      := 360;
+  NComment1.Title := 'Math Block';
+  NComment1.Width := 460;
+  NComment1.Height := 360;
   NComment1.CommentText := 'Arithmetic: A+B then ×C';
   NComment1.HeaderColor := $0060A060;
-  NComment1.BodyColor   := $00EEFFEE;
+  NComment1.BodyColor := $00EEFFEE;
   FEditor.AddNode(NComment1);
 
   // ── Comment / Frame 2 (Flow block) ────────────────────────────
   NComment2 := FEditor.Graph.Registry.CreateNode('comment', 500, 120);
-  NComment2.Title       := 'Flow Block';
-  NComment2.Width       := 320;
-  NComment2.Height      := 200;
+  NComment2.Title := 'Flow Block';
+  NComment2.Width := 320;
+  NComment2.Height := 200;
   NComment2.CommentText := 'Exec pipeline: Expr → Branch';
   NComment2.HeaderColor := $00804000;
-  NComment2.BodyColor   := $00FFF8E8;
+  NComment2.BodyColor := $00FFF8E8;
   FEditor.AddNode(NComment2);
 
   // ── Links: Float → Add ─────────────────────────────────────────
@@ -655,7 +674,7 @@ end;
 
 procedure TForm1.ClickNew(Sender: TObject);
 begin
-  if MessageDlg('New Graph', 'Clear current graph?',
+  if MessageDlg('Clear current graph?',
     mtConfirmation, [mbYes, mbNo], 0) = mrYes then
   begin
     FEditor.Clear;
@@ -755,9 +774,9 @@ begin
   Msgs := TStringList.Create;
   try
     if FEditor.ValidateGraphToStrings(Msgs) then
-      ShowMessage('✔ Graph is valid.' + LineEnding + LineEnding + Msgs.Text)
+      ShowMessage('✔ Graph is valid.' + #13#10 + #13#10 + Msgs.Text)
     else
-      MessageDlg('Validation Errors', Msgs.Text, mtError, [mbOK], 0);
+      MessageDlg(Msgs.Text, mtError, [mbOK], 0);
   finally
     Msgs.Free;
   end;
@@ -774,7 +793,8 @@ procedure TForm1.ClickBringFront(Sender: TObject);
 var
   i: Integer;
 begin
-  if FEditor.SelectedNodeCount = 0 then Exit;
+  if FEditor.SelectedNodeCount = 0 then
+    Exit;
   for i := 0 to FEditor.SelectedNodeCount - 1 do
     FEditor.Graph.BringNodeToFront(FEditor.GetSelectedNode(i));
   FEditor.Invalidate;
@@ -785,7 +805,8 @@ procedure TForm1.ClickSendBack(Sender: TObject);
 var
   i: Integer;
 begin
-  if FEditor.SelectedNodeCount = 0 then Exit;
+  if FEditor.SelectedNodeCount = 0 then
+    Exit;
   for i := 0 to FEditor.SelectedNodeCount - 1 do
     FEditor.Graph.SendNodeToBack(FEditor.GetSelectedNode(i));
   FEditor.Invalidate;
@@ -796,7 +817,7 @@ end;
 
 function TForm1.CenterWorldPos: TPointF;
 begin
-  Result.X := (FEditor.ClientWidth  div 2 - 90);
+  Result.X := (FEditor.ClientWidth div 2 - 90);
   Result.Y := (FEditor.ClientHeight div 2 - 60);
   // грубое приближение без доступа к ScreenToWorld — достаточно для демки
   Result.X := (Result.X - 0) / FEditor.Zoom;
@@ -819,31 +840,49 @@ begin
 end;
 
 procedure TForm1.ClickAddFloat(Sender: TObject);
-begin AddNodeAtCenter('float'); end;
+begin
+  AddNodeAtCenter('float');
+end;
 
 procedure TForm1.ClickAddAdd(Sender: TObject);
-begin AddNodeAtCenter('add'); end;
+begin
+  AddNodeAtCenter('add');
+end;
 
 procedure TForm1.ClickAddMul(Sender: TObject);
-begin AddNodeAtCenter('multiply_node'); end;
+begin
+  AddNodeAtCenter('multiply_node');
+end;
 
 procedure TForm1.ClickAddMath(Sender: TObject);
-begin AddNodeAtCenter('math_expr'); end;
+begin
+  AddNodeAtCenter('math_expr');
+end;
 
 procedure TForm1.ClickAddString(Sender: TObject);
-begin AddNodeAtCenter('string_node'); end;
+begin
+  AddNodeAtCenter('string_node');
+end;
 
 procedure TForm1.ClickAddBranch(Sender: TObject);
-begin AddNodeAtCenter('branch_node'); end;
+begin
+  AddNodeAtCenter('branch_node');
+end;
 
 procedure TForm1.ClickAddReroute(Sender: TObject);
-begin AddNodeAtCenter('reroute'); end;
+begin
+  AddNodeAtCenter('reroute');
+end;
 
 procedure TForm1.ClickAddComment(Sender: TObject);
-begin AddNodeAtCenter('comment'); end;
+begin
+  AddNodeAtCenter('comment');
+end;
 
 procedure TForm1.ClickAddDefault(Sender: TObject);
-begin AddNodeAtCenter('default'); end;
+begin
+  AddNodeAtCenter('default');
+end;
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -904,8 +943,9 @@ begin
     '  Links: ' + IntToStr(FEditor.Graph.Links.Count);
   FStatusBar.Panels[2].Text := Format('Zoom: %.0f%%', [FEditor.Zoom * 100]);
   FStatusBar.Panels[3].Text :=
-    'Snap: ' + BoolToStr(FEditor.SnapToGrid, 'ON', 'OFF') +
+    'Snap: ' + (if FEditor.SnapToGrid then 'ON' else 'OFF') +
     '  Grid: ' + IntToStr(FEditor.GridSize);
 end;
 
 end.
+

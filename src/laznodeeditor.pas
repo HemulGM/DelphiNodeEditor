@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,13 +21,11 @@
 }
 unit LazNodeEditor;
 
-{$mode objfpc}{$H+}
-
 interface
 
 uses
-  Classes, SysUtils, Graphics, Controls, ExtCtrls, LCLIntf, LCLType, Math, Types,
-  Menus, Clipbrd, fpjson, jsonparser, Forms, StdCtrls, Grids, Dialogs, LazUTF8;
+  Classes, SysUtils, Graphics, Controls, ExtCtrls, Math, Types, Windows,
+  Menus, Clipbrd, System.JSON, Forms, StdCtrls, Grids, Dialogs;
 
 type
   TCustomNode = class;
@@ -582,7 +580,7 @@ type
     function SafeClientWidth(AControl: TControl; ADefault: integer = 270): integer;
     function EditWidth(AParent: TControl; ALeft: Integer): Integer;
   public
-    constructor Create(AOwner: TComponent); override;
+    constructor Create(AOwner: TComponent; AParent: TWinControl); reintroduce;
     procedure RefreshFromSelection;
     property Editor: TLazNodeEditor read FEditor write SetEditor;
   end;
@@ -776,6 +774,7 @@ type
 procedure Register;
 
 implementation
+ uses System.IOUtils;
 
 // =============================================================================
 // Helpers
@@ -905,7 +904,7 @@ end;
 
 procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string);
 var
-  Data: TJSONData;
+  Data: TJSONValue;
 begin
   if AGraph = nil then
     Exit;
@@ -913,9 +912,9 @@ begin
   if Trim(S) = '' then
     Exit;
 
-  Data := GetJSON(S);
+  Data := TJSONValue.ParseJSONValue(S);
   try
-    if Data.JSONType = jtObject then
+    if Data is TJSONObject then
       AGraph.LoadGraphFromJSON(TJSONObject(Data));
   finally
     Data.Free;
@@ -1066,11 +1065,11 @@ begin
   if AObj = nil then
     Exit;
 
-  AObj.Add('typeId', TypeId);
-  AObj.Add('category', Category);
-  AObj.Add('displayName', DisplayName);
-  AObj.Add('color', integer(Color));
-  AObj.Add('flags', TypeFlagsToInt(Flags));
+  AObj.AddPair('typeId', TypeId);
+  AObj.AddPair('category', Category);
+  AObj.AddPair('displayName', DisplayName);
+  AObj.AddPair('color', integer(Color));
+  AObj.AddPair('flags', TypeFlagsToInt(Flags));
 end;
 
 procedure TNodePinType.LoadFromJSON(AObj: TJSONObject);
@@ -1078,11 +1077,11 @@ begin
   if AObj = nil then
     Exit;
 
-  TypeId := AObj.Get('typeId', TypeId);
-  Category := AObj.Get('category', Category);
-  DisplayName := AObj.Get('displayName', DisplayName);
-  Color := TColor(AObj.Get('color', integer(Color)));
-  Flags := IntToTypeFlags(AObj.Get('flags', TypeFlagsToInt(Flags)));
+  TypeId := AObj.GetValue('typeId', TypeId);
+  Category := AObj.GetValue('category', Category);
+  DisplayName := AObj.GetValue('displayName', DisplayName);
+  Color := TColor(AObj.GetValue('color', integer(Color)));
+  Flags := IntToTypeFlags(AObj.GetValue('flags', TypeFlagsToInt(Flags)));
 
   if TypeId = '' then
     TypeId := 'any';
@@ -1111,26 +1110,26 @@ begin
   if AObj = nil then
     Exit;
 
-  AObj.Add('name', Name);
-  AObj.Add('kind', NodeValueKindToStr(Kind));
+  AObj.AddPair('name', Name);
+  AObj.AddPair('kind', NodeValueKindToStr(Kind));
 
   case Kind of
     nvkFloat:
-      AObj.Add('value', FloatValue);
+      AObj.AddPair('value', FloatValue);
 
     nvkInteger:
-      AObj.Add('value', IntegerValue);
+      AObj.AddPair('value', IntegerValue);
 
     nvkString:
-      AObj.Add('value', StringValue);
+      AObj.AddPair('value', StringValue);
 
     nvkBoolean:
-      AObj.Add('value', BooleanValue);
+      AObj.AddPair('value', BooleanValue);
 
     nvkJSON:
-      AObj.Add('value', JSONValue);
+      AObj.AddPair('value', JSONValue);
     else
-      AObj.Add('value', '');
+      AObj.AddPair('value', '');
   end;
 end;
 
@@ -1139,24 +1138,24 @@ begin
   if AObj = nil then
     Exit;
 
-  Name := AObj.Get('name', Name);
-  Kind := StrToNodeValueKind(AObj.Get('kind', 'null'));
+  Name := AObj.GetValue('name', Name);
+  Kind := StrToNodeValueKind(AObj.GetValue('kind', 'null'));
 
   case Kind of
     nvkFloat:
-      FloatValue := AObj.Get('value', FloatValue);
+      FloatValue := AObj.GetValue('value', FloatValue);
 
     nvkInteger:
-      IntegerValue := AObj.Get('value', IntegerValue);
+      IntegerValue := AObj.GetValue('value', IntegerValue);
 
     nvkString:
-      StringValue := AObj.Get('value', StringValue);
+      StringValue := AObj.GetValue('value', StringValue);
 
     nvkBoolean:
-      BooleanValue := AObj.Get('value', BooleanValue);
+      BooleanValue := AObj.GetValue('value', BooleanValue);
 
     nvkJSON:
-      JSONValue := AObj.Get('value', JSONValue);
+      JSONValue := AObj.GetValue('value', JSONValue);
   end;
 end;
 
@@ -1695,19 +1694,19 @@ var
 begin
   if AObj = nil then Exit;
 
-  AObj.Add('id', Id);
-  AObj.Add('type', NodeType);
-  AObj.Add('title', Title);
-  AObj.Add('x', X);
-  AObj.Add('y', Y);
-  AObj.Add('width', Width);
-  AObj.Add('height', Height);
-  AObj.Add('headerColor', integer(HeaderColor));
-  AObj.Add('bodyColor', integer(BodyColor));
-  AObj.Add('visualKind', Ord(VisualKind));
-  AObj.Add('commentText', CommentText);
-  AObj.Add('collapsed', Collapsed);
-  AObj.Add('zOrder', ZOrder);
+  AObj.AddPair('id', Id);
+  AObj.AddPair('type', NodeType);
+  AObj.AddPair('title', Title);
+  AObj.AddPair('x', X);
+  AObj.AddPair('y', Y);
+  AObj.AddPair('width', Width);
+  AObj.AddPair('height', Height);
+  AObj.AddPair('headerColor', integer(HeaderColor));
+  AObj.AddPair('bodyColor', integer(BodyColor));
+  AObj.AddPair('visualKind', Ord(VisualKind));
+  AObj.AddPair('commentText', CommentText);
+  AObj.AddPair('collapsed', Collapsed);
+  AObj.AddPair('zOrder', ZOrder);
 
   // === PINS ===
   PinsArr := TJSONArray.Create;
@@ -1716,27 +1715,27 @@ begin
     P := GetInput(i);
     PinObj := TJSONObject.Create;
 
-    PinObj.Add('id', P.Id);
-    PinObj.Add('name', P.Name);
-    PinObj.Add('displayName', P.DisplayName);
-    PinObj.Add('kind', PinKindToStr(P.Kind));
-    PinObj.Add('direction', PinDirectionToStr(P.Direction));
-    PinObj.Add('dataType', P.DataType);
-    PinObj.Add('localY', P.LocalY);
+    PinObj.AddPair('id', P.Id);
+    PinObj.AddPair('name', P.Name);
+    PinObj.AddPair('displayName', P.DisplayName);
+    PinObj.AddPair('kind', PinKindToStr(P.Kind));
+    PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
+    PinObj.AddPair('dataType', P.DataType);
+    PinObj.AddPair('localY', P.LocalY);
 
-    PinObj.Add('isRequired', P.IsRequired);
-    PinObj.Add('defaultValue', P.DefaultValue);
-    PinObj.Add('tooltip', P.Tooltip);
-    PinObj.Add('hidden', P.Hidden);
-    PinObj.Add('advanced', P.Advanced);
-    PinObj.Add('allowMultipleConnections', P.AllowMultipleConnections);
-    PinObj.Add('sortIndex', P.SortIndex);
+    PinObj.AddPair('isRequired', P.IsRequired);
+    PinObj.AddPair('defaultValue', P.DefaultValue);
+    PinObj.AddPair('tooltip', P.Tooltip);
+    PinObj.AddPair('hidden', P.Hidden);
+    PinObj.AddPair('advanced', P.Advanced);
+    PinObj.AddPair('allowMultipleConnections', P.AllowMultipleConnections);
+    PinObj.AddPair('sortIndex', P.SortIndex);
 
     if P.PinType <> nil then
     begin
       PinTypeObj := TJSONObject.Create;
       P.PinType.SaveToJSON(PinTypeObj);
-      PinObj.Add('pinType', PinTypeObj);
+      PinObj.AddPair('pinType', PinTypeObj);
     end;
 
     PinsArr.Add(PinObj);
@@ -1747,27 +1746,27 @@ begin
     P := GetOutput(i);
     PinObj := TJSONObject.Create;
 
-    PinObj.Add('id', P.Id);
-    PinObj.Add('name', P.Name);
-    PinObj.Add('displayName', P.DisplayName);
-    PinObj.Add('kind', PinKindToStr(P.Kind));
-    PinObj.Add('direction', PinDirectionToStr(P.Direction));
-    PinObj.Add('dataType', P.DataType);
-    PinObj.Add('localY', P.LocalY);
-    PinObj.Add('allowMultipleConnections', P.AllowMultipleConnections);
-    PinObj.Add('sortIndex', P.SortIndex);
+    PinObj.AddPair('id', P.Id);
+    PinObj.AddPair('name', P.Name);
+    PinObj.AddPair('displayName', P.DisplayName);
+    PinObj.AddPair('kind', PinKindToStr(P.Kind));
+    PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
+    PinObj.AddPair('dataType', P.DataType);
+    PinObj.AddPair('localY', P.LocalY);
+    PinObj.AddPair('allowMultipleConnections', P.AllowMultipleConnections);
+    PinObj.AddPair('sortIndex', P.SortIndex);
 
     if P.PinType <> nil then
     begin
       PinTypeObj := TJSONObject.Create;
       P.PinType.SaveToJSON(PinTypeObj);
-      PinObj.Add('pinType', PinTypeObj);
+      PinObj.AddPair('pinType', PinTypeObj);
     end;
 
     PinsArr.Add(PinObj);
   end;
 
-  AObj.Add('pins', PinsArr);
+  AObj.AddPair('pins', PinsArr);
 
   // === VALUES ===
   ValuesArr := TJSONArray.Create;
@@ -1778,13 +1777,13 @@ begin
     V.SaveToJSON(ValueObj);
     ValuesArr.Add(ValueObj);
   end;
-  AObj.Add('values', ValuesArr);
+  AObj.AddPair('values', ValuesArr);
 end;
 
 procedure TCustomNode.LoadFromJSON(AObj: TJSONObject);
 var
   PinsArr, ValuesArr: TJSONArray;
-  PinObj, PinTypeObj, ValueObj: TJSONObject;
+  PinObj, PinTypeObj, ValueObj: TJSONValue;
   i: integer;
   P: TNodePin;
   V: TNodeValue;
@@ -1793,52 +1792,52 @@ var
 begin
   if AObj = nil then Exit;
 
-  Id := AObj.Get('id', Id);
-  NodeType := AObj.Get('type', NodeType);
-  Title := AObj.Get('title', Title);
-  X := AObj.Get('x', X);
-  Y := AObj.Get('y', Y);
-  Width := AObj.Get('width', Width);
-  Height := AObj.Get('height', Height);
-  HeaderColor := TColor(AObj.Get('headerColor', integer(HeaderColor)));
-  BodyColor := TColor(AObj.Get('bodyColor', integer(BodyColor)));
+  Id := AObj.GetValue('id', Id);
+  NodeType := AObj.GetValue('type', NodeType);
+  Title := AObj.GetValue('title', Title);
+  X := AObj.GetValue('x', X);
+  Y := AObj.GetValue('y', Y);
+  Width := AObj.GetValue('width', Width);
+  Height := AObj.GetValue('height', Height);
+  HeaderColor := TColor(AObj.GetValue('headerColor', integer(HeaderColor)));
+  BodyColor := TColor(AObj.GetValue('bodyColor', integer(BodyColor)));
 
-  VisualKind := TNodeVisualKind(AObj.Get('visualKind', Ord(nvNormal)));
-  CommentText := AObj.Get('commentText', CommentText);
-  Collapsed := AObj.Get('collapsed', False);
-  ZOrder := AObj.Get('zOrder', 0);
+  VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(nvNormal)));
+  CommentText := AObj.GetValue('commentText', CommentText);
+  Collapsed := AObj.GetValue('collapsed', False);
+  ZOrder := AObj.GetValue('zOrder', 0);
 
   // Pins
   ClearPins;
-  PinsArr := AObj.Arrays['pins'];
+  PinsArr := AObj.GetValue<TJSONArray>('pins', nil);
   if PinsArr <> nil then
   begin
     for i := 0 to PinsArr.Count - 1 do
     begin
-      PinObj := PinsArr.Objects[i];
+      PinObj := PinsArr.Items[i];
 
-      Dir := StrToPinDirection(PinObj.Get('direction', 'input'));
-      Kind := StrToPinKind(PinObj.Get('kind', 'data'));
+      Dir := StrToPinDirection(PinObj.GetValue('direction', 'input'));
+      Kind := StrToPinKind(PinObj.GetValue('kind', 'data'));
 
-      P := TNodePin.Create(PinObj.Get('name', ''), Dir, Kind, PinObj.Get('localY', 40));
+      P := TNodePin.Create(PinObj.GetValue('name', ''), Dir, Kind, PinObj.GetValue('localY', 40));
 
-      P.Id := PinObj.Get('id', P.Id);
-      P.DisplayName := PinObj.Get('displayName', P.Name);
-      P.DataType := PinObj.Get('dataType', '');
+      P.Id := PinObj.GetValue('id', P.Id);
+      P.DisplayName := PinObj.GetValue('displayName', P.Name);
+      P.DataType := PinObj.GetValue('dataType', '');
       P.SetTypeId(P.DataType);
 
-      PinTypeObj := PinObj.Objects['pinType'];
+      PinTypeObj := PinObj.GetValue<TJSONObject>('pinType', nil);
       if PinTypeObj <> nil then
-        P.PinType.LoadFromJSON(PinTypeObj);
+        P.PinType.LoadFromJSON(TJSONObject(PinTypeObj));
 
-      P.IsRequired := PinObj.Get('isRequired', False);
-      P.DefaultValue := PinObj.Get('defaultValue', '');
-      P.Tooltip := PinObj.Get('tooltip', '');
-      P.Hidden := PinObj.Get('hidden', False);
-      P.Advanced := PinObj.Get('advanced', False);
+      P.IsRequired := PinObj.GetValue('isRequired', False);
+      P.DefaultValue := PinObj.GetValue('defaultValue', '');
+      P.Tooltip := PinObj.GetValue('tooltip', '');
+      P.Hidden := PinObj.GetValue('hidden', False);
+      P.Advanced := PinObj.GetValue('advanced', False);
       P.AllowMultipleConnections :=
-        PinObj.Get('allowMultipleConnections', Dir = pdOutput);
-      P.SortIndex := PinObj.Get('sortIndex', 0);
+        PinObj.GetValue('allowMultipleConnections', Dir = pdOutput);
+      P.SortIndex := PinObj.GetValue('sortIndex', 0);
 
       P.OwnerNode := Self;
 
@@ -1853,14 +1852,14 @@ begin
 
   // Values
   ClearValues;
-  ValuesArr := AObj.Arrays['values'];
+  ValuesArr := AObj.GetValue<TJSONArray>('values');
   if ValuesArr <> nil then
   begin
     for i := 0 to ValuesArr.Count - 1 do
     begin
-      ValueObj := ValuesArr.Objects[i];
+      ValueObj := ValuesArr.Items[i];
       V := TNodeValue.Create;
-      V.LoadFromJSON(ValueObj);
+      V.LoadFromJSON(TJSONObject(ValueObj));
       FValues.Add(V);
     end;
   end;
@@ -1981,20 +1980,20 @@ var
   F: string;
   i: integer;
 begin
-  F := UTF8LowerCase(Trim(AFilter));
+  F := Trim(AFilter).ToLower;
 
   if F = '' then
     Exit(True);
 
   Result :=
-    (Pos(F, UTF8LowerCase(NodeType)) > 0) or (Pos(F, UTF8LowerCase(Caption)) > 0) or
-    (Pos(F, UTF8LowerCase(Category)) > 0) or (Pos(F, UTF8LowerCase(Description)) > 0);
+    (Pos(F, NodeType.ToLower) > 0) or (Pos(F, Caption.ToLower) > 0) or
+    (Pos(F, Category.ToLower) > 0) or (Pos(F, Description.ToLower) > 0);
 
   if Result then
     Exit;
 
   for i := 0 to Tags.Count - 1 do
-    if Pos(F, UTF8LowerCase(Tags[i])) > 0 then
+    if Pos(F, Tags[i].ToLower) > 0 then
       Exit(True);
 end;
 
@@ -2538,7 +2537,7 @@ begin
 
   Obj := SaveGraphToJSON;
   try
-    Cmd := TJSONSnapshotCommand.Create(Self, Obj.AsJSON, Obj.AsJSON, 'Snapshot');
+    Cmd := TJSONSnapshotCommand.Create(Self, Obj.ToJSON, Obj.ToJSON, 'Snapshot');
     FUndoStack.Add(Cmd);
   finally
     Obj.Free;
@@ -2557,7 +2556,7 @@ var
 begin
   Obj := SaveGraphToJSON;
   try
-    Result := Obj.AsJSON;
+    Result := Obj.ToJSON;
   finally
     Obj.Free;
   end;
@@ -2676,7 +2675,7 @@ begin
       N.SaveToJSON(NodeObj);
       NodesArr.Add(NodeObj);
     end;
-    Result.Add('nodes', NodesArr);
+    Result.AddPair('nodes', NodesArr);
 
     LinksArr := TJSONArray.Create;
     for i := 0 to FLinks.Count - 1 do
@@ -2685,12 +2684,12 @@ begin
       if (L.FromPin = nil) or (L.ToPin = nil) then Continue;
 
       LinkObj := TJSONObject.Create;
-      LinkObj.Add('id', L.Id);
-      LinkObj.Add('fromPinId', L.FromPin.Id);
-      LinkObj.Add('toPinId', L.ToPin.Id);
+      LinkObj.AddPair('id', L.Id);
+      LinkObj.AddPair('fromPinId', L.FromPin.Id);
+      LinkObj.AddPair('toPinId', L.ToPin.Id);
       LinksArr.Add(LinkObj);
     end;
-    Result.Add('links', LinksArr);
+    Result.AddPair('links', LinksArr);
   except
     Result.Free;
     raise;
@@ -2709,33 +2708,33 @@ var
 begin
   Clear;
 
-  NodesArr := AObj.Arrays['nodes'];
+  NodesArr := AObj.GetValue<TJSONArray>('nodes', nil);
   if NodesArr <> nil then
   begin
     for i := 0 to NodesArr.Count - 1 do
     begin
-      NodeObj := NodesArr.Objects[i];
-      NodeType := NodeObj.Get('type', 'default');
+      NodeObj := NodesArr.Items[i] as TJSONObject;
+      NodeType := NodeObj.GetValue('type', 'default');
 
-      N := FRegistry.CreateNode(NodeType, NodeObj.Get('x', 0.0), NodeObj.Get('y', 0.0));
+      N := FRegistry.CreateNode(NodeType, NodeObj.GetValue('x', 0.0), NodeObj.GetValue('y', 0.0));
       N.LoadFromJSON(NodeObj);
       FNodes.Add(N);
     end;
   end;
 
-  LinksArr := AObj.Arrays['links'];
+  LinksArr := AObj.GetValue<TJSONArray>('links', nil);
   if LinksArr <> nil then
   begin
     for i := 0 to LinksArr.Count - 1 do
     begin
-      LinkObj := LinksArr.Objects[i];
-      FromPin := FindPinById(LinkObj.Get('fromPinId', ''));
-      ToPin := FindPinById(LinkObj.Get('toPinId', ''));
+      LinkObj := LinksArr.Items[i] as TJSONObject;
+      FromPin := FindPinById(LinkObj.GetValue('fromPinId', ''));
+      ToPin := FindPinById(LinkObj.GetValue('toPinId', ''));
 
       if (FromPin <> nil) and (ToPin <> nil) and CanConnect(FromPin, ToPin) then
       begin
         L := TNodeLink.Create(FromPin, ToPin);
-        L.Id := LinkObj.Get('id', L.Id);
+        L.Id := LinkObj.GetValue('id', L.Id);
         FLinks.Add(L);
       end;
     end;
@@ -3066,7 +3065,7 @@ begin
   begin
     Obj := AGraph.SaveGraphToJSON;
     try
-      FGraphBeforeJSON := Obj.AsJSON;
+      FGraphBeforeJSON := Obj.ToJSON;
     finally
       Obj.Free;
     end;
@@ -3084,7 +3083,7 @@ begin
 
   Obj := FGraph.SaveGraphToJSON;
   try
-    FGraphAfterJSON := Obj.AsJSON;
+    FGraphAfterJSON := Obj.ToJSON;
   finally
     Obj.Free;
   end;
@@ -3092,14 +3091,15 @@ end;
 
 procedure TRemoveNodeCommand.Undo;
 var
-  Data: TJSONData;
+  Data: TJSONValue;
 begin
   if (FGraph = nil) or (FGraphBeforeJSON = '') then
     Exit;
 
-  Data := GetJSON(FGraphBeforeJSON);
+  Data := TJSONValue.ParseJSONValue(FGraphBeforeJSON);
   try
-    FGraph.LoadGraphFromJSON(TJSONObject(Data));
+    if Data is TJSONObject then
+      FGraph.LoadGraphFromJSON(TJSONObject(Data));
   finally
     Data.Free;
   end;
@@ -3353,7 +3353,7 @@ end;
 procedure TChangeNodePropertyCommand.DoExecute;
 var
   N: TCustomNode;
-  Data: TJSONData;
+  Data: TJSONValue;
 begin
   if FGraph = nil then
     Exit;
@@ -3362,7 +3362,7 @@ begin
   if N = nil then
     Exit;
 
-  Data := GetJSON(FNewJSON);
+  Data := TJSONValue.ParseJSONValue(FNewJSON);
   try
     N.LoadFromJSON(TJSONObject(Data));
   finally
@@ -3375,7 +3375,7 @@ end;
 procedure TChangeNodePropertyCommand.Undo;
 var
   N: TCustomNode;
-  Data: TJSONData;
+  Data: TJSONValue;
 begin
   if FGraph = nil then
     Exit;
@@ -3384,7 +3384,7 @@ begin
   if N = nil then
     Exit;
 
-  Data := GetJSON(FOldJSON);
+  Data := TJSONValue.ParseJSONValue(FOldJSON);
   try
     N.LoadFromJSON(TJSONObject(Data));
   finally
@@ -3399,10 +3399,11 @@ end;
 // TLazNodeInspector
 // =============================================================================
 
-constructor TLazNodeInspector.Create(AOwner: TComponent);
+constructor TLazNodeInspector.Create(AOwner: TComponent; AParent: TWinControl);
 begin
   inherited Create(AOwner);
-  SetInitialBounds(0, 0, 260, 600);
+  Parent := AParent;
+  SetBounds(0, 0, 260, 600);
   FUpdating := False;
   BuildControls;
   ShowNoSelection;
@@ -3555,9 +3556,9 @@ begin
       FPinsGrid.Cells[0, i + 1] := P.EffectiveDisplayName;
       FPinsGrid.Cells[1, i + 1] := 'In';
       FPinsGrid.Cells[2, i + 1] :=
-        specialize IfThen<string>(P.PinType <> nil, P.PinType.TypeId, P.DataType);
+        if P.PinType <> nil then P.PinType.TypeId else P.DataType;
       FPinsGrid.Cells[3, i + 1] :=
-        specialize IfThen<string>(P.Kind = pkExec, 'exec', 'data');
+        if P.Kind = pkExec then 'exec' else 'data';
     end;
     for i := 0 to N.OutputCount - 1 do
     begin
@@ -3565,9 +3566,9 @@ begin
       FPinsGrid.Cells[0, N.InputCount + i + 1] := P.EffectiveDisplayName;
       FPinsGrid.Cells[1, N.InputCount + i + 1] := 'Out';
       FPinsGrid.Cells[2, N.InputCount + i + 1] :=
-        specialize IfThen<string>(P.PinType <> nil, P.PinType.TypeId, P.DataType);
+        if P.PinType <> nil then P.PinType.TypeId else P.DataType;
       FPinsGrid.Cells[3, N.InputCount + i + 1] :=
-        specialize IfThen<string>(P.Kind = pkExec, 'exec', 'data');
+        if P.Kind = pkExec then 'exec' else 'data';
     end;
 
     // --- Values ---
@@ -3584,7 +3585,7 @@ begin
           nvkFloat: VStr := FormatFloat('0.######', V.FloatValue);
           nvkInteger: VStr := IntToStr(V.IntegerValue);
           nvkString: VStr := V.StringValue;
-          nvkBoolean: VStr := specialize IfThen<string>(V.BooleanValue, 'true', 'false');
+          nvkBoolean: VStr := if V.BooleanValue then 'true' else 'false';
           nvkJSON: VStr := V.JSONValue;
           else
             VStr := '';
@@ -3665,7 +3666,7 @@ begin
   OldObj := TJSONObject.Create;
   try
     N.SaveToJSON(OldObj);
-    OldJSON := OldObj.AsJSON;
+    OldJSON := OldObj.ToJSON;
   finally
     OldObj.Free;
   end;
@@ -3702,7 +3703,7 @@ begin
   NewObj := TJSONObject.Create;
   try
     N.SaveToJSON(NewObj);
-    NewJSON := NewObj.AsJSON;
+    NewJSON := NewObj.ToJSON;
   finally
     NewObj.Free;
   end;
@@ -3887,12 +3888,12 @@ begin
 
   MakeLabel(FGrpVisual, 'Header Color:', 8, Y + 4, LW);
   FHeaderColorPanel := MakeColorPanel(FGrpVisual, EX, Y, EW);
-  FHeaderColorPanel.OnClick := @HeaderColorClick;
+  FHeaderColorPanel.OnClick := HeaderColorClick;
   Inc(Y, ROW);
 
   MakeLabel(FGrpVisual, 'Body Color:', 8, Y + 4, LW);
   FBodyColorPanel := MakeColorPanel(FGrpVisual, EX, Y, EW);
-  FBodyColorPanel.OnClick := @BodyColorClick;
+  FBodyColorPanel.OnClick := BodyColorClick;
   Inc(Y, ROW);
 
   FCollapsedCheck := TCheckBox.Create(Self);
@@ -3983,7 +3984,7 @@ begin
   FPinsGrid.Anchors := [akLeft, akTop, akRight];
   FPinsGrid.RowCount := 1;
   FPinsGrid.ColCount := 4;
-  FPinsGrid.FixedRows := 1;
+  FPinsGrid.FixedRows := 0;
   FPinsGrid.FixedCols := 0;
   FPinsGrid.Options := [
     goRowSizing,
@@ -4041,7 +4042,7 @@ begin
   FValuesGrid.Anchors := [akLeft, akTop, akRight];
   FValuesGrid.RowCount := 1;
   FValuesGrid.ColCount := 3;
-  FValuesGrid.FixedRows := 1;
+  FValuesGrid.FixedRows := 0;
   FValuesGrid.FixedCols := 0;
   FValuesGrid.Options := [
     goRowSizing,
@@ -4059,7 +4060,7 @@ begin
   FValuesGrid.ColWidths[0] := 72;
   FValuesGrid.ColWidths[1] := 52;
   FValuesGrid.ColWidths[2] := 80;
-  FValuesGrid.OnSelectCell := @ValuesGridSelectCell;
+  FValuesGrid.OnSelectCell := ValuesGridSelectCell;
 end;
 
 procedure TLazNodeInspector.BuildButtonBar(AParent: TWinControl;
@@ -4083,14 +4084,14 @@ begin
   FApplyButton.SetBounds(LEFT_PAD, ATop, BW, BUTTON_H);
   FApplyButton.Caption := 'Apply';
   FApplyButton.Anchors := [akLeft, akTop];
-  FApplyButton.OnClick := @ApplyClick;
+  FApplyButton.OnClick := ApplyClick;
 
   FRevertButton := TButton.Create(Self);
   FRevertButton.Parent := AParent;
   FRevertButton.SetBounds(LEFT_PAD + BW + GAP, ATop, BW, BUTTON_H);
   FRevertButton.Caption := 'Revert';
   FRevertButton.Anchors := [akLeft, akTop];
-  FRevertButton.OnClick := @RevertClick;
+  FRevertButton.OnClick := RevertClick;
 
   Inc(ATop, BUTTON_H + 8);
 end;
@@ -4217,15 +4218,15 @@ var
 begin
   Root := TJSONObject.Create;
   try
-    Root.Add('version', 2);
-    Root.Add('zoom', FZoom);
-    Root.Add('offsetX', FOffsetX);
-    Root.Add('offsetY', FOffsetY);
+    Root.AddPair('version', 2);
+    Root.AddPair('zoom', FZoom);
+    Root.AddPair('offsetX', FOffsetX);
+    Root.AddPair('offsetY', FOffsetY);
 
     GraphObj := FGraph.SaveGraphToJSON;
-    Root.Add('graph', GraphObj);
+    Root.AddPair('graph', GraphObj);
 
-    Result := Root.AsJSON;
+    Result := Root.ToJSON;
   finally
     Root.Free;
   end;
@@ -4233,7 +4234,7 @@ end;
 
 procedure TLazNodeEditor.LoadFromJSONText(const S: string);
 var
-  Data: TJSONData;
+  Data: TJSONValue;
   Root: TJSONObject;
   GraphObj: TJSONObject;
   BeforeJSON, AfterJSON: string;
@@ -4243,15 +4244,15 @@ begin
 
   BeforeJSON := FGraph.CaptureJSONText;
 
-  Data := GetJSON(S);
+  Data := TJSONValue.ParseJSONValue(S);
   try
     Root := TJSONObject(Data);
 
-    FZoom := Root.Get('zoom', 1.0);
-    FOffsetX := Root.Get('offsetX', 0);
-    FOffsetY := Root.Get('offsetY', 0);
+    FZoom := Root.GetValue('zoom', 1.0);
+    FOffsetX := Root.GetValue('offsetX', 0);
+    FOffsetY := Root.GetValue('offsetY', 0);
 
-    GraphObj := Root.Objects['graph'];
+    GraphObj := Root.GetValue<TJSONObject>('graph', nil);
     if GraphObj <> nil then
       FGraph.LoadGraphFromJSON(GraphObj);
 
@@ -4279,16 +4280,8 @@ begin
 end;
 
 procedure TLazNodeEditor.LoadFromFile(const AFileName: string);
-var
-  SL: TStringList;
 begin
-  SL := TStringList.Create;
-  try
-    SL.LoadFromFile(AFileName);
-    LoadFromJSONText(SL.Text);
-  finally
-    SL.Free;
-  end;
+  LoadFromJSONText(TFile.ReadAllText(AFileName));
 end;
 
 // === View Logic ===
@@ -4802,7 +4795,7 @@ begin
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Search Node...';
-  Item.OnClick := @OnContextSearchNode;
+  Item.OnClick := OnContextSearchNode;
   FPopupMenu.Items.Add(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
@@ -4817,8 +4810,8 @@ begin
     RegItem := FGraph.Registry.Item(i);
     Item := TMenuItem.Create(FPopupMenu);
     Item.Caption := RegItem.Caption;
-    Item.Tag := PtrInt(RegItem);
-    Item.OnClick := @OnAddRegisteredNodeClick;
+    Item.Tag := NativeInt(RegItem);
+    Item.OnClick := OnAddRegisteredNodeClick;
     AddRoot.Add(Item);
   end;
 
@@ -4829,19 +4822,19 @@ begin
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Copy';
   Item.ShortCut := ShortCut(Ord('C'), [ssCtrl]);
-  Item.OnClick := @OnContextCopy;
+  Item.OnClick := OnContextCopy;
   FPopupMenu.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Paste';
   Item.ShortCut := ShortCut(Ord('V'), [ssCtrl]);
-  Item.OnClick := @OnContextPaste;
+  Item.OnClick := OnContextPaste;
   FPopupMenu.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Duplicate';
   Item.ShortCut := ShortCut(Ord('D'), [ssCtrl]);
-  Item.OnClick := @OnContextDuplicate;
+  Item.OnClick := OnContextDuplicate;
   FPopupMenu.Items.Add(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
@@ -4850,12 +4843,12 @@ begin
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Insert Reroute On Selected Link';
-  Item.OnClick := @OnContextInsertReroute;
+  Item.OnClick := OnContextInsertReroute;
   FPopupMenu.Items.Add(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Add Comment / Frame';
-  Item.OnClick := @OnContextAddComment;
+  Item.OnClick := OnContextAddComment;
   FPopupMenu.Items.Add(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
@@ -4864,7 +4857,7 @@ begin
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Caption := 'Delete';
-  Item.OnClick := @OnContextDelete;
+  Item.OnClick := OnContextDelete;
   FPopupMenu.Items.Add(Item);
 end;
 
@@ -4959,7 +4952,7 @@ var
 begin
   Root := TJSONObject.Create;
   try
-    Root.Add('version', 1);
+    Root.AddPair('version', 1);
     NodesArr := TJSONArray.Create;
     for i := 0 to FSelectedNodes.Count - 1 do
     begin
@@ -4968,7 +4961,7 @@ begin
       N.SaveToJSON(NodeObj);
       NodesArr.Add(NodeObj);
     end;
-    Root.Add('nodes', NodesArr);
+    Root.AddPair('nodes', NodesArr);
     LinksArr := TJSONArray.Create;
     for i := 0 to FGraph.Links.Count - 1 do
     begin
@@ -4978,14 +4971,14 @@ begin
         (FSelectedNodes.IndexOf(L.ToPin.OwnerNode) >= 0) then
       begin
         LinkObj := TJSONObject.Create;
-        LinkObj.Add('id', L.Id);
-        LinkObj.Add('fromPinId', L.FromPin.Id);
-        LinkObj.Add('toPinId', L.ToPin.Id);
+        LinkObj.AddPair('id', L.Id);
+        LinkObj.AddPair('fromPinId', L.FromPin.Id);
+        LinkObj.AddPair('toPinId', L.ToPin.Id);
         LinksArr.Add(LinkObj);
       end;
     end;
-    Root.Add('links', LinksArr);
-    Result := Root.AsJSON;
+    Root.AddPair('links', LinksArr);
+    Result := Root.ToJSON;
   finally
     Root.Free;
   end;
@@ -4999,7 +4992,7 @@ end;
 
 procedure TLazNodeEditor.PasteNodesFromJSONText(const S: string; AX, AY: single);
 var
-  Data: TJSONData;
+  Data: TJSONValue;
   Root: TJSONObject;
   NodesArr, LinksArr: TJSONArray;
   NodeObj, LinkObj: TJSONObject;
@@ -5020,10 +5013,10 @@ begin
   BeforeJSON := FGraph.CaptureJSONText;
   ClearSelectionInternal;
 
-  Data := GetJSON(S);
+  Data := TJSONValue.ParseJSONValue(S);
   try
     Root := TJSONObject(Data);
-    NodesArr := Root.Arrays['nodes'];
+    NodesArr := Root.GetValue<TJSONArray>('nodes', nil);
     if NodesArr = nil then Exit;
 
     OldToNewNodeIds := TStringList.Create;
@@ -5036,26 +5029,26 @@ begin
       MinY := 0;
       for i := 0 to NodesArr.Count - 1 do
       begin
-        NodeObj := NodesArr.Objects[i];
+        NodeObj := NodesArr.Items[i] as TJSONObject;
         if First then
         begin
-          MinX := NodeObj.Get('x', 0.0);
-          MinY := NodeObj.Get('y', 0.0);
+          MinX := NodeObj.GetValue('x', 0.0);
+          MinY := NodeObj.GetValue('y', 0.0);
           First := False;
         end
         else
         begin
-          MinX := Min(MinX, NodeObj.Get('x', 0.0));
-          MinY := Min(MinY, NodeObj.Get('y', 0.0));
+          MinX := Min(MinX, NodeObj.GetValue('x', 0.0));
+          MinY := Min(MinY, NodeObj.GetValue('y', 0.0));
         end;
       end;
       for i := 0 to NodesArr.Count - 1 do
       begin
-        NodeObj := NodesArr.Objects[i];
-        NodeType := NodeObj.Get('type', 'default');
-        OldNodeId := NodeObj.Get('id', '');
-        N := FGraph.Registry.CreateNode(NodeType, NodeObj.Get('x', 0.0),
-          NodeObj.Get('y', 0.0));
+        NodeObj := NodesArr.Items[i] as TJSONObject;
+        NodeType := NodeObj.GetValue('type', 'default');
+        OldNodeId := NodeObj.GetValue('id', '');
+        N := FGraph.Registry.CreateNode(NodeType, NodeObj.GetValue('x', 0.0),
+          NodeObj.GetValue('y', 0.0));
         N.LoadFromJSON(NodeObj);
         NewNodeId := NewId;
         N.Id := NewNodeId;
@@ -5079,14 +5072,14 @@ begin
         FGraph.AddNode(N);
         SelectNodeInternal(N, True);
       end;
-      LinksArr := Root.Arrays['links'];
+      LinksArr := Root.GetValue<TJSONARray>('links', nil);
       if LinksArr <> nil then
       begin
         for i := 0 to LinksArr.Count - 1 do
         begin
-          LinkObj := LinksArr.Objects[i];
-          NewFromId := OldToNewPinIds.Values[LinkObj.Get('fromPinId', '')];
-          NewToId := OldToNewPinIds.Values[LinkObj.Get('toPinId', '')];
+          LinkObj := LinksArr.Items[i] as TJSONObject;
+          NewFromId := OldToNewPinIds.Values[LinkObj.GetValue('fromPinId', '')];
+          NewToId := OldToNewPinIds.Values[LinkObj.GetValue('toPinId', '')];
           FromPin := FGraph.FindPinById(NewFromId);
           ToPin := FGraph.FindPinById(NewToId);
           if (FromPin <> nil) and (ToPin <> nil) and
@@ -5969,13 +5962,13 @@ begin
   FEdit := TEdit.Create(Self);
   FEdit.Parent := Self;
   FEdit.Align := alTop;
-  FEdit.OnChange := @EditChange;
-  FEdit.OnKeyDown := @EditKeyDown;
+  FEdit.OnChange := EditChange;
+  FEdit.OnKeyDown := EditKeyDown;
 
   FList := TListBox.Create(Self);
   FList.Parent := Self;
   FList.Align := alClient;
-  FList.OnDblClick := @ListDblClick;
+  FList.OnDblClick := ListDblClick;
 
   RebuildList;
 end;
@@ -5989,14 +5982,14 @@ begin
   FList.Items.BeginUpdate;
   try
     FList.Items.Clear;
-    FilterText := UTF8LowerCase(FEdit.Text);
+    FilterText := string(FEdit.Text).ToLower;
 
     for i := 0 to FRegistry.Count - 1 do
     begin
       It := FRegistry.Item(i);
 
-      if (FilterText = '') or (Pos(FilterText, UTF8LowerCase(It.Caption)) > 0) or
-        (Pos(FilterText, UTF8LowerCase(It.NodeType)) > 0) or
+      if (FilterText = '') or (Pos(FilterText, It.Caption.ToLower) > 0) or
+        (Pos(FilterText, It.NodeType.ToLower) > 0) or
         (TNodeDefinition(It).MatchesFilter(FilterText)) then
       begin
         FList.Items.AddObject(It.Caption + ' [' + It.NodeType + ']', It);
