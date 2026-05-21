@@ -1,26 +1,4 @@
-﻿{
-  Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-}
-
-unit FMX.NodeEditor;
+﻿unit FMX.NodeEditor;
 
 interface
 
@@ -74,6 +52,8 @@ type
     FBoxSelecting: Boolean;
     FBoxStart: TPoint;
     FBoxCurrent: TPoint;
+    FBoxStartWorld: TPointF;
+    FBoxCurrentWorld: TPointF;
 
     FPopupMenu: TPopupMenu;
     FContextWorldPos: TPointF;
@@ -113,6 +93,11 @@ type
     FGuideSnapX: single;
     FGuideSnapY: single;
 
+    // Axes properties
+    FShowAxes: boolean;
+    FAxesColor: TAlphaColor;
+    FAxesThickness: integer;
+
     FOnUpdatedStatus: TNotifyEvent;
     FGridType: TGridType;
 
@@ -133,15 +118,20 @@ type
     procedure OnContextInsertReroute(Sender: TObject);
     procedure OnContextAddComment(Sender: TObject);
 
-    procedure GetLinkBezierPoints(ALink: TNodeLink; out P0, P1, P2, P3: TPoint);
+    // World-Space Logic
+    function GetVisibleWorldRect: TRectF;
+    function GetPinWorldPosition(APin: TNodePin): TPointF;
+    procedure GetLinkBezierWorldPoints(ALink: TNodeLink; out P0, P1, P2, P3: TPointF);
 
+    // Rendering
     procedure DrawGrid;
+    procedure DrawAxes;
     procedure DrawLinks(WorldRect: TRectF);
     procedure DrawTempLink;
     procedure DrawBoxSelect;
 
     function GetNodeUnderMouse(SX, SY: Integer): TCustomNode;
-    function IsLinkInsideScreenRect(ALink: TNodeLink; const R: TRect): boolean;
+    function IsLinkInsideWorldRect(ALink: TNodeLink; const R: TRectF): boolean;
     function GetPinUnderMouse(SX, SY: Integer; out Node: TCustomNode; out Pin: TNodePin): Boolean;
     function GetLinkUnderMouse(SX, SY: Integer; out Link: TNodeLink): Boolean;
 
@@ -233,6 +223,10 @@ type
     property SnapToNodes: boolean read FSnapToNodes write FSnapToNodes default True;
     property NodeSnapDistance: single read FNodeSnapDistance write FNodeSnapDistance;
 
+    // New Axes Properties
+    property ShowAxes: boolean read FShowAxes write FShowAxes default False;
+    property AxesColor: TAlphaColor read FAxesColor write FAxesColor default TAlphaColors.Silver;
+    property AxesThickness: integer read FAxesThickness write FAxesThickness default 2;
   published
     property Align;
     property Anchors;
@@ -252,6 +246,89 @@ implementation
 uses
   System.IOUtils, FMX.NodeEditor.Form.Search, FMX.NodeEditor.Node.Command,
   System.Generics.Defaults, FMX.Platform, System.Math.Vectors;
+
+function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
+begin
+  Result := (Pt.X >= R.Left) and (Pt.X <= R.Right) and
+    (Pt.Y >= R.Top) and (Pt.Y <= R.Bottom);
+end;
+
+function RectFIntersects(const R1, R2: TRectF): Boolean;
+begin
+  Result := not ((R1.Right < R2.Left) or (R1.Left > R2.Right) or
+    (R1.Bottom < R2.Top) or (R1.Top > R2.Bottom));
+end;
+
+function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
+var
+  U, TT, UU, UUU, TTT: single;
+begin
+  U := 1 - T;
+  TT := T * T;
+  UU := U * U;
+  UUU := UU * U;
+  TTT := TT * T;
+
+  Result.X := UUU * P0.X +
+    3 * UU * T * P1.X +
+    3 * U * TT * P2.X +
+    TTT * P3.X;
+
+  Result.Y := UUU * P0.Y +
+    3 * UU * T * P1.Y +
+    3 * U * TT * P2.Y +
+    TTT * P3.Y;
+end;
+
+function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
+var
+  N: TRectF;
+  Dx, Dy: Single;
+  T0, T1: Single;
+
+  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean;
+  var
+    Rr: Single;
+  begin
+    if Abs(P) < 1e-6 then
+      Exit(Q >= 0);
+
+    Rr := Q / P;
+    if P < 0 then
+    begin
+      if Rr > T1 then
+        Exit(False);
+      if Rr > T0 then
+        T0 := Rr;
+    end
+    else
+    begin
+      if Rr < T0 then
+        Exit(False);
+      if Rr < T1 then
+        T1 := Rr;
+    end;
+    Result := True;
+  end;
+
+begin
+  N := R;
+  N.NormalizeRect;
+
+  if PtInRectF(P1, N) or PtInRectF(P2, N) then
+    Exit(True);
+
+  Dx := P2.X - P1.X;
+  Dy := P2.Y - P1.Y;
+  T0 := 0.0;
+  T1 := 1.0;
+
+  Result :=
+    ClipTest(-Dx, P1.X - N.Left, T0, T1) and
+    ClipTest(Dx, N.Right - P1.X, T0, T1) and
+    ClipTest(-Dy, P1.Y - N.Top, T0, T1) and
+    ClipTest(Dy, N.Bottom - P1.Y, T0, T1);
+end;
 
 function NodePaintCompare(const Item1, Item2: TCustomNode): Integer;
 begin
@@ -308,6 +385,11 @@ begin
   FGuideSnapYActive := False;
   FGuideSnapX := 0;
   FGuideSnapY := 0;
+
+  // Axes defaults
+  FShowAxes := False;
+  FAxesColor := TAlphaColors.Silver;
+  FAxesThickness := 2;
 
   CanFocus := True;
   TabStop := True;
@@ -874,20 +956,67 @@ end;
 
 function TNodeEditor.IsMouseNearLinkStart(ALink: TNodeLink; SX, SY: Integer): Boolean;
 var
-  P0, P1, P2, P3: TPoint;
+  P0, P1: TPointF; // Using World points now
   D0, D1: Double;
+  MouseW: TPointF;
 begin
   Result := False;
 
   if (ALink = nil) or (ALink.FromPin = nil) or (ALink.ToPin = nil) then
     Exit;
 
-  GetLinkBezierPoints(ALink, P0, P1, P2, P3);
+  MouseW := ScreenToWorld(SX, SY);
+  P0 := GetPinWorldPosition(ALink.FromPin);
+  P1 := GetPinWorldPosition(ALink.ToPin);
 
-  D0 := Sqrt(Sqr(SX - P0.X) + Sqr(SY - P0.Y));
-  D1 := Sqrt(Sqr(SX - P3.X) + Sqr(SY - P3.Y));
+  D0 := Hypot(MouseW.X - P0.X, MouseW.Y - P0.Y);
+  D1 := Hypot(MouseW.X - P1.X, MouseW.Y - P1.Y);
 
   Result := D0 <= D1;
+end;
+
+function TNodeEditor.GetVisibleWorldRect: TRectF;
+var
+  P0, P1: TPointF;
+begin
+  P0 := ScreenToWorld(0, 0);
+  P1 := ScreenToWorld(Round(Width), Round(Height));
+
+  Result.Left := Min(P0.X, P1.X);
+  Result.Top := Min(P0.Y, P1.Y);
+  Result.Right := Max(P0.X, P1.X);
+  Result.Bottom := Max(P0.Y, P1.Y);
+end;
+
+function TNodeEditor.GetPinWorldPosition(APin: TNodePin): TPointF;
+begin
+  if (APin = nil) or (APin.OwnerNode = nil) then
+    Exit(PointF(0, 0));
+  Result := TCustomNode(APin.OwnerNode).GetPinWorldPosition(APin);
+end;
+
+procedure TNodeEditor.GetLinkBezierWorldPoints(ALink: TNodeLink; out P0, P1, P2, P3: TPointF);
+var
+  DX, DY: single;
+  Dist: single;
+  D: single;
+begin
+  P0 := GetPinWorldPosition(ALink.FromPin);
+  P3 := GetPinWorldPosition(ALink.ToPin);
+
+  DX := P3.X - P0.X;
+  DY := P3.Y - P0.Y;
+  Dist := Hypot(DX, DY);
+
+  // Divide by FZoom to keep the visual curve consistent
+  D := Dist * 0.35;
+  D := EnsureRange(D, 30 / FZoom, 150 / FZoom);
+
+  P1 := P0;
+  P1.X := P1.X + D;
+
+  P2 := P3;
+  P2.X := P2.X - D;
 end;
 
 procedure TNodeEditor.NotifySelectionChanged;
@@ -953,9 +1082,9 @@ begin
   Result := FSelectedLinks.Count;
 end;
 
-function TNodeEditor.IsLinkInsideScreenRect(ALink: TNodeLink; const R: TRect): boolean;
+function TNodeEditor.IsLinkInsideWorldRect(ALink: TNodeLink; const R: TRectF): boolean;
 var
-  P0, P1, P2, P3: TPoint;
+  P0, P1, P2, P3: TPointF;
   Prev, Cur: TPointF;
   k: integer;
 begin
@@ -967,21 +1096,20 @@ begin
   if (ALink.FromPin.OwnerNode = nil) or (ALink.ToPin.OwnerNode = nil) then
     Exit;
 
-  GetLinkBezierPoints(ALink, P0, P1, P2, P3);
+  GetLinkBezierWorldPoints(ALink, P0, P1, P2, P3);
 
-  if PtInRect(R, P0) or PtInRect(R, P3) then
+  if PtInRectF(P0, R) or PtInRectF(P3, R) then
     Exit(True);
 
-  Prev := PointF(P0.X, P0.Y);
+  Prev := P0;
   for k := 1 to 32 do
   begin
-    Cur := CubicBezierPoint(P0, P1, P2, P3, k / 32);
+    Cur := CubicBezierPointF(P0, P1, P2, P3, k / 32);
 
-    if PtInRect(R, Point(Round(Cur.X), Round(Cur.Y))) then
+    if PtInRectF(Cur, R) then
       Exit(True);
 
-    if LineIntersectsRect(Round(Prev.X), Round(Prev.Y),
-      Round(Cur.X), Round(Cur.Y), R) then
+    if LineIntersectsRectF(Prev, Cur, R) then
       Exit(True);
 
     Prev := Cur;
@@ -1073,13 +1201,15 @@ var
   i, j: integer;
   N: TCustomNode;
   P: TNodePin;
-  R: TRect;
   Sorted: TList<TCustomNode>;
-  Radius: integer;
+  W, PW: TPointF;
+  HitRadiusWorld: Single;
 begin
   Result := False;
   Node := nil;
   Pin := nil;
+
+  W := ScreenToWorld(SX, SY);
 
   Sorted := TList<TCustomNode>.Create;
   try
@@ -1093,9 +1223,9 @@ begin
         Continue;
 
       if N.VisualKind = nvReroute then
-        Radius := Max(7, Round(9 * FZoom))
+        HitRadiusWorld := 9 / FZoom
       else
-        Radius := Max(10, Round(10 * FZoom));
+        HitRadiusWorld := 10 / FZoom;
 
       for j := 0 to N.InputCount - 1 do
       begin
@@ -1104,9 +1234,8 @@ begin
         if P.Hidden then
           Continue;
 
-        R := N.GetPinScreenRect(P, FZoom, FOffsetX, FOffsetY, Radius);
-
-        if PtInRect(R, Point(SX, SY)) then
+        PW := GetPinWorldPosition(P);
+        if Hypot(W.X - PW.X, W.Y - PW.Y) <= HitRadiusWorld then
         begin
           Node := N;
           Pin := P;
@@ -1121,9 +1250,8 @@ begin
         if P.Hidden then
           Continue;
 
-        R := N.GetPinScreenRect(P, FZoom, FOffsetX, FOffsetY, Radius);
-
-        if PtInRect(R, Point(SX, SY)) then
+        PW := GetPinWorldPosition(P);
+        if Hypot(W.X - PW.X, W.Y - PW.Y) <= HitRadiusWorld then
         begin
           Node := N;
           Pin := P;
@@ -1136,42 +1264,19 @@ begin
   end;
 end;
 
-procedure TNodeEditor.GetLinkBezierPoints(ALink: TNodeLink; out P0, P1, P2, P3: TPoint);
-var
-  S0, S1: TPoint;
-  DX, DY: Single;
-  Dist: Single;
-  D: Integer;
-begin
-  S0 := ALink.FromPin.OwnerNode.GetPinScreenPosition(ALink.FromPin, FZoom, FOffsetX, FOffsetY);
-  S1 := ALink.ToPin.OwnerNode.GetPinScreenPosition(ALink.ToPin, FZoom, FOffsetX, FOffsetY);
-  P0 := S0;
-  P3 := S1;
-
-  DX := P3.X - P0.X;
-  DY := P3.Y - P0.Y;
-
-  Dist := Hypot(DX, DY);
-
-  D := Round(Dist * 0.35);
-  D := EnsureRange(D, 30, 150);
-
-  P1 := P0;
-  P1.X := P1.X + D;
-
-  P2 := P3;
-  P2.X := P2.X - D;
-end;
-
 function TNodeEditor.GetLinkUnderMouse(SX, SY: Integer; out Link: TNodeLink): Boolean;
 var
   L: TNodeLink;
-  P0, P1, P2, P3: TPoint;
+  P0, P1, P2, P3: TPointF;
   M: TPointF;
+  TolWorld: single;
 begin
   Result := False;
   Link := nil;
-  M := PointF(SX, SY);
+
+  M := ScreenToWorld(SX, SY);
+  TolWorld := Max(4 / FZoom, 8 / FZoom);
+
   for var i := FGraph.Links.Count - 1 downto 0 do
   begin
     L := FGraph.Links[i];
@@ -1179,8 +1284,8 @@ begin
       Continue;
     if (L.FromPin.OwnerNode = nil) or (L.ToPin.OwnerNode = nil) then
       Continue;
-    GetLinkBezierPoints(L, P0, P1, P2, P3);
-    if PointNearPath(M, P0, P1, P2, P3, 10 * Zoom) then
+    GetLinkBezierWorldPoints(L, P0, P1, P2, P3);
+    if PointNearPath(M, P0, P1, P2, P3, TolWorld) then   //10 * Zoom
     begin
       Link := L;
       Exit(True);
@@ -1190,20 +1295,25 @@ end;
 
 procedure TNodeEditor.DrawGrid;
 var
-  x, y, Step: Integer;
+  VR: TRectF;
+  GX, GY: single;
+  SX, SY: integer;
+  StartX, StartY: single;
 begin
+  if FGridSize <= 0 then
+    Exit;
+
+  VR := GetVisibleWorldRect;
+
   Canvas.Stroke.Color := $55E0E0E0;
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Thickness := 1 * FZoom;
 
-  Step := Round(FGridSize * FZoom);
-  if Step < 8 then
-    Step := 8;
-  x := FOffsetX mod Step;
-  if x < 0 then
-    x := x + Step;
-  while x < Width do
+  StartX := Floor(VR.Left / FGridSize) * FGridSize;
+  GX := StartX;
+  while GX <= VR.Right do
   begin
+    {
     if FGridType = TGridType.Dots then
     begin
       y := FOffsetY mod Step;
@@ -1211,25 +1321,56 @@ begin
         y := y + Step;
       while y < Height do
       begin
-        Canvas.DrawRect(TRectF.Create(TPointF.Create(x, y), 2, 2), 1);
+        Canvas.DrawRect(TRectF.Create(TPointF.Create(SX, SY), 2, 2), 1);
         Inc(y, Step);
       end;
     end
     else
-      Canvas.DrawLine(TPointF.Create(x, 0), TPointF.Create(x, Height), 1);
-    Inc(x, Step);
+    }
+    SX := WorldToScreen(GX, 0).X;
+    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
+    GX := GX + FGridSize;
   end;
+
   if FGridType = TGridType.Lines then
   begin
-    y := FOffsetY mod Step;
-    if y < 0 then
-      y := y + Step;
-    while y < Height do
+    StartY := Floor(VR.Top / FGridSize) * FGridSize;
+    GY := StartY;
+    while GY <= VR.Bottom do
     begin
-      Canvas.DrawLine(TPointF.Create(0, y), TPointF.Create(Width, y), 1);
-      Inc(y, Step);
+      SY := WorldToScreen(0, GY).Y;
+      Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
+      GY := GY + FGridSize;
     end;
   end;
+end;
+
+procedure TNodeEditor.DrawAxes;
+var
+  VR: TRectF;
+  SX, SY: integer;
+begin
+  if not FShowAxes then
+    Exit;
+
+  VR := GetVisibleWorldRect;
+
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Color := FAxesColor;
+  Canvas.Stroke.Thickness := FAxesThickness;
+
+  if (VR.Left <= 0) and (VR.Right >= 0) then
+  begin
+    SX := WorldToScreen(0, 0).X;
+    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
+  end;
+  if (VR.Top <= 0) and (VR.Bottom >= 0) then
+  begin
+    SY := WorldToScreen(0, 0).Y;
+    Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
+  end;
+
+  Canvas.Stroke.Thickness := 1;
 end;
 
 procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
@@ -1265,6 +1406,7 @@ procedure TNodeEditor.DrawLinks(WorldRect: TRectF);
 var
   i: Integer;
   Link: TNodeLink;
+  W0, W1, W2, W3: TPointF;
   P0, P1, P2, P3: TPoint;
 begin
   for i := 0 to FGraph.Links.Count - 1 do
@@ -1272,7 +1414,14 @@ begin
     Link := TNodeLink(FGraph.Links[i]);
     if (Link.FromPin = nil) or (Link.ToPin = nil) then
       Continue;
-    GetLinkBezierPoints(Link, P0, P1, P2, P3);
+
+    GetLinkBezierWorldPoints(Link, W0, W1, W2, W3);
+
+    P0 := WorldToScreen(W0.X, W0.Y);
+    P1 := WorldToScreen(W1.X, W1.Y);
+    P2 := WorldToScreen(W2.X, W2.Y);
+    P3 := WorldToScreen(W3.X, W3.Y);
+
     var R := TRect.Create(P0, P3);
     R.NormalizeRect;
     if not WorldRect.IntersectsWith(R) then
@@ -1321,7 +1470,10 @@ end;
 procedure TNodeEditor.DrawTempLink;
 var
   P0, P1, P2, P3: TPoint;
-  FixedPos: TPoint;
+  W0, W1, W2, W3: TPointF;
+  StartPin: TNodePin;
+  FixedPosW: TPointF;
+  DX, DY, Dist, D: Single;
 begin
   if FTempFromPin = nil then
     Exit;
@@ -1330,50 +1482,56 @@ begin
   Canvas.Stroke.Thickness := 3;
   Canvas.Stroke.Dash := TStrokeDash.Dot;
 
+  StartPin := FTempFromPin;
+
   if FReconnectingLink and (FReconnectFixedPin <> nil) then
   begin
-    FixedPos := FReconnectFixedPin.OwnerNode.GetPinScreenPosition(
-      FReconnectFixedPin, FZoom, FOffsetX, FOffsetY);
+    FixedPosW := GetPinWorldPosition(FReconnectFixedPin);
 
     if FReconnectMovingFromSide then
     begin
-      P0 := FTempMousePos;
-      P3 := FixedPos;
+      W0 := ScreenToWorld(FTempMousePos.X, FTempMousePos.Y);
+      W3 := FixedPosW;
     end
     else
     begin
-      P0 := FixedPos;
-      P3 := FTempMousePos;
+      W0 := FixedPosW;
+      W3 := ScreenToWorld(FTempMousePos.X, FTempMousePos.Y);
+      StartPin := FReconnectFixedPin;
     end;
-
-    P1 := P0;
-    P2 := P3;
-
-    P1.X := P1.X + Round(60 * FZoom);
-    P2.X := P2.X - Round(60 * FZoom);
   end
   else
   begin
-    P0 := FTempFromPin.OwnerNode.GetPinScreenPosition(
-      FTempFromPin, FZoom, FOffsetX, FOffsetY);
-
-    if FTempFromPin.Direction = pdOutput then
-    begin
-      P1 := P0;
-      P1.X := P1.X + Round(60 * FZoom);
-      P2 := FTempMousePos;
-      P2.X := P2.X - Round(60 * FZoom);
-    end
-    else
-    begin
-      P1 := P0;
-      P1.X := P1.X - Round(60 * FZoom);
-      P2 := FTempMousePos;
-      P2.X := P2.X + Round(60 * FZoom);
-    end;
-
-    P3 := FTempMousePos;
+    W0 := GetPinWorldPosition(FTempFromPin);
+    W3 := ScreenToWorld(FTempMousePos.X, FTempMousePos.Y);
   end;
+
+  DX := W3.X - W0.X;
+  DY := W3.Y - W0.Y;
+  Dist := Hypot(DX, DY);
+  D := EnsureRange(Dist * 0.35, 30 / FZoom, 150 / FZoom);
+
+  W1 := W0;
+  W2 := W3;
+
+  if (StartPin <> nil) and (StartPin.Direction = pdInput) then
+  begin
+    W1.X := W0.X - D;
+    W2.X := W3.X + D;
+  end
+  else
+  begin
+    W1.X := W0.X + D;
+    W2.X := W3.X - D;
+  end;
+
+  W1.Y := W0.Y;
+  W2.Y := W3.Y;
+
+  P0 := WorldToScreen(W0.X, W0.Y);
+  P1 := WorldToScreen(W1.X, W1.Y);
+  P2 := WorldToScreen(W2.X, W2.Y);
+  P3 := WorldToScreen(W3.X, W3.Y);
 
   DrawCubicBezier(Canvas, P0, P1, P2, P3);
 
@@ -1567,6 +1725,8 @@ var
 
 begin
   DrawGrid;
+  DrawAxes;
+
   WorldRect := TRectF.Create(
     ScreenToWorld(FOffsetX, FOffsetY),
     TPointF.Create(Width, Height));
@@ -2297,6 +2457,8 @@ begin
     FBoxSelecting := True;
     FBoxStart := Point(X, Y);
     FBoxCurrent := Point(X, Y);
+    FBoxStartWorld := ScreenToWorld(X, Y);
+    FBoxCurrentWorld := FBoxStartWorld;
     NotifySelectionChanged;
     Repaint;
   end
@@ -2359,48 +2521,34 @@ begin
   end
   else if FDraggingNode and (FSelectedNodes.Count > 0) then
   begin
+    Dx := (X - FDragAnchorX) / FZoom;
+    Dy := (Y - FDragAnchorY) / FZoom;
+
     if FSnapToGrid and not (ssAlt in Shift) then
     begin
-      Dx := (X - FDragAnchorX) / FZoom;
-      Dy := (Y - FDragAnchorY) / FZoom;
-
-      Dx := SnapWorldValue(Dx);
-      Dy := SnapWorldValue(Dy);
-
-      ApplyNodeSnap(Dx, Dy);
-
-      for var i := 0 to FDragCommandNodes.Count - 1 do
+      if FDragCommandNodes.Count > 0 then
       begin
-        var N := TCustomNode(FDragCommandNodes[i]);
-        BaseX := FDragOldPositions[i].X;
-        BaseY := FDragOldPositions[i].Y;
+        BaseX := FDragOldPositions[0].X;
+        BaseY := FDragOldPositions[0].Y;
 
-        N.X := BaseX + Dx;
-        N.Y := BaseY + Dy;
-
-        if Assigned(FOnNodeChanged) then
-          FOnNodeChanged(Self, N);
+        Dx := SnapWorldValue(BaseX + Dx) - BaseX;
+        Dy := SnapWorldValue(BaseY + Dy) - BaseY;
       end;
-    end
-    else
+    end;
+
+    ApplyNodeSnap(Dx, Dy);
+
+    for var i := 0 to FDragCommandNodes.Count - 1 do
     begin
-      Dx := (X - FDragAnchorX) / FZoom;
-      Dy := (Y - FDragAnchorY) / FZoom;
-      ApplyNodeSnap(Dx, Dy);
-      for var i := 0 to FDragCommandNodes.Count - 1 do
-      begin
-        var N := TCustomNode(FDragCommandNodes[i]);
-        BaseX := FDragOldPositions[i].X;
-        BaseY := FDragOldPositions[i].Y;
+      var N := TCustomNode(FDragCommandNodes[i]);
+      BaseX := FDragOldPositions[i].X;
+      BaseY := FDragOldPositions[i].Y;
 
-        N.X := BaseX + Dx;
-        N.Y := BaseY + Dy;
+      N.X := BaseX + Dx;
+      N.Y := BaseY + Dy;
 
-        if Assigned(FOnNodeChanged) then
-          FOnNodeChanged(Self, N);
-      end;
-      FDragStartX := X;
-      FDragStartY := Y;
+      if Assigned(FOnNodeChanged) then
+        FOnNodeChanged(Self, N);
     end;
   end
   else if FTempFromPin <> nil then
@@ -2413,6 +2561,7 @@ begin
   else if FBoxSelecting then
   begin
     FBoxCurrent := Point(X, Y);
+    FBoxCurrentWorld := ScreenToWorld(X, Y);
   end;
   Repaint;
 end;
@@ -2451,7 +2600,7 @@ procedure TNodeEditor.MouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: 
 var
   TargetNode: TCustomNode;
   TargetPin: TNodePin;
-  R: TRect;
+  R: TRectF;
   i: Integer;
   N: TCustomNode;
   NewPositions: array of TPointF;
@@ -2643,7 +2792,7 @@ begin
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
           N := TCustomNode(FGraph.Nodes[i]);
-          if RectIntersects(R, N.GetScreenBounds(FZoom, FOffsetX, FOffsetY)) then
+          if RectFIntersects(R, RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
             AddNodeToSelection(N);
         end;
       end
@@ -2653,7 +2802,7 @@ begin
         for i := 0 to FGraph.Links.Count - 1 do
         begin
           var L := TNodeLink(FGraph.Links[i]);
-          if IsLinkInsideScreenRect(L, R) then
+          if IsLinkInsideWorldRect(L, R) then
             AddLinkToSelection(L);
         end;
       end
@@ -2662,14 +2811,14 @@ begin
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
           N := TCustomNode(FGraph.Nodes[i]);
-          if RectIntersects(R, N.GetScreenBounds(FZoom, FOffsetX, FOffsetY)) then
+          if RectFIntersects(R, RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
             AddNodeToSelection(N);
         end;
 
         for i := 0 to FGraph.Links.Count - 1 do
         begin
           var L := TNodeLink(FGraph.Links[i]);
-          if IsLinkInsideScreenRect(L, R) then
+          if IsLinkInsideWorldRect(L, R) then
             AddLinkToSelection(L);
         end;
       end;

@@ -72,7 +72,7 @@ procedure DrawCubicBezier(C: TCanvas; P0, P1, P2, P3: TPoint);
 
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius: Single);
 
-function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPoint; Tolerance: Single): Boolean;
+function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
 
 function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF;
 
@@ -241,7 +241,7 @@ begin
   Result := P.Distance(Closest);
 end;
 
-function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPoint; Tolerance: Single): Boolean;
+function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
 var
   Poly: TPolygon;
   I: Integer;

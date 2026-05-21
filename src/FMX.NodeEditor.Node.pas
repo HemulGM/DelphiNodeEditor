@@ -135,6 +135,7 @@ type
 
     function GetPinLocalPosition(APin: TNodePin): TPoint;
     function GetPinScreenPosition(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer): TPoint;
+    function GetPinWorldPosition(APin: TNodePin): TPointF;
     function GetPinScreenRect(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
 
     function GetPinAt(LocalX, LocalY: integer): TNodePin;
@@ -438,6 +439,17 @@ begin
   Result.Y := Round((y + P.Y) * Zoom) + OffsetY;
   //if (VisualKind = nvReroute) and (APin.Direction = pdOutput) then
   //  Sleep(1);
+end;
+
+function TCustomNode.GetPinWorldPosition(APin: TNodePin): TPointF;
+var
+  local: TPoint;
+begin
+  if (APin = nil) or (APin.OwnerNode <> Self) then
+    Exit(PointF(0, 0));
+
+  local := GetPinLocalPosition(APin);
+  Result := PointF(X + local.X, Y + local.Y);
 end;
 
 function TCustomNode.GetPinScreenRect(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer; Radius: integer): TRect;
