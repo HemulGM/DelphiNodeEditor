@@ -3,3 +3,9 @@
 *.dsv
 *.exe
 *.dcu
+*.o
+*.so
+*.exe
+*.dll
+fmx/Linux64/*
+*.local

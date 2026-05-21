@@ -1,0 +1,49 @@
+object FormNodeEditorSearch: TFormNodeEditorSearch
+  Left = 0
+  Top = 0
+  ActiveControl = SearchBoxFilter
+  Caption = 'Add Node'
+  ClientHeight = 400
+  ClientWidth = 300
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object ListBoxItems: TListBox
+    Align = Client
+    Margins.Left = 10.000000000000000000
+    Margins.Top = 10.000000000000000000
+    Margins.Right = 10.000000000000000000
+    Margins.Bottom = 10.000000000000000000
+    Size.Width = 280.000000000000000000
+    Size.Height = 380.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    OnDblClick = ListBoxItemsDblClick
+    ScrollAnimation = True
+    DisableFocusEffect = True
+    ItemHeight = 32.000000000000000000
+    DefaultItemStyles.ItemStyle = ''
+    DefaultItemStyles.GroupHeaderStyle = ''
+    DefaultItemStyles.GroupFooterStyle = ''
+    Viewport.Width = 276.000000000000000000
+    Viewport.Height = 344.000000000000000000
+    object SearchBoxFilter: TSearchBox
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      Align = Top
+      TabOrder = 0
+      Size.Width = 276.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+    end
+  end
+  object ActionList: TActionList
+    Left = 144
+    Top = 168
+    object ActionEsc: TAction
+      Text = 'ActionEsc'
+      ShortCut = 27
+      OnExecute = ActionEscExecute
+    end
+  end
+end
