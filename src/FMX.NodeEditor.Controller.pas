@@ -40,10 +40,10 @@ type
     procedure CopySelectionToClipboard;
     procedure PasteFromClipboard(AX, AY: single);
     procedure DuplicateSelection(AX, AY: single);
-    function SaveToJSONText(AZoom: double; AOffsetX, AOffsetY: integer): string;
-    procedure LoadFromJSONText(const S: string; out AZoom: double; out AOffsetX, AOffsetY: integer);
-    procedure SaveToFile(const AFileName: string; AZoom: double; AOffsetX, AOffsetY: integer);
-    procedure LoadFromFile(const AFileName: string; out AZoom: double; out AOffsetX, AOffsetY: integer);
+    function SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
+    procedure LoadFromJSONText(const S: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
+    procedure SaveToFile(const AFileName: string; AZoom: Double; AOffsetX, AOffsetY: Double);
+    procedure LoadFromFile(const AFileName: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
 
     function ValidateGraphToStrings(AStrings: TStrings): boolean;
 
@@ -135,7 +135,7 @@ begin
     FSelection.Clear;
 end;
 
-function TNodeEditorController.SaveToJSONText(AZoom: double; AOffsetX, AOffsetY: integer): string;
+function TNodeEditorController.SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
 begin
   var Root := TJSONObject.Create;
   try
@@ -153,7 +153,7 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.LoadFromJSONText(const S: string; out AZoom: double; out AOffsetX, AOffsetY: integer);
+procedure TNodeEditorController.LoadFromJSONText(const S: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
 begin
   AZoom := 1.0;
   AOffsetX := 0;
@@ -166,9 +166,9 @@ begin
 
   var Data := TJSONValue.ParseJSONValue(S) as TJSONObject;
   try
-    AZoom := Data.GetValue('zoom', 1.0);
-    AOffsetX := Data.GetValue('offsetX', 0);
-    AOffsetY := Data.GetValue('offsetY', 0);
+    AZoom := Data.GetValue<Double>('zoom', 1.0);
+    AOffsetX := Data.GetValue<Double>('offsetX', 0.0);
+    AOffsetY := Data.GetValue<Double>('offsetY', 0.0);
 
     var GraphObj := Data.GetValue<TJSONObject>('graph', nil);
     if GraphObj <> nil then
@@ -184,12 +184,12 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.SaveToFile(const AFileName: string; AZoom: double; AOffsetX, AOffsetY: integer);
+procedure TNodeEditorController.SaveToFile(const AFileName: string; AZoom: Double; AOffsetX, AOffsetY: Double);
 begin
   TFile.WriteAllText(AFileName, SaveToJSONText(AZoom, AOffsetX, AOffsetY));
 end;
 
-procedure TNodeEditorController.LoadFromFile(const AFileName: string; out AZoom: double; out AOffsetX, AOffsetY: integer);
+procedure TNodeEditorController.LoadFromFile(const AFileName: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
 begin
   LoadFromJSONText(TFile.ReadAllText(AFileName), AZoom, AOffsetX, AOffsetY);
 end;
@@ -581,14 +581,14 @@ begin
         NodeObj := NodesArr.Items[i] as TJSONObject;
         if First then
         begin
-          MinX := NodeObj.GetValue('x', 0.0);
-          MinY := NodeObj.GetValue('y', 0.0);
+          MinX := NodeObj.GetValue<Single>('x', 0.0);
+          MinY := NodeObj.GetValue<Single>('y', 0.0);
           First := False;
         end
         else
         begin
-          MinX := Min(MinX, NodeObj.GetValue('x', 0.0));
-          MinY := Min(MinY, NodeObj.GetValue('y', 0.0));
+          MinX := Min(MinX, NodeObj.GetValue<Single>('x', 0.0));
+          MinY := Min(MinY, NodeObj.GetValue<Single>('y', 0.0));
         end;
       end;
 
@@ -598,8 +598,8 @@ begin
         NodeType := NodeObj.GetValue('type', 'default');
         OldNodeId := NodeObj.GetValue('id', '');
 
-        N := AGraph.Registry.CreateNode(NodeType, NodeObj.GetValue('x', 0.0),
-          NodeObj.GetValue('y', 0.0));
+        N := AGraph.Registry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0),
+          NodeObj.GetValue<Single>('y', 0.0));
         N.LoadFromJSON(NodeObj);
         NewNodeId := NewId;
         N.Id := NewNodeId;

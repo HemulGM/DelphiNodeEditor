@@ -1,4 +1,4 @@
-{$include Old/FMX.NodeEditor.Node.Graph.pas}
+//{$include Old/FMX.NodeEditor.Node.Graph.pas}
 
 unit FMX.NodeEditor.Node.Graph;
 
@@ -1107,7 +1107,7 @@ begin
       NodeObj := NodesArr.Items[i] as TJSONObject;
       NodeType := NodeObj.GetValue('type', 'default');
 
-      N := FRegistry.CreateNode(NodeType, NodeObj.GetValue('x', 0.0), NodeObj.GetValue('y', 0.0));
+      N := FRegistry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0));
       N.LoadFromJSON(NodeObj);
       FNodes.Add(N);
     end;

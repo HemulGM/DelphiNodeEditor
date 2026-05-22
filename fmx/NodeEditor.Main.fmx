@@ -77920,15 +77920,15 @@ object FormMain: TFormMain
         Align = Center
         CanParentFocus = True
         Frequency = 1.000000000000000000
-        Max = 300.000000000000000000
-        Min = 25.000000000000000000
+        Max = 600.000000000000000000
+        Min = 12.000000000000000000
         Orientation = Vertical
-        Reverse = True
+        RotationAngle = 180.000000000000000000
         Size.Width = 32.000000000000000000
         Size.Height = 220.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
-        Value = 25.000000000000000000
+        Value = 12.000000000000000000
         OnChange = TrackBarZoomChange
       end
     end

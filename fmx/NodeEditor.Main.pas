@@ -44,6 +44,11 @@ type
     procedure SetupPins; override;
   end;
 
+  TTrackBar = class(FMX.StdCtrls.TTrackBar)
+  protected
+    procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
+  end;
+
   TFormMain = class(TForm)
     LayoutRender: TLayout;
     Layout1: TLayout;
@@ -219,7 +224,7 @@ var
 implementation
 
 uses
-  System.Math, System.JSON, FMX.NodeEditor.Node.Command;
+  System.Math, System.JSON, FMX.NodeEditor.Node.Command, FMX.Platform.Win;
 
 {$R *.fmx}
 
@@ -516,7 +521,9 @@ procedure TFormMain.TrackBarZoomChange(Sender: TObject);
 begin
   if FNodeUpdating then
     Exit;
-  FEditor.SetZoom(TrackBarZoom.Value / 100, FEditor.LocalRect.CenterPoint.Round);
+  FNodeUpdating := True;
+  FEditor.SetZoom((TrackBarZoom.Value) / 100, FEditor.LocalRect.CenterPoint.Round);
+  FNodeUpdating := False;
 end;
 
 procedure TFormMain.InitDemoGraph;
@@ -1049,9 +1056,29 @@ begin
   LabelStat4.Text :=
     'Snap: ' + (if FEditor.SnapToGrid then 'ON' else 'OFF') +
     '  Grid: ' + IntToStr(FEditor.GridSize);
-  FNodeUpdating := True;
-  TrackBarZoom.Value := FEditor.Zoom * 100;
-  FNodeUpdating := False;
+
+  if not FNodeUpdating then
+  begin
+    FNodeUpdating := True;
+    TrackBarZoom.Value := FEditor.Zoom * 100;
+    FNodeUpdating := False;
+  end;
+end;
+
+procedure TTrackBar.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
+var
+  LValue: Double;
+  OldValue: Double;
+  LInc: Double;
+begin
+  LInc := Frequency;
+  if LInc = 0 then
+    LInc := 1;
+  LInc := LInc * Sign(WheelDelta);
+  LValue := Value + LInc;
+  OldValue := Value;
+  Value := LValue;
+  Handled := not SameValue(Value, OldValue);
 end;
 
 initialization

@@ -138,13 +138,13 @@ type
     function FindPinById(const AId: string): TNodePin;
 
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
-    function GetPinScreenPosition(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer): TPoint;
+    function GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
     function GetPinWorldPosition(APin: TNodePin): TPointF;
-    function GetPinScreenRect(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
+    function GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
 
     function GetPinAt(LocalX, LocalY: integer): TNodePin;
     function HitTest(WX, WY: single): boolean;
-    function GetScreenBounds(Zoom: double; OffsetX, OffsetY: integer): TRect;
+    function GetScreenBounds(Zoom: double; OffsetX, OffsetY: Double): TRect;
 
     procedure ClearValues;
     function AddValue(const AName: string; AKind: TNodeValueKind): TNodeValue;
@@ -454,13 +454,13 @@ begin
     Result := Point(Width, APin.LocalY);
 end;
 
-function TCustomNode.GetPinScreenPosition(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer): TPoint;
+function TCustomNode.GetPinScreenPosition(APin: TNodePin; Zoom: double; OffsetX, OffsetY: Double): TPoint;
 var
   P: TPoint;
 begin
   P := GetPinLocalPosition(APin);
-  Result.X := Round((x + P.X) * Zoom) + OffsetX;
-  Result.Y := Round((y + P.Y) * Zoom) + OffsetY;
+  Result.X := Round((x + P.X) * Zoom + OffsetX);
+  Result.Y := Round((y + P.Y) * Zoom + OffsetY);
 end;
 
 function TCustomNode.GetPinWorldPosition(APin: TNodePin): TPointF;
@@ -567,10 +567,10 @@ begin
   Result := (WX >= X) and (WY >= Y) and (WX <= X + Width) and (WY <= Y + Height);
 end;
 
-function TCustomNode.GetScreenBounds(Zoom: double; OffsetX, OffsetY: integer): TRect;
+function TCustomNode.GetScreenBounds(Zoom: double; OffsetX, OffsetY: Double): TRect;
 begin
-  Result.Left := Round(x * Zoom) + OffsetX;
-  Result.Top := Round(y * Zoom) + OffsetY;
+  Result.Left := Round(x * Zoom + OffsetX);
+  Result.Top := Round(y * Zoom + OffsetY);
   Result.Right := Result.Left + Round(Width * Zoom);
   Result.Bottom := Result.Top + Round(Height * Zoom);
 end;
@@ -1068,7 +1068,7 @@ begin
   VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(nvNormal)));
   CommentText := AObj.GetValue('commentText', CommentText);
   Collapsed := AObj.GetValue('collapsed', False);
-  ZOrder := AObj.GetValue('zOrder', 0);
+  ZOrder := AObj.GetValue<Integer>('zOrder', 0);
 
   // Pins
   ClearPins;
@@ -1082,7 +1082,7 @@ begin
       Dir := StrToPinDirection(PinObj.GetValue('direction', 'input'));
       Kind := StrToPinKind(PinObj.GetValue('kind', 'data'));
 
-      P := TNodePin.Create(PinObj.GetValue('name', ''), Dir, Kind, PinObj.GetValue('localY', 40));
+      P := TNodePin.Create(PinObj.GetValue('name', ''), Dir, Kind, PinObj.GetValue<Integer>('localY', 40));
 
       P.Id := PinObj.GetValue('id', P.Id);
       P.DisplayName := PinObj.GetValue('displayName', P.Name);
@@ -1099,7 +1099,7 @@ begin
       P.Hidden := PinObj.GetValue('hidden', False);
       P.Advanced := PinObj.GetValue('advanced', False);
       P.AllowMultipleConnections := PinObj.GetValue('allowMultipleConnections', Dir = pdOutput);
-      P.SortIndex := PinObj.GetValue('sortIndex', 0);
+      P.SortIndex := PinObj.GetValue<Integer>('sortIndex', 0);
 
       P.OwnerNode := Self;
 

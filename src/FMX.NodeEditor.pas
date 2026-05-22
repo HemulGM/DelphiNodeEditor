@@ -17,7 +17,7 @@ type
   TNodeChangedEvent = procedure(Sender: TObject; ANode: TCustomNode) of object;
 
   { Custom Draw Events }
-  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRect; Zoom: double; OffsetX, OffsetY: integer; var AHandled: boolean) of object;
+  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRect; Zoom: Double; OffsetX, OffsetY: Double; var AHandled: boolean) of object;
 
   TNodeEditorDrawPinEvent = procedure(Sender: TObject; Canvas: TCanvas; APin: TNodePin; const ACenter: TPoint; ARadius: integer; ASelected, AHovered, AHighlighted: boolean; var AHandled: boolean) of object;
 
@@ -40,7 +40,7 @@ type
     FOnSelectionChanged: TNodeSelectionChangedEvent;
 
     FZoom: Double;
-    FOffsetX, FOffsetY: Integer;
+    FOffsetX, FOffsetY: Double;
 
     FDraggingNode: Boolean;
     FDragStartX, FDragStartY: Integer;
@@ -56,7 +56,7 @@ type
     FPanning: Boolean;
     FPanStartX, FPanStartY: Integer;
     FRightMouseMoved: Boolean;
-    FRightButtonDown: boolean;
+    FRightButtonDown: Boolean;
 
     FTempFromPin: TNodePin;
     FTempMousePos: TPoint;
@@ -92,6 +92,7 @@ type
 
     FSnapToGrid: Boolean;
     FGridSize: Integer;
+    FZoomStep: Double;
 
     FSnapToNodes: boolean;
     FNodeSnapDistance: single;
@@ -200,6 +201,7 @@ type
     procedure ClearHoverStates;
     procedure UpdateHoverStates(SX, SY: Integer);
     procedure SetZoom(Value: Double); overload;
+    procedure SetZoomStep(AValue: Double);
     procedure UpdatedStatus;
     procedure SetOnUpdatedStatus(const Value: TNotifyEvent);
     procedure SetGridSize(const Value: Integer);
@@ -225,7 +227,7 @@ type
 
     // Hit Testing
     function WorldToScreen(WX, WY: Single): TPoint;
-    function ScreenToWorld(SX, SY: Integer): TPointF;
+    function ScreenToWorld(SX, SY: Double): TPointF;
 
     function GetNodeUnderMouse(SX, SY: Integer): TCustomNode;
     function IsLinkInsideWorldRect(ALink: TNodeLink; const R: TRectF): boolean;
@@ -251,6 +253,7 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single); override;
     procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
     procedure KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
+    procedure KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState); override;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -328,6 +331,7 @@ type
 
     property PinCompatibleColor: TAlphaColor read FPinCompatibleColor write FPinCompatibleColor default TAlphaColors.Aqua;
     property PinIncompatibleColor: TAlphaColor read FPinIncompatibleColor write FPinIncompatibleColor default TAlphaColors.Red;
+    property ZoomStep: Double read FZoomStep write SetZoomStep;
 
     // Events
     property OnSelectionChanged: TNodeSelectionChangedEvent read FOnSelectionChanged write FOnSelectionChanged;
@@ -479,6 +483,7 @@ begin
   FLastPaintTick := 0;
 
   FZoom := 1.0;
+  FZoomStep := 1.12;
   FSnapToGrid := False;
   FGridSize := 40;
   FSnapToNodes := True;
@@ -810,13 +815,13 @@ begin
 
   if FGuideSnapXActive then
   begin
-    SX := Round(FGuideSnapX * FZoom) + FOffsetX;
+    SX := Round(FGuideSnapX * FZoom + FOffsetX);
     Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
   end;
 
   if FGuideSnapYActive then
   begin
-    SY := Round(FGuideSnapY * FZoom) + FOffsetY;
+    SY := Round(FGuideSnapY * FZoom + FOffsetY);
     Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
   end;
 
@@ -905,7 +910,7 @@ end;
 procedure TNodeEditor.LoadFromJSONText(const S: string);
 var
   Z: double;
-  OX, OY: integer;
+  OX, OY: Double;
 begin
   if Trim(S) = '' then
     Exit;
@@ -930,8 +935,8 @@ end;
 
 procedure TNodeEditor.LoadFromFile(const AFileName: string);
 var
-  Z: double;
-  OX, OY: integer;
+  Z: Double;
+  OX, OY: Double;
 begin
   if FController <> nil then
   begin
@@ -1423,11 +1428,11 @@ end;
 
 function TNodeEditor.WorldToScreen(WX, WY: Single): TPoint;
 begin
-  Result.X := Round(WX * FZoom) + FOffsetX;
-  Result.Y := Round(WY * FZoom) + FOffsetY;
+  Result.X := Round(WX * FZoom + FOffsetX);
+  Result.Y := Round(WY * FZoom + FOffsetY);
 end;
 
-function TNodeEditor.ScreenToWorld(SX, SY: Integer): TPointF;
+function TNodeEditor.ScreenToWorld(SX, SY: Double): TPointF;
 begin
   Result.X := (SX - FOffsetX) / FZoom;
   Result.Y := (SY - FOffsetY) / FZoom;
@@ -1729,8 +1734,8 @@ begin
       if (P = nil) or P.Hidden then
         Continue;
 
-      PX := Round(ANode.X * FZoom) + FOffsetX;
-      PY := Round((ANode.Y + P.LocalY) * FZoom) + FOffsetY;
+      PX := Round(ANode.X * FZoom + FOffsetX);
+      PY := Round((ANode.Y + P.LocalY) * FZoom + FOffsetY);
       Center := Point(PX, PY);
 
       IsSelected := FController.PinSelection.Contains(P);
@@ -1764,8 +1769,8 @@ begin
       if (P = nil) or P.Hidden then
         Continue;
 
-      PX := Round((ANode.X + ANode.Width) * FZoom) + FOffsetX;
-      PY := Round((ANode.Y + P.LocalY) * FZoom) + FOffsetY;
+      PX := Round((ANode.X + ANode.Width) * FZoom + FOffsetX);
+      PY := Round((ANode.Y + P.LocalY) * FZoom + FOffsetY);
       Center := Point(PX, PY);
 
       IsSelected := FController.PinSelection.Contains(P);
@@ -1894,9 +1899,9 @@ begin
     if N.VisualKind = nvComment then
       Continue;
     if N.VisualKind = nvReroute then
-      HitRadiusWorld := 9 / FZoom
+      HitRadiusWorld := 9
     else
-      HitRadiusWorld := 10 / FZoom;
+      HitRadiusWorld := 10 ;
 
     var SkipInput := False;
     if N.VisualKind = nvReroute then
@@ -2327,6 +2332,9 @@ var
   WorldRect: TRectF;
 begin
   var TS := TStopWatch.StartNew;
+
+  Canvas.Stroke.Cap := TStrokeCap.Round;
+  Canvas.Stroke.Join := TStrokeJoin.Round;
   DrawGrid;
   DrawAxes;
 
@@ -2387,17 +2395,14 @@ begin
   DrawTempLink;
   DrawBoxSelect;
 
-  if FDraggingNode and FShowDragCoordinates and (GetPrimarySelectedNode <> nil)
-    //and ((GetKeyState(VK_MENU) and $8000) <> 0)
-  then
+  if FDraggingNode and FShowDragCoordinates and (GetPrimarySelectedNode <> nil) then
   begin
     CX := GetPrimarySelectedNode.X;
     CY := GetPrimarySelectedNode.Y;
     DX := CX - FDragStartWorldPos.X;
     DY := CY - FDragStartWorldPos.Y;
 
-    Txt := Format('X: %.1f   Y: %.1f   (Δ %.1f, %.1f)',
-      [CX, CY, DX, DY]);
+    Txt := Format('X: %.1f   Y: %.1f   (Δ %.1f, %.1f)', [CX, CY, DX, DY]);
 
     ScreenPos := WorldToScreen(CX, CY);
     ScreenPos.Offset(Round(GetPrimarySelectedNode.Width * Zoom / 2), 0);
@@ -3612,10 +3617,15 @@ end;
 
 procedure TNodeEditor.SetZoom(Value: Double; TargetPos: TPoint);
 begin
-  var OldZoom := FZoom;
-  FZoom := EnsureRange(Value, 0.25, 3.0);
-  FOffsetX := TargetPos.X - Round((TargetPos.X - FOffsetX) * (FZoom / OldZoom));
-  FOffsetY := TargetPos.Y - Round((TargetPos.Y - FOffsetY) * (FZoom / OldZoom));
+  var NewZoom := EnsureRange(Value, 0.12, 6.0);
+
+  if Abs(FZoom - NewZoom) > 0.0001 then
+  begin
+    FOffsetX := TargetPos.X - Round((TargetPos.X - FOffsetX) * (NewZoom / FZoom));
+    FOffsetY := TargetPos.Y - Round((TargetPos.Y - FOffsetY) * (NewZoom / FZoom));
+  end;
+  FZoom := NewZoom;
+
   UpdatedStatus;
   Repaint;
 end;
@@ -3625,21 +3635,39 @@ begin
   SetZoom(Value, FLastMousePos);
 end;
 
+procedure TNodeEditor.SetZoomStep(AValue: Double);
+begin
+  if FZoomStep = AValue then
+    Exit;
+  FZoomStep := AValue;
+end;
+
 procedure TNodeEditor.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
 begin
   inherited MouseWheel(Shift, WheelDelta, Handled);
   Handled := True;
   var NewZoom: Double;
-  if WheelDelta > 0 then
-    NewZoom := FZoom * 1.15
-  else
-    NewZoom := FZoom / 1.15;
+  var OldZoom := FZoom;
+
+  var Factor := Power(FZoomStep, WheelDelta / 120.0);
+
+  if ssCtrl in Shift then
+    Factor := Power(Factor, 1.7)
+  else if ssShift in Shift then
+    Factor := Power(Factor, 0.4);
+
+  NewZoom := OldZoom * Factor;
   SetZoom(NewZoom, FLastMousePos);
+end;
+
+procedure TNodeEditor.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
+begin
+  inherited;
 end;
 
 procedure TNodeEditor.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
-  inherited KeyUp(Key, KeyChar, Shift);
+  inherited;
   if (Key = vkDelete) then
   begin
     DeleteSelection;
