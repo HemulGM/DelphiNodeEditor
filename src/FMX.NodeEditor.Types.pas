@@ -68,7 +68,7 @@ function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF;
 
 function DistancePointToSegment(const P, A, B: TPointF): Single;
 
-procedure DrawCubicBezier(C: TCanvas; P0, P1, P2, P3: TPoint);
+procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint);
 
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
 
@@ -309,7 +309,7 @@ begin
   Result.Y := it3 * P0.Y + 3 * it2 * T * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
 end;
 
-procedure DrawCubicBezier(C: TCanvas; P0, P1, P2, P3: TPoint);
+procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint);
 begin
   var Path := TPathData.Create;
   try

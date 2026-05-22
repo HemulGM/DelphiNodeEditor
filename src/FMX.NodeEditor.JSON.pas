@@ -111,6 +111,9 @@ type
 
 implementation
 
+uses
+  System.IOUtils;
+
 function JsonKindToStr(AKind: TJSONNodeKind): string;
 begin
   case AKind of
@@ -739,29 +742,13 @@ begin
 end;
 
 procedure TJsonNodeEditor.LoadFromFile(const AFileName: string);
-var
-  SL: TStringList;
 begin
-  SL := TStringList.Create;
-  try
-    SL.LoadFromFile(AFileName);
-    LoadJSONText(SL.Text);
-  finally
-    SL.Free;
-  end;
+  LoadJSONText(TFile.ReadAllText(AFileName));
 end;
 
 procedure TJsonNodeEditor.SaveToFile(const AFileName: string; AFormatted: boolean);
-var
-  SL: TStringList;
 begin
-  SL := TStringList.Create;
-  try
-    SL.Text := SaveJSONText(AFormatted);
-    SL.SaveToFile(AFileName);
-  finally
-    SL.Free;
-  end;
+  TFile.WriteAllText(AFileName, SaveJSONText(AFormatted));
 end;
 
 procedure TJsonNodeEditor.SetNodeEditor(const Value: TNodeEditor);

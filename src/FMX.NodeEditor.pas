@@ -340,7 +340,8 @@ implementation
 
 uses
   System.IOUtils, FMX.NodeEditor.Form.Search, FMX.NodeEditor.Node.Command,
-  System.Generics.Defaults, FMX.Platform, System.Math.Vectors;
+  System.Generics.Defaults, FMX.Platform, System.Math.Vectors,
+  System.Diagnostics;
 
 function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
 begin
@@ -1464,9 +1465,9 @@ end;
 
 procedure TNodeEditor.DefaultDrawNode(ANode: TCustomNode; const ARect: TRect);
 var
-  R, HeaderR, BodyR: TRect;
-  HeaderH: integer;
-  PinRadius: integer;
+  R, HeaderR, BodyR: TRectF;
+  HeaderH: Single;
+  PinRadius: Single;
   CornerRadius: Single;
 begin
   if ANode = nil then
@@ -1474,8 +1475,8 @@ begin
 
   R := ARect;
 
-  HeaderH := Round(28 * Zoom);
-  PinRadius := Round(8 * Zoom);
+  HeaderH := 28 * Zoom;
+  PinRadius := 8 * Zoom;
   CornerRadius := 10 * Zoom;
 
   if ANode.Collapsed and (ANode.VisualKind = nvNormal) then
@@ -1492,7 +1493,7 @@ begin
         Canvas.FillRect(R, CornerRadius, CornerRadius, AllCorners, 1);
 
         // Head
-        HeaderR := Rect(R.Left, R.Top, R.Right, R.Top + Round(24 * Zoom));
+        HeaderR := RectF(R.Left, R.Top, R.Right, R.Top + (24 * Zoom));
         Canvas.Fill.Kind := TBrushKind.Solid;
         Canvas.Fill.Color := ANode.HeaderColor;
         Canvas.FillRect(HeaderR, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
@@ -1522,7 +1523,7 @@ begin
 
         // Text Head
         Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := Round(10 * Zoom);
+        Canvas.Font.Size := (10 * Zoom);
         Canvas.Fill.Kind := TBrushKind.Solid;
 
         var RF := TRectF.Create(R.Left + (8 * Zoom), R.Top + (5 * Zoom), R.Left + 1000, R.Top + 1000);
@@ -1547,17 +1548,17 @@ begin
 
         if ANode.Highlighted then
         begin
-          Canvas.Stroke.Thickness := Round(3 * Zoom);
+          Canvas.Stroke.Thickness := (3 * Zoom);
         end
         else if ANode.Hovered then
         begin
           Canvas.Fill.Color := TAlphaColors.Yellow;
-          Canvas.Stroke.Thickness := Round(2 * Zoom);
+          Canvas.Stroke.Thickness := (2 * Zoom);
         end
         else
         begin
           Canvas.Fill.Color := TAlphaColors.White;
-          Canvas.Stroke.Thickness := Round(2 * Zoom);
+          Canvas.Stroke.Thickness := (2 * Zoom);
         end;
                                  {
         Canvas.Stroke.Color := TAlphaColors.Black;
@@ -1609,7 +1610,7 @@ begin
         Canvas.FillRect(BodyR, CornerRadius, CornerRadius, AllCorners, 1);
 
         // Fill Head
-        HeaderR := Rect(R.Left, R.Top, R.Right, R.Top + HeaderH);
+        HeaderR := RectF(R.Left, R.Top, R.Right, R.Top + HeaderH);
         Canvas.Fill.Kind := TBrushKind.Solid;
         Canvas.Fill.Color := ANode.HeaderColor;
         Canvas.Stroke.Kind := TBrushKind.None;
@@ -1645,12 +1646,12 @@ begin
         // Head Text
         Canvas.Fill.Kind := TBrushKind.Solid;
         Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := Round(10 * Zoom);
+        Canvas.Font.Size := 10 * Zoom;
         var RF := TRectF.Create(
-          R.Left + Round(8 * Zoom),
-          R.Top + Round(6 * Zoom),
-          R.Left + Round(8 * Zoom) + 1000,
-          R.Top + Round(8 * Zoom) + 1000);
+          R.Left + (8 * Zoom),
+          R.Top + (6 * Zoom),
+          R.Left + (8 * Zoom) + 1000,
+          R.Top + (8 * Zoom) + 1000);
         Canvas.FillText(RF, ANode.Title, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
       end;
   else
@@ -2325,6 +2326,7 @@ var
   ScreenPos: TPoint;
   WorldRect: TRectF;
 begin
+  var TS := TStopWatch.StartNew;
   DrawGrid;
   DrawAxes;
 
@@ -2404,6 +2406,11 @@ begin
 
     Canvas.Fill.Kind := TBrushKind.Solid;
   end;
+
+  TS.Stop;
+  Canvas.Font.Size := 12;
+  Canvas.Fill.Color := TAlphaColors.White;
+  Canvas.FillText(TRectF.Create(20, 20, 100, 100), TS.ElapsedMilliseconds.ToString + 'ms', False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 end;
 
 function TNodeEditor.GetResizeHandleRect(ANode: TCustomNode): TRect;
