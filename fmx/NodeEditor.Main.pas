@@ -404,7 +404,11 @@ begin
 
   for var i := 0 to N.ValueCount - 1 do
   begin
+    if i >= StringGridNodeValues.RowCount then
+      Continue;
     var V := N.GetValue(i);
+    if V = nil then
+      Continue;
     var VStr := StringGridNodeValues.Cells[2, i].Trim;
 
     case V.Kind of
@@ -430,11 +434,7 @@ begin
     NewObj.Free;
   end;
 
-  if OldJSON <> NewJSON then
-  begin
-    FEditor.Graph.ExecuteCommand(
-      TChangeNodePropertyCommand.Create(FEditor.Graph, N, OldJSON, NewJSON));
-  end;
+  FEditor.ExecuteNodePropertyChange(N, OldJSON, NewJSON);
 
   FEditor.Graph.DoGraphChanged;
   FEditor.Repaint;
@@ -929,6 +929,8 @@ begin
 
   FNodeUpdating := True;
   try
+    ClearAllSections;
+
     // --- Info ---
     LabelNodeType.Text := 'Info (' + N.NodeType + ')';
 
@@ -952,6 +954,8 @@ begin
     for i := 0 to N.InputCount - 1 do
     begin
       P := N.GetInput(i);
+      if P = nil then
+        Continue;
       StringGridNodePins.Cells[0, i] := P.EffectiveDisplayName;
       StringGridNodePins.Cells[1, i] := 'In';
       StringGridNodePins.Cells[2, i] :=
@@ -962,6 +966,8 @@ begin
     for i := 0 to N.OutputCount - 1 do
     begin
       P := N.GetOutput(i);
+      if P = nil then
+        Continue;
       StringGridNodePins.Cells[0, N.InputCount + i] := P.EffectiveDisplayName;
       StringGridNodePins.Cells[1, N.InputCount + i] := 'Out';
       StringGridNodePins.Cells[2, N.InputCount + i] :=
@@ -977,6 +983,8 @@ begin
       for i := 0 to N.ValueCount - 1 do
       begin
         V := N.GetValue(i);
+        if V = nil then
+          Continue;
         StringGridNodeValues.Cells[0, i] := V.Name;
         StringGridNodeValues.Cells[1, i] := NodeValueKindToStr(V.Kind);
 

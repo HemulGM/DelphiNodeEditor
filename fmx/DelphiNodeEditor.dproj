@@ -355,6 +355,8 @@
         <DCCReference Include="..\src\FMX.NodeEditor.JSON.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Types.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Controller.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.DAG.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Selection.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

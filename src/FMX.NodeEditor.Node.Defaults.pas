@@ -3,7 +3,7 @@ unit FMX.NodeEditor.Node.Defaults;
 interface
 
 uses
-  FMX.NodeEditor.Node, System.UITypes, FMX.NodeEditor.Types;
+  FMX.NodeEditor.Node, System.Types, System.UITypes, FMX.NodeEditor.Types;
 
 type
   TDefaultNode = class(TCustomNode)
@@ -25,7 +25,11 @@ type
   end;
 
   TRerouteNode = class(TCustomNode)
+  protected
+    procedure SetHeight(const Value: Integer); override;
+    procedure SetWidth(const Value: Integer); override;
   public
+    function GetPinLocalPosition(APin: TNodePin): TPoint; override;
     constructor Create(ATitle: string; AX, AY: single); override;
     constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 20; AHeight: integer = 20); override;
     procedure SetupPins; override;
@@ -107,11 +111,24 @@ end;
 constructor TRerouteNode.Create(ATitle: string; AX, AY: single; AWidth, AHeight: integer);
 begin
   inherited Create(ATitle, AX, AY, Max(10, AWidth), Max(10, AHeight));
+  MinWidth := 20;
+  MinHeight := 20;
   NodeType := 'reroute';
   VisualKind := nvReroute;
   Title := '';
-  HeaderColor := TAlphaColors.White;
-  BodyColor := TAlphaColors.White;
+  HeaderColor := $FF737373;
+  BodyColor := $FF737373;
+end;
+
+function TRerouteNode.GetPinLocalPosition(APin: TNodePin): TPoint;
+begin
+  if APin = nil then
+    Exit(Point(0, 0));
+
+  if APin.Direction = pdInput then
+    Result := TRect.Create(0, 0, Width, Height).CenterPoint
+  else
+    Result := TRect.Create(0, 0, Width, Height).CenterPoint;
 end;
 
 constructor TRerouteNode.Create(ATitle: string; AX, AY: single);
@@ -119,17 +136,29 @@ begin
   Create(ATitle, AX, AY, 20, 20);
 end;
 
+procedure TRerouteNode.SetHeight(const Value: Integer);
+begin
+  inherited;
+  AutoLayoutPins;
+end;
+
 procedure TRerouteNode.SetupPins;
 begin
   ClearPins;
-  AddInput('', 'any', pkData, Height div 2);
   AddOutput('', 'any', pkData, Height div 2);
+  AddInput('', 'any', pkData, Height div 2);
 
   if InputCount > 0 then
     GetInput(0).AllowMultipleConnections := False;
 
   if OutputCount > 0 then
-    GetOutput(0).AllowMultipleConnections := True;
+    GetOutput(0).AllowMultipleConnections := False;
+end;
+
+procedure TRerouteNode.SetWidth(const Value: Integer);
+begin
+  inherited;
+  AutoLayoutPins;
 end;
 
 { TCommentNode }

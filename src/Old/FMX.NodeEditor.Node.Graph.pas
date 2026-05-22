@@ -1,18 +1,13 @@
-{$include Old/FMX.NodeEditor.Node.Graph.pas}
-
 unit FMX.NodeEditor.Node.Graph;
 
 interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections, System.UITypes,
-  System.Types, System.JSON, FMX.NodeEditor.Node, FMX.NodeEditor.Types,
-  FMX.NodeEditor.DAG;
+  System.Types, System.JSON, FMX.NodeEditor.Node, FMX.NodeEditor.Types;
 
 type
   TNodeGraph = class;
-
-  TNodeDAG = TObjectDAG<TCustomNode>;
 
   TGraphNodeEvent = procedure(Sender: TObject; ANode: TCustomNode) of object;
 
@@ -81,7 +76,7 @@ type
 
   TNodeGraph = class
   private
-    FNodes: TNodeDAG;
+    FNodes: TObjectList<TCustomNode>;
     FLinks: TObjectList<TNodeLink>;
     FRegistry: TNodeRegistry;
     FUndoStack: TObjectList<TGraphCommand>;
@@ -100,9 +95,6 @@ type
     function PinHasIncomingLink(APin: TNodePin): boolean;
     function PinHasOutgoingLink(APin: TNodePin): boolean;
     procedure PushExecutedCommand(ACommand: TGraphCommand);
-
-    function HasLinksBetweenNodes(ANodeA, ANodeB: TCustomNode): boolean;
-    class function CompareNodeById(const A, B: TCustomNode): integer; static;
   public
     constructor Create;
     destructor Destroy; override;
@@ -114,6 +106,7 @@ type
     procedure RemoveLink(ALink: TNodeLink);
 
     function CheckInvariants(AErrors: TStrings = nil): boolean;
+    procedure NormalizeGraph;
     function IsNodeIdUnique(const AId: string; AExcept: TCustomNode = nil): boolean;
     function IsPinIdUnique(const AId: string; AExcept: TNodePin = nil): boolean;
 
@@ -150,7 +143,7 @@ type
     procedure BringNodeToFront(ANode: TCustomNode);
     procedure SendNodeToBack(ANode: TCustomNode);
 
-    property Nodes: TNodeDAG read FNodes;
+    property Nodes: TObjectList<TCustomNode> read FNodes;
     property Links: TObjectList<TNodeLink> read FLinks;
     property Registry: TNodeRegistry read FRegistry;
     property OnNodeAdded: TGraphNodeEvent read FOnNodeAdded write FOnNodeAdded;
@@ -257,7 +250,7 @@ end;
 constructor TNodeGraph.Create;
 begin
   inherited Create;
-  FNodes := TNodeDAG.Create(True);
+  FNodes := TObjectList<TCustomNode>.Create;
   FLinks := TObjectList<TNodeLink>.Create;
   FRegistry := TNodeRegistry.Create;
   FUndoStack := TObjectList<TGraphCommand>.Create;
@@ -319,7 +312,7 @@ begin
   if ANode = nil then
     Exit;
 
-  if not FNodes.Contains(ANode) then
+  if FNodes.IndexOf(ANode) < 0 then
     Exit;
 
   for i := FLinks.Count - 1 downto 0 do
@@ -339,7 +332,7 @@ begin
   if Assigned(FOnNodeRemoved) then
     FOnNodeRemoved(Self, ANode);
 
-  FNodes.Remove(ANode);
+  FNodes.Extract(ANode);
 
   Result := True;
   DoGraphChanged;
@@ -378,7 +371,6 @@ end;
 procedure TNodeGraph.AddLink(ALink: TNodeLink);
 var
   OutPin, InPin: TNodePin;
-  OutNode, InNode: TCustomNode;
 begin
   if ALink = nil then
     Exit;
@@ -409,9 +401,6 @@ begin
   ALink.FromPin := OutPin;
   ALink.ToPin := InPin;
 
-  OutNode := OutPin.OwnerNode;
-  InNode := InPin.OwnerNode;
-
   if LinkExists(OutPin, InPin) then
   begin
     ALink.Free;
@@ -420,19 +409,6 @@ begin
 
   if not InPin.AllowMultipleConnections then
     RemoveLinksToInput(InPin);
-
-  if FNodes.Contains(OutNode) and FNodes.Contains(InNode) then
-  begin
-    if not FNodes.HasEdge(OutNode, InNode) then
-    begin
-      if FNodes.CanCreateCycle(OutNode, InNode) then
-      begin
-        ALink.Free;
-        Exit;
-      end;
-      FNodes.AddEdge(OutNode, InNode);
-    end;
-  end;
 
   FLinks.Add(ALink);
 
@@ -443,68 +419,18 @@ begin
 end;
 
 procedure TNodeGraph.RemoveLink(ALink: TNodeLink);
-var
-  NFrom, NTo: TCustomNode;
 begin
   if ALink = nil then
     Exit;
 
-  NFrom := nil;
-  NTo := nil;
-
-  if (ALink.FromPin <> nil) and (ALink.FromPin.OwnerNode <> nil) then
-    NFrom := TCustomNode(ALink.FromPin.OwnerNode);
-
-  if (ALink.ToPin <> nil) and (ALink.ToPin.OwnerNode <> nil) then
-    NTo := TCustomNode(ALink.ToPin.OwnerNode);
-
-  if Assigned(FOnLinkRemoved) then
-    FOnLinkRemoved(Self, ALink);
-
-  if FLinks.Remove(ALink) >= 0 then
+  if FLinks.Contains(ALink) then
   begin
-    if (NFrom <> nil) and (NTo <> nil) then
-    begin
-      if not HasLinksBetweenNodes(NFrom, NTo) then
-        FNodes.RemoveEdge(NFrom, NTo);
-    end;
+    if Assigned(FOnLinkRemoved) then
+      FOnLinkRemoved(Self, ALink);
+
+    FLinks.Remove(ALink);
     DoGraphChanged;
   end;
-end;
-
-function TNodeGraph.HasLinksBetweenNodes(ANodeA, ANodeB: TCustomNode): boolean;
-var
-  i: integer;
-  L: TNodeLink;
-  OwnerA, OwnerB: TCustomNode;
-begin
-  Result := False;
-  if (ANodeA = nil) or (ANodeB = nil) then
-    Exit;
-
-  for i := 0 to FLinks.Count - 1 do
-  begin
-    L := FLinks[i];
-    if (L.FromPin = nil) or (L.ToPin = nil) then
-      Continue;
-
-    OwnerA := TCustomNode(L.FromPin.OwnerNode);
-    OwnerB := TCustomNode(L.ToPin.OwnerNode);
-
-    if (OwnerA = ANodeA) and (OwnerB = ANodeB) then
-      Exit(True);
-  end;
-end;
-
-class function TNodeGraph.CompareNodeById(const A, B: TCustomNode): integer;
-begin
-  if A = B then
-    Exit(0);
-  if A = nil then
-    Exit(-1);
-  if B = nil then
-    Exit(1);
-  Result := CompareText(A.Id, B.Id);
 end;
 
 function TNodeGraph.CheckInvariants(AErrors: TStrings): boolean;
@@ -633,11 +559,11 @@ begin
         AddError('Link ToPin is not input.');
 
       if (L.FromPin <> nil) and ((L.FromPin.OwnerNode = nil) or
-        (not FNodes.Contains(TCustomNode(L.FromPin.OwnerNode)))) then
+        (FNodes.IndexOf(L.FromPin.OwnerNode) < 0)) then
         AddError('Link FromPin points to pin outside graph.');
 
       if (L.ToPin <> nil) and ((L.ToPin.OwnerNode = nil) or
-        (not FNodes.Contains(TCustomNode(L.ToPin.OwnerNode)))) then
+        (FNodes.IndexOf(L.ToPin.OwnerNode) < 0)) then
         AddError('Link ToPin points to pin outside graph.');
 
       if (L.FromPin <> nil) and (L.ToPin <> nil) and
@@ -647,6 +573,95 @@ begin
   finally
     PinIds.Free;
     NodeIds.Free;
+  end;
+end;
+
+procedure TNodeGraph.NormalizeGraph;
+var
+  i, j: integer;
+  N: TCustomNode;
+  P: TNodePin;
+  L: TNodeLink;
+  UsedNodeIds: TStringList;
+  UsedPinIds: TStringList;
+begin
+  UsedNodeIds := TStringList.Create;
+  UsedPinIds := TStringList.Create;
+  try
+    UsedNodeIds.CaseSensitive := False;
+    UsedPinIds.CaseSensitive := False;
+
+    for i := 0 to FNodes.Count - 1 do
+    begin
+      N := FNodes[i];
+
+      if (N.Id = '') or (UsedNodeIds.IndexOf(N.Id) >= 0) then
+        N.Id := NewId;
+
+      UsedNodeIds.Add(N.Id);
+
+      N.ReindexPins;
+
+      for j := 0 to N.InputCount - 1 do
+      begin
+        P := N.GetInput(j);
+        P.OwnerNode := N;
+        P.Direction := pdInput;
+
+        if (P.Id = '') or (UsedPinIds.IndexOf(P.Id) >= 0) then
+          P.Id := NewId;
+
+        UsedPinIds.Add(P.Id);
+      end;
+
+      for j := 0 to N.OutputCount - 1 do
+      begin
+        P := N.GetOutput(j);
+        P.OwnerNode := N;
+        P.Direction := pdOutput;
+
+        if (P.Id = '') or (UsedPinIds.IndexOf(P.Id) >= 0) then
+          P.Id := NewId;
+
+        UsedPinIds.Add(P.Id);
+      end;
+    end;
+
+    for i := FLinks.Count - 1 downto 0 do
+    begin
+      L := FLinks[i];
+
+      if (L = nil) or (L.FromPin = nil) or (L.ToPin = nil) or
+        (L.FromPin.OwnerNode = nil) or (L.ToPin.OwnerNode = nil) then
+      begin
+        FLinks.Delete(i);
+        Continue;
+      end;
+
+      if (FNodes.IndexOf(L.FromPin.OwnerNode) < 0) or
+        (FNodes.IndexOf(L.ToPin.OwnerNode) < 0) then
+      begin
+        FLinks.Delete(i);
+        Continue;
+      end;
+
+      if (L.FromPin.Direction = pdInput) and (L.ToPin.Direction = pdOutput) then
+      begin
+        P := L.FromPin;
+        L.FromPin := L.ToPin;
+        L.ToPin := P;
+      end;
+
+      if (L.FromPin.Direction <> pdOutput) or (L.ToPin.Direction <> pdInput) or
+        (not CanConnect(L.FromPin, L.ToPin)) then
+      begin
+        FLinks.Delete(i);
+        Continue;
+      end;
+    end;
+  finally
+    UsedPinIds.Free;
+    UsedNodeIds.Free;
   end;
 end;
 
@@ -714,15 +729,9 @@ end;
 function TNodeGraph.FindNodeById(const AId: string): TCustomNode;
 begin
   Result := nil;
-  if AId = '' then
-    Exit;
-
   for var i := 0 to FNodes.Count - 1 do
-  begin
-    var N := FNodes[i];
-    if (N <> nil) and SameText(N.Id, AId) then
-      Exit(N);
-  end;
+    if FNodes[i].Id = AId then
+      Exit(FNodes[i]);
 end;
 
 function TNodeGraph.FindPinById(const AId: string): TNodePin;
@@ -899,8 +908,6 @@ end;
 procedure TNodeGraph.Clear;
 begin
   FLinks.Clear;
-  for var i := 0 to FNodes.Count - 1 do
-    FNodes[i].Free;
   FNodes.Clear;
 
   DoGraphChanged;
@@ -1126,11 +1133,11 @@ begin
       begin
         L := TNodeLink.Create(FromPin, ToPin);
         L.Id := LinkObj.GetValue('id', L.Id);
-        // AddLink handles FLinks and FNodes sync
-        AddLink(L);
+        FLinks.Add(L);
       end;
     end;
   end;
+  NormalizeGraph;
   DoGraphChanged;
 end;
 
@@ -1279,9 +1286,60 @@ begin
 end;
 
 function TNodeGraph.HasCycle: boolean;
+var
+  Visited: TList<TCustomNode>;
+  Stack: TList<TCustomNode>;
+
+  function Visit(N: TCustomNode): boolean;
+  begin
+    Result := False;
+
+    if Stack.IndexOf(N) >= 0 then
+      Exit(True);
+
+    if Visited.IndexOf(N) >= 0 then
+      Exit(False);
+
+    if N.VisualKind = nvComment then
+      Exit(False);
+
+    Visited.Add(N);
+    Stack.Add(N);
+
+    for var i := 0 to FLinks.Count - 1 do
+    begin
+      var L := FLinks[i];
+
+      if (L.FromPin <> nil) and (L.ToPin <> nil) and (L.FromPin.OwnerNode = N) then
+      begin
+        var NextNode := L.ToPin.OwnerNode;
+
+        if (NextNode <> nil) and (NextNode.VisualKind <> nvComment) then
+        begin
+          if Visit(NextNode) then
+            Exit(True);
+        end;
+      end;
+    end;
+
+    Stack.Remove(N);
+  end;
+
 begin
-  // Using DAG cycle check
-  Result := not FNodes.IsAcyclic;
+  Result := False;
+
+  Visited := TList<TCustomNode>.Create;
+  Stack := TList<TCustomNode>.Create;
+  try
+    for var i := 0 to FNodes.Count - 1 do
+    begin
+      if Visit(FNodes[i]) then
+        Exit(True);
+    end;
+  finally
+    Stack.Free;
+    Visited.Free;
+  end;
 end;
 
 function TNodeGraph.CreateRerouteForLink(ALink: TNodeLink; AX, AY: single): TCustomNode;

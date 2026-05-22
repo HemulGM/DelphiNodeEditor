@@ -5,39 +5,9 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Types,
   System.UITypes, System.JSON, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
-  FMX.NodeEditor.Types;
+  FMX.NodeEditor.Types, FMX.NodeEditor.Selection;
 
 type
-  TNodeSelectionModel = class
-  private
-    FNodes: TObjectList<TCustomNode>;
-    FSelectedLinks: TObjectList<TNodeLink>;
-    FOnChanged: TNotifyEvent;
-    procedure NotifyChanged;
-  public
-    constructor Create;
-    destructor Destroy; override;
-
-    procedure Clear;
-    procedure SelectNode(ANode: TCustomNode; AAppend: boolean);
-    procedure SelectLink(ALink: TNodeLink; AAppend: boolean = False);
-    procedure ToggleLink(ALink: TNodeLink);
-    procedure AddLinkToSelection(ALink: TNodeLink);
-    procedure RemoveLinkFromSelection(ALink: TNodeLink);
-    procedure RemoveNode(ANode: TCustomNode);
-
-    function NodeCount: integer;
-    function GetNode(Index: integer): TCustomNode;
-    function LinkCount: integer;
-    function GetLink(Index: integer): TNodeLink;
-    function HasLink: boolean;
-    function SelectedLink: TNodeLink; // returns first selected link
-
-    property OnChanged: TNotifyEvent read FOnChanged write FOnChanged;
-    property Nodes: TObjectList<TCustomNode> read FNodes;
-    property Links: TObjectList<TNodeLink> read FSelectedLinks;
-  end;
-
   TNodeClipboardService = class
   public
     function NodesToJSONText(ANodes: TObjectList<TCustomNode>; AGraph: TNodeGraph): string;
@@ -50,6 +20,7 @@ type
   private
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
+    FPinSelection: TPinSelectionModel;
     FClipboard: TNodeClipboardService;
   public
     constructor Create(AGraph: TNodeGraph);
@@ -87,6 +58,7 @@ type
 
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
+    property PinSelection: TPinSelectionModel read FPinSelection;
     property ClipboardService: TNodeClipboardService read FClipboard;
   end;
 
@@ -96,7 +68,6 @@ uses
   System.Math, FMX.Types, FMX.Clipboard, FMX.Platform, System.IOUtils,
   FMX.NodeEditor.Node.Command;
 
-
 { TNodeEditorController }
 
 constructor TNodeEditorController.Create(AGraph: TNodeGraph);
@@ -104,6 +75,7 @@ begin
   inherited Create;
   FGraph := AGraph;
   FSelection := TNodeSelectionModel.Create;
+  FPinSelection := TPinSelectionModel.Create;
   FClipboard := TNodeClipboardService.Create;
 end;
 
@@ -111,6 +83,7 @@ destructor TNodeEditorController.Destroy;
 begin
   FClipboard.Free;
   FSelection.Free;
+  FPinSelection.Free;
   inherited Destroy;
 end;
 
@@ -301,6 +274,12 @@ begin
   else
     NeedDir := pdOutput;
 
+  if SameText(APin.OwnerNode.NodeType, 'reroute') then
+  begin
+    Result := FGraph.Registry.CreateNode(APin.OwnerNode.NodeType, AX, AY);
+    Exit;
+  end;
+
   for i := 0 to FGraph.Registry.Count - 1 do
   begin
     It := FGraph.Registry.Item(i);
@@ -464,7 +443,7 @@ begin
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
   begin
-    Clipboard.SetText(FClipboard.NodesToJSONText(FSelection.FNodes, FGraph));
+    Clipboard.SetText(FClipboard.NodesToJSONText(FSelection.Nodes, FGraph));
   end;
 end;
 
@@ -497,7 +476,7 @@ begin
   if (FGraph = nil) or (FSelection = nil) or (FSelection.NodeCount = 0) then
     Exit;
 
-  S := FClipboard.NodesToJSONText(FSelection.FNodes, FGraph);
+  S := FClipboard.NodesToJSONText(FSelection.Nodes, FGraph);
   if Trim(S) = '' then
     Exit;
 
@@ -506,163 +485,6 @@ begin
   AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
-end;
-
-{ TNodeSelectionModel }
-
-constructor TNodeSelectionModel.Create;
-begin
-  inherited Create;
-  FNodes := TObjectList<TCustomNode>.Create(False);
-  FSelectedLinks := TObjectList<TNodeLink>.Create(False);
-end;
-
-destructor TNodeSelectionModel.Destroy;
-begin
-  FSelectedLinks.Free;
-  FNodes.Free;
-  inherited Destroy;
-end;
-
-procedure TNodeSelectionModel.NotifyChanged;
-begin
-  if Assigned(FOnChanged) then
-    FOnChanged(Self);
-end;
-
-procedure TNodeSelectionModel.Clear;
-begin
-  for var i := 0 to FNodes.Count - 1 do
-    if FNodes[i] <> nil then
-      FNodes[i].Selected := False;
-  FNodes.Clear;
-  FSelectedLinks.Clear;
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.SelectNode(ANode: TCustomNode; AAppend: boolean);
-begin
-  if ANode = nil then
-    Exit;
-
-  if not AAppend then
-  begin
-    for var i := 0 to FNodes.Count - 1 do
-      if FNodes[i] <> nil then
-        FNodes[i].Selected := False;
-
-    FNodes.Clear;
-    FSelectedLinks.Clear;
-  end;
-
-  if FNodes.IndexOf(ANode) < 0 then
-  begin
-    FNodes.Add(ANode);
-    ANode.Selected := True;
-  end;
-
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.SelectLink(ALink: TNodeLink; AAppend: boolean = False);
-begin
-  if ALink = nil then
-    Exit;
-
-  if not AAppend then
-  begin
-    FSelectedLinks.Clear;
-  end;
-
-  if FSelectedLinks.IndexOf(ALink) < 0 then
-    FSelectedLinks.Add(ALink);
-
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.ToggleLink(ALink: TNodeLink);
-begin
-  if ALink = nil then
-    Exit;
-
-  if FSelectedLinks.IndexOf(ALink) >= 0 then
-    RemoveLinkFromSelection(ALink)
-  else
-    AddLinkToSelection(ALink);
-end;
-
-procedure TNodeSelectionModel.AddLinkToSelection(ALink: TNodeLink);
-begin
-  if (ALink = nil) or (FSelectedLinks.IndexOf(ALink) >= 0) then
-    Exit;
-  FSelectedLinks.Add(ALink);
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.RemoveLinkFromSelection(ALink: TNodeLink);
-begin
-  if ALink = nil then
-    Exit;
-  FSelectedLinks.Remove(ALink);
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.RemoveNode(ANode: TCustomNode);
-begin
-  if ANode = nil then
-    Exit;
-  FNodes.Remove(ANode);
-
-  // Remove links connected to this node from selection
-  for var i := FSelectedLinks.Count - 1 downto 0 do
-  begin
-    if (FSelectedLinks[i].FromPin <> nil) and
-      (FSelectedLinks[i].FromPin.OwnerNode = ANode) or
-      (FSelectedLinks[i].ToPin <> nil) and
-      (FSelectedLinks[i].ToPin.OwnerNode = ANode) then
-      FSelectedLinks.Delete(i);
-  end;
-
-  NotifyChanged;
-end;
-
-function TNodeSelectionModel.NodeCount: integer;
-begin
-  Result := FNodes.Count;
-end;
-
-function TNodeSelectionModel.GetNode(Index: integer): TCustomNode;
-begin
-  if (Index >= 0) and (Index < FNodes.Count) then
-    Result := FNodes[Index]
-  else
-    Result := nil;
-end;
-
-function TNodeSelectionModel.LinkCount: integer;
-begin
-  Result := FSelectedLinks.Count;
-end;
-
-function TNodeSelectionModel.GetLink(Index: integer): TNodeLink;
-begin
-  if (Index >= 0) and (Index < FSelectedLinks.Count) then
-    Result := FSelectedLinks[Index]
-  else
-    Result := nil;
-end;
-
-function TNodeSelectionModel.HasLink: boolean;
-begin
-  Result := FSelectedLinks.Count > 0;
-end;
-
-function TNodeSelectionModel.SelectedLink: TNodeLink;
-begin
-  if FSelectedLinks.Count > 0 then
-    Result := FSelectedLinks[0]
-  else
-    Result := nil;
 end;
 
 { TNodeClipboardService }

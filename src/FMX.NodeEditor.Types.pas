@@ -70,16 +70,47 @@ function DistancePointToSegment(const P, A, B: TPointF): Single;
 
 procedure DrawCubicBezier(C: TCanvas; P0, P1, P2, P3: TPoint);
 
-procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius: Single);
+procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
 
 function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
 
 function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF;
 
+procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
+
 implementation
 
 uses
   System.Math, FMX.Types, System.Math.Vectors;
+
+procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
+var
+  DX, DY, Len: Single;
+begin
+  DX := P2.X - P1.X;
+  DY := P2.Y - P1.Y;
+
+  Len := Sqrt(DX * DX + DY * DY);
+
+  if Len = 0 then
+  begin
+    StartPos := PointF(0.5, 0.5);
+    StopPos := PointF(0.5, 0.5);
+    Exit;
+  end;
+
+  DX := DX / Len;
+  DY := DY / Len;
+
+  // центрируем относительно 0.5
+  StartPos := PointF(
+    0.5 - DX * 0.5,
+    0.5 - DY * 0.5);
+
+  StopPos := PointF(
+    0.5 + DX * 0.5,
+    0.5 + DY * 0.5);
+end;
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 begin
@@ -290,28 +321,39 @@ begin
   end;
 end;
 
-procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius: Single);
+procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
+const
+  sL = 6;
+  sM = 3;
+  sS = 2;
+  sR = 1;
+  {
+  sL = 12;
+  sM = 6;
+  sS = 3;
+  sR = 1;
+  }
 begin
   // Large
-  var S := R;
-  InflateRect(S, 12, 12);
-  OffsetRect(S, 0, 6);
+  var S := R;//ScaleRectFFromCenter(R, -Zoom, -Zoom);
+  InflateRect(S, sL * Zoom, sL * Zoom);
+  OffsetRect(S, 0, sM * Zoom);
 
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := $10000000;
-  Canvas.FillRect(S, Radius + 12, Radius + 12, AllCorners, 1);
+  Canvas.FillRect(S, Radius + sL * Zoom, Radius + sL * Zoom, AllCorners, 1);
 
   // Mid
   S := R;
-  InflateRect(S, 6, 6);
-  OffsetRect(S, 0, 3);
+  InflateRect(S, sM * Zoom, sM * Zoom);
+  OffsetRect(S, 0, sS * Zoom);
 
   Canvas.Fill.Color := $18000000;
-  Canvas.FillRect(S, Radius + 6, Radius + 6, AllCorners, 1);
+  Canvas.FillRect(S, Radius + sM * Zoom, Radius + sM * Zoom, AllCorners, 1);
 
   // Small
   S := R;
-  OffsetRect(S, 0, 1);
+  OffsetRect(S, 0, sR * Zoom);
 
   Canvas.Fill.Color := $30000000;
   Canvas.FillRect(S, Radius, Radius, AllCorners, 1);

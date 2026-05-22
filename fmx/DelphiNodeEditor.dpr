@@ -14,7 +14,9 @@ uses
   FMX.NodeEditor.Node.Graph in '..\src\FMX.NodeEditor.Node.Graph.pas',
   FMX.NodeEditor.JSON in '..\src\FMX.NodeEditor.JSON.pas',
   FMX.NodeEditor.Types in '..\src\FMX.NodeEditor.Types.pas',
-  FMX.NodeEditor.Controller in '..\src\FMX.NodeEditor.Controller.pas';
+  FMX.NodeEditor.Controller in '..\src\FMX.NodeEditor.Controller.pas',
+  FMX.NodeEditor.DAG in '..\src\FMX.NodeEditor.DAG.pas',
+  FMX.NodeEditor.Selection in '..\src\FMX.NodeEditor.Selection.pas';
 
 {$R *.res}
 

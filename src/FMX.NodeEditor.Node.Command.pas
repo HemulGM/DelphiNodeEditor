@@ -154,7 +154,7 @@ begin
   if (FGraph = nil) or (FNode = nil) then
     Exit;
 
-  if FGraph.Nodes.IndexOf(FNode) < 0 then
+  if not FGraph.Nodes.Contains(FNode) then
   begin
     FGraph.AddNode(FNode);
     FOwnsNode := False;
