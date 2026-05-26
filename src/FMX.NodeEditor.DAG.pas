@@ -114,7 +114,7 @@ type
     function EdgeTo(AIndex, AEdgeNo: integer): integer;
     function CanCreateCycle(const AFromValue, AToValue: T): boolean;
     function IsAcyclic: boolean;
-    function TopologicalSort: TList<integer>;
+    function TopologicalSort(out List: TList<integer>): Boolean;
   end;
 
   TObjectDAG<T: class> = class(TDAG<T>)
@@ -844,23 +844,20 @@ end;
 
 function TDAG<T>.IsAcyclic: boolean;
 begin
-  try
-    TopologicalSort.Free;
-    Result := True;
-  except
-    on E: Exception do
-      Result := False;
-  end;
+  var List: TIntList;
+  Result := TopologicalSort(List);
+  if Result then
+    List.Free;
 end;
 
-function TDAG<T>.TopologicalSort: TList<integer>;
+function TDAG<T>.TopologicalSort(out List: TList<integer>): Boolean;
 var
   InDeg: array of integer;
   Queue: array of integer;
   Head, Tail: integer;
   I, J, V, N, Seen: integer;
 begin
-  Result := TIntList.Create;
+  List := TIntList.Create;
   try
     SetLength(InDeg, FCount);
     SetLength(Queue, FCount);
@@ -883,7 +880,7 @@ begin
     begin
       V := Queue[Head];
       Inc(Head);
-      Result.Add(V);
+      List.Add(V);
       Inc(Seen);
       for J := 0 to FEdges[V].Count - 1 do
       begin
@@ -899,13 +896,16 @@ begin
 
     if Seen <> FCount then
     begin
-      Result.Free;
-      raise EListError.Create('Graph contains a cycle');
+      List.Free;
+      List := nil;
+      Exit(False);
     end;
   except
-    Result.Free;
+    List.Free;
+    List := nil;
     raise;
   end;
+  Result := True;
 end;
 
 { TObjectDAG }

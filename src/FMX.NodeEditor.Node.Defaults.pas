@@ -3,7 +3,8 @@ unit FMX.NodeEditor.Node.Defaults;
 interface
 
 uses
-  FMX.NodeEditor.Node, System.Types, System.UITypes, FMX.NodeEditor.Types;
+  FMX.NodeEditor.Node, System.Types, System.UITypes, FMX.Graphics,
+  FMX.NodeEditor.Types;
 
 type
   TDefaultNode = class(TCustomNode)
@@ -30,18 +31,22 @@ type
     constructor Create(ATitle: string; AX, AY: single); override;
     constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 20; AHeight: integer = 20); override;
     procedure SetupPins; override;
+  public
+    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
 
   TCommentNode = class(TCustomNode)
   public
     constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 320; AHeight: integer = 200); override;
     procedure SetupPins; override;
+  public
+    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
 
 implementation
 
 uses
-  System.Math;
+  System.Math, FMX.Types;
 
 { TDefaultNode }
 
@@ -128,6 +133,55 @@ begin
     Result := TRect.Create(0, 0, Width, Height).CenterPoint;
 end;
 
+procedure TRerouteNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+begin
+  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  var Radius := PinRadius * Zoom;
+  var Center := NodeBounds.CenterPoint;
+
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+
+  // Frame
+  if Selected then
+  begin
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := TAlphaColors.White;
+    var SelRect := NodeBounds;
+    SelRect.Inflate(3 * Zoom, 3 * Zoom);
+    Canvas.FillEllipse(SelRect, 0.3);
+  end;
+
+  // Body
+  if Hovered or Highlighted then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    if Highlighted then
+      Canvas.Fill.Color := GetInput(0).PinType.Color
+    else
+      Canvas.Fill.Color := $FFFFD740;
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+  end
+  else
+  begin
+    Canvas.Fill.Color := GetInput(0).PinType.Color;
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+    Radius := Radius * 0.8;
+  end;
+
+  var BodyRect := TRectF.Create(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
+
+  // Highlight frame
+  Canvas.DrawEllipse(BodyRect, 1);
+
+  // Body
+  BodyRect.Inflate(-Radius * 0.4, -Radius * 0.4);
+  Canvas.FillEllipse(BodyRect, 1);
+end;
+
 constructor TRerouteNode.Create(ATitle: string; AX, AY: single);
 begin
   Create(ATitle, AX, AY, 20, 20);
@@ -156,6 +210,69 @@ begin
   HeaderColor := $FFB0B0B0;
   BodyColor := $FFFFFFCC;
   CommentText := 'Comment';
+end;
+
+procedure TCommentNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+begin
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
+
+  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+
+  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeHeadText := NodeHead;
+  NodeHeadText.Inflate(-10 * Zoom, 0);
+
+  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+  var NodeBodyText := NodeBody;
+  NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
+
+  var CornerRadius := 10 * Zoom;
+
+  // Fill
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := $FF1E2125; //BodyColor;
+  Canvas.FillRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Head
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := HeaderColor;
+  if Collapsed then
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
+  else
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+
+  // Frame
+  if Selected then
+  begin
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else if Highlighted then
+  begin
+    Canvas.Stroke.Color := TAlphaColors.Red;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else if Hovered then
+  begin
+    Canvas.Stroke.Color := HeaderColor;//TAlphaColors.Blue;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else
+  begin
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end;
+  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Text Head
+  Canvas.Fill.Color := TAlphaColors.White;
+  Canvas.Font.Size := (10 * Zoom);
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.FillText(NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+
+  // Text Body
+  if (CommentText <> '') and (not Collapsed) then
+    Canvas.FillText(NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 end;
 
 procedure TCommentNode.SetupPins;

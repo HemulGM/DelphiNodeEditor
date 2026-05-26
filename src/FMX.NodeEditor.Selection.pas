@@ -186,10 +186,11 @@ begin
 
   for var i := FSelectedLinks.Count - 1 downto 0 do
   begin
-    if (FSelectedLinks[i].FromPin <> nil) and
-      (FSelectedLinks[i].FromPin.OwnerNode = ANode) or
-      (FSelectedLinks[i].ToPin <> nil) and
-      (FSelectedLinks[i].ToPin.OwnerNode = ANode) then
+    if ((FSelectedLinks[i].FromPin <> nil) and
+      (FSelectedLinks[i].FromPin.OwnerNode = ANode)) or
+      ((FSelectedLinks[i].ToPin <> nil) and
+      (FSelectedLinks[i].ToPin.OwnerNode = ANode))
+    then
       FSelectedLinks.Delete(i);
   end;
 

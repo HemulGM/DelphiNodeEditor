@@ -78,8 +78,6 @@ type
     MenuItemViewZoom1x1: TMenuItem;
     MenuItemEditDeselect: TMenuItem;
     MenuItem3: TMenuItem;
-    MenuItem7: TMenuItem;
-    MenuItemSnapToGrid: TMenuItem;
     MenuItemAdd: TMenuItem;
     MenuItemGraphValidate: TMenuItem;
     MenuItemAddFloat: TMenuItem;
@@ -190,6 +188,10 @@ type
     Button3: TButton;
     Button4: TButton;
     Panel6: TPanel;
+    CheckBoxShowFrameTime: TCheckBox;
+    CheckBoxShowSnapGuides: TCheckBox;
+    CheckBoxShowAxes: TCheckBox;
+    CheckBoxShowGrid: TCheckBox;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -218,7 +220,6 @@ type
     procedure MenuItemAddMulClick(Sender: TObject);
     procedure MenuItemAddRerouteClick(Sender: TObject);
     procedure MenuItemAddStringClick(Sender: TObject);
-    procedure MenuItemSnapToGridClick(Sender: TObject);
     procedure SpinBoxSizeChange(Sender: TObject);
     procedure ButtonNodeApplyClick(Sender: TObject);
     procedure StringGridNodeValuesSelectCell(Sender: TObject; const ACol, ARow: Integer; var CanSelect: Boolean);
@@ -227,6 +228,7 @@ type
     procedure MenuItemJSONLoadClick(Sender: TObject);
     procedure MenuItemJSONSaveClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
+    procedure CheckBoxSnapToGridChange(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -502,8 +504,13 @@ begin
   FEditor := TNodeEditor.Create(LayoutRender);
   FEditor.Parent := LayoutRender;
   FEditor.Align := TAlignLayout.Client;
-  FEditor.SnapToGrid := False;
-  FEditor.GridSize := 40;
+  FEditor.SnapToGrid := CheckBoxSnapToGrid.IsChecked;
+  FEditor.SnapToNodes := CheckBoxSnapToNodes.IsChecked;
+  FEditor.GridSize := Trunc(SpinBoxSize.Value);
+  FEditor.ShowFrameTime := CheckBoxShowFrameTime.IsChecked;
+  FEditor.ShowSnapGuides := CheckBoxShowSnapGuides.IsChecked;
+  FEditor.ShowAxes := CheckBoxShowAxes.IsChecked;
+  FEditor.ShowGrid := CheckBoxShowGrid.IsChecked;
   FEditor.OnPaint := FOnEditorPaint;
 
   FEditor.OnSelectionChanged := OnSelectionChanged;
@@ -877,12 +884,6 @@ begin
     FJsonNodeEditor.SaveToFile(SaveDialogJSON.FileName);
 end;
 
-procedure TFormMain.MenuItemSnapToGridClick(Sender: TObject);
-begin
-  FEditor.SnapToGrid := MenuItemSnapToGrid.IsChecked;
-  UpdateStatus;
-end;
-
 procedure TFormMain.MenuItemViewFitSelClick(Sender: TObject);
 begin
   if FEditor.SelectedNodeCount > 0 then
@@ -912,6 +913,17 @@ begin
   // грубое приближение без доступа к ScreenToWorld — достаточно для демки
   Result.X := (Result.X - 0) / FEditor.Zoom;
   Result.Y := (Result.Y - 0) / FEditor.Zoom;
+end;
+
+procedure TFormMain.CheckBoxSnapToGridChange(Sender: TObject);
+begin
+  FEditor.SnapToGrid := CheckBoxSnapToGrid.IsChecked;
+  FEditor.SnapToNodes := CheckBoxSnapToNodes.IsChecked;
+  FEditor.ShowFrameTime := CheckBoxShowFrameTime.IsChecked;
+  FEditor.ShowGrid := CheckBoxShowGrid.IsChecked;
+  FEditor.ShowAxes := CheckBoxShowAxes.IsChecked;
+  FEditor.ShowSnapGuides := CheckBoxShowSnapGuides.IsChecked;
+  UpdateStatus;
 end;
 
 procedure TFormMain.AddNodeAtCenter(const ANodeType: string);

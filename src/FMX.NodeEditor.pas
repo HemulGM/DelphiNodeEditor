@@ -4,10 +4,10 @@ interface
 
 uses
   System.Classes, System.SysUtils, FMX.Graphics, FMX.Controls, System.Math,
-  System.Types, FMX.Menus, FMX.Clipboard, System.JSON, FMX.Forms, FMX.Dialogs,
-  System.UITypes, FMX.Types, FMX.Objects, System.Generics.Collections,
-  FMX.NodeEditor.Node, FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.Node.Graph,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Controller;
+  System.Types, FMX.Menus, FMX.Clipboard, System.JSON, System.Diagnostics,
+  FMX.Forms, FMX.Dialogs, System.UITypes, FMX.Types, FMX.Objects,
+  System.Generics.Collections, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Defaults,
+  FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Types, FMX.NodeEditor.Controller;
 
 {$SCOPEDENUMS ON}
 
@@ -46,6 +46,7 @@ type
 
     FZoom: Double;
     FOffsetX, FOffsetY: Double;
+    FScreenRect: TRectF;
 
     FDraggingNode: Boolean;
     FDragStartX, FDragStartY: Integer;
@@ -97,8 +98,9 @@ type
 
     FSnapToGrid: Boolean;
     FGridSize: Integer;
+    FGridType: TGridType;
+    FGridColor: TAlphaColor;
     FZoomStep: Double;
-
     FSnapToNodes: boolean;
     FNodeSnapDistance: single;
 
@@ -123,10 +125,7 @@ type
     FLastHoverMouseY: integer;
     FLastMouseMoveTick: UInt64;
     FLastPaintTick: UInt64;
-
-    FOnUpdatedStatus: TNotifyEvent;
-    FGridType: TGridType;
-
+    FFrameTimeWatch: TStopWatch;
 
     // Styling Properties
     FPinRadius: integer;
@@ -153,12 +152,14 @@ type
     FOnDrawSnapGuides: TNodeEditorDrawSnapGuidesEvent;
 
     // Interaction Events
+    FOnUpdatedStatus: TNotifyEvent;
     FOnPinSelectionChanged: TNotifyEvent;
     FOnPinClick: TNodePinEvent;
     FOnLinkClick: TNodeLinkEvent;
     FOnBeforeConnectPins: TEditorConnectPinsEvent;
     FOnAfterConnectPins: TEditorPinsConnectedEvent;
     FShowGrid: Boolean;
+    FShowFrameTime: Boolean;
 
     // Internal Logic
     procedure ClearPinSelection;
@@ -170,11 +171,10 @@ type
     function GetPrimarySelectedLink: TNodeLink;
 
     // Render Helpers
-    procedure DefaultDrawNode(ANode: TCustomNode; const ARect: TRect);
-    procedure DrawSingleNode(ANode: TCustomNode);
+    procedure DrawNode(ANode: TCustomNode);
     procedure DrawNodePins(ANode: TCustomNode);
-    procedure DefaultDrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
-    procedure DefaultDrawLink(ALink: TNodeLink; const P0, P1, P2, P3: TPoint; ASelected, AHovered: boolean);
+    procedure DrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
+    procedure DrawLink(ALink: TNodeLink; const P0, P1, P2, P3: TPoint; ASelected, AHovered: boolean);
 
     procedure NotifySelectionChanged;
     procedure ControllerSelectionChanged(Sender: TObject);
@@ -190,11 +190,10 @@ type
     // Render Layers
     procedure DrawGrid;
     procedure DrawAxes;
-    procedure DrawLinks(WorldRect: TRectF);
+    procedure DrawLinks;
     procedure DrawMoveHint;
     procedure DrawTempLink;
     procedure DrawBoxSelect;
-    procedure DrawGrip(const R: TRectF; const AOpacity: Single = 1.0);
     procedure DrawSnapGuides;
     procedure ClearSnapGuides;
 
@@ -224,6 +223,13 @@ type
     procedure SetShowGrid(const Value: Boolean);
     procedure DrawNavigator(ACanvas: TCanvas; ARect: TRectF);
     procedure DrawMiniGrid(ACanvas: TCanvas; ARect: TRectF; AOffsetX, AOffsetY, AZoom: Double);
+    procedure DrawNodes(FirstLevel: Boolean);
+    procedure InternalWorldChanged;
+    procedure BeginPaint;
+    procedure DrawFrameTime;
+    procedure EndPaint;
+    procedure SetShowFrameTime(const Value: Boolean);
+    procedure SetGridColor(const Value: TAlphaColor);
   protected
     function SelectedPinCount: integer;
     function GetSelectedPin(Index: integer): TNodePin;
@@ -265,6 +271,7 @@ type
     procedure SyncNodeSelectedFlags;
   protected
     procedure Paint; override;
+    procedure Resize; override;
     procedure DoMouseLeave; override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; AX, AY: Single); override;
     procedure MouseMove(Shift: TShiftState; AX, AY: Single); override;
@@ -326,11 +333,12 @@ type
 
     // New Axes Properties
     property ShowAxes: boolean read FShowAxes write FShowAxes default False;
-    property AxesColor: TAlphaColor read FAxesColor write FAxesColor default TAlphaColors.Silver;
+    property AxesColor: TAlphaColor read FAxesColor write FAxesColor default $50FFFFFF;
     property AxesThickness: integer read FAxesThickness write FAxesThickness default 2;
     property SnapToGrid: Boolean read FSnapToGrid write FSnapToGrid default False;
     property GridSize: Integer read FGridSize write SetGridSize default 40;
     property ShowGrid: Boolean read FShowGrid write SetShowGrid default True;
+    property GridColor: TAlphaColor read FGridColor write SetGridColor default $22E0E0E0;
 
     // Styling
     property PinRadius: integer read FPinRadius write FPinRadius default 8;
@@ -351,6 +359,7 @@ type
     property PinIncompatibleColor: TAlphaColor read FPinIncompatibleColor write FPinIncompatibleColor default TAlphaColors.Red;
     property ZoomStep: Double read FZoomStep write SetZoomStep;
     property GridType: TGridType read FGridType write SetGridType;
+    property ShowFrameTime: Boolean read FShowFrameTime write SetShowFrameTime;
 
     // Events
     property OnSelectionChanged: TNodeSelectionChangedEvent read FOnSelectionChanged write FOnSelectionChanged;
@@ -382,8 +391,7 @@ implementation
 
 uses
   System.IOUtils, FMX.NodeEditor.Form.Search, FMX.NodeEditor.Node.Command,
-  System.Generics.Defaults, FMX.Platform, System.Math.Vectors,
-  System.Diagnostics;
+  System.Generics.Defaults, FMX.Platform, System.Math.Vectors;
 
 function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
 begin
@@ -524,6 +532,7 @@ begin
   FZoomStep := 1.12;
   FSnapToGrid := False;
   FGridSize := 40;
+  FGridColor := $22E0E0E0;
   FSnapToNodes := True;
   FNodeSnapDistance := 10.0;
   FOffsetX := 0;
@@ -541,7 +550,7 @@ begin
 
   // Axes defaults
   FShowAxes := False;
-  FAxesColor := TAlphaColors.Silver;
+  FAxesColor := $50FFFFFF;
   FAxesThickness := 2;
 
   // Styling Defaults
@@ -581,7 +590,6 @@ begin
 
   FPopupMenu := TPopupMenu.Create(Self);
   BuildContextMenu;
-  //PopupMenu := FPopupMenu;
 end;
 
 destructor TNodeEditor.Destroy;
@@ -980,6 +988,7 @@ begin
     FZoom := Z;
     FOffsetX := OX;
     FOffsetY := OY;
+    InternalWorldChanged;
   end;
 
   UpdatePinsConnectedState;
@@ -1004,6 +1013,7 @@ begin
     FZoom := Z;
     FOffsetX := OX;
     FOffsetY := OY;
+    InternalWorldChanged;
   end;
 
   UpdatePinsConnectedState;
@@ -1333,15 +1343,6 @@ begin
   Result := D0 <= D1;
 end;
 
-function TNodeEditor.GetVisibleWorldRect: TRectF;
-var
-  P0, P1: TPointF;
-begin
-  P0 := ScreenToWorld(0, 0);
-  P1 := ScreenToWorld(Round(Width), Round(Height));
-  Result := TRectF.Create(P0, P1, True);
-end;
-
 function TNodeEditor.GetPinWorldPosition(APin: TNodePin): TPointF;
 begin
   if (APin = nil) or (APin.OwnerNode = nil) then
@@ -1517,6 +1518,17 @@ begin
   Result.Y := Round(WY * FZoom + FOffsetY);
 end;
 
+function TNodeEditor.GetVisibleWorldRect: TRectF;
+begin
+  Result := TRectF.Create(
+    ScreenToWorld(0, 0),
+    ScreenToWorld(Width, Height), True);
+end;
+
+procedure TNodeEditor.InternalWorldChanged;
+begin
+end;
+
 function TNodeEditor.ScreenToWorld(SX, SY: Double): TPointF;
 begin
   Result.X := (SX - FOffsetX) / FZoom;
@@ -1537,196 +1549,26 @@ begin
     Result := V;
 end;
 
-procedure TNodeEditor.DrawSingleNode(ANode: TCustomNode);
+procedure TNodeEditor.DrawNode(ANode: TCustomNode);
 begin
-  if ANode = nil then
-    Exit;
+  var NodeBounds := ANode.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
 
-  var R := ANode.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-
+  // Override drawing
   var Handled := False;
   if Assigned(FOnDrawNode) then
-    FOnDrawNode(Self, Canvas, ANode, R, FZoom, FOffsetX, FOffsetY, Handled);
+    FOnDrawNode(Self, Canvas, ANode, NodeBounds, FZoom, FOffsetX, FOffsetY, Handled);
 
+  // Draw node
   if not Handled then
-    DefaultDrawNode(ANode, R);
+    ANode.Paint(Canvas, FZoom, FOffsetX, FOffsetY);
 
-  DrawNodePins(ANode);
-  if ANode.Selected and (ANode.VisualKind <> TNodeVisualKind.nvReroute) and (not ANode.Collapsed) then
-  begin
-    var HR := GetResizeHandleRect(ANode);
-    DrawGrip(HR);
-  end;
+  // Draw pins
+  if (ANode.VisualKind not in [nvComment, nvReroute]) and not ANode.Collapsed then
+    DrawNodePins(ANode);
 end;
 
-procedure TNodeEditor.DefaultDrawNode(ANode: TCustomNode; const ARect: TRect);
+procedure TNodeEditor.DrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
 begin
-  var HeaderHeight := ANode.HeaderHeight * Zoom;
-  var NodeBounds: TRectF := ARect;
-  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + HeaderHeight);
-  var NodeHeadText := NodeHead;
-  NodeHeadText.Inflate(-10 * Zoom, 0);
-  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + HeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
-  var NodeBodyText := NodeBody;
-  NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
-  var CornerRadius := 10 * Zoom;
-
-  case ANode.VisualKind of
-    nvComment:
-      begin
-        // Fill
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := $FF1E2125; //BodyColor;
-        Canvas.FillRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Head
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := ANode.HeaderColor;
-        if ANode.Collapsed then
-          Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
-        else
-          Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
-
-        // Frame
-        if ANode.Selected then
-        begin
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if ANode.Highlighted then
-        begin
-          Canvas.Stroke.Color := TAlphaColors.Red;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if ANode.Hovered then
-        begin
-          Canvas.Stroke.Color := ANode.HeaderColor;//TAlphaColors.Blue;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else
-        begin
-          Canvas.Stroke.Color := ANode.HeaderColor;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end;
-        Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Text Head
-        Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := (10 * Zoom);
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.FillText(NodeHeadText, ANode.Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
-
-        // Text Body
-        if (ANode.CommentText <> '') and (not ANode.Collapsed) then
-          Canvas.FillText(NodeBodyText, ANode.CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-      end;
-    nvReroute:
-      begin
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-
-        if ANode.Selected then
-        begin
-          Canvas.Fill.Kind := TBrushKind.Solid;
-          Canvas.Fill.Color := TAlphaColors.White;
-          var SelRect := NodeBounds;
-          SelRect.Inflate(3 * Zoom, 3 * Zoom);
-          Canvas.FillEllipse(SelRect, 0.3);
-        end;
-
-        var Radius := FPinRadius * Zoom;
-        if ANode.Hovered or ANode.Highlighted then
-        begin
-          Canvas.Stroke.Kind := TBrushKind.Solid;
-          if ANode.Highlighted then
-            Canvas.Fill.Color := ANode.GetInput(0).PinType.Color
-          else
-            Canvas.Fill.Color := $FFFFD740;
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-        end
-        else
-        begin
-          Canvas.Fill.Color := ANode.GetInput(0).PinType.Color;
-          Canvas.Stroke.Kind := TBrushKind.Solid;
-          Canvas.Stroke.Color := ANode.HeaderColor;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-          Radius := Radius * 0.8;
-        end;
-
-        var PR := NodeBounds.CenterPoint;
-        var RE := TRectF.Create(PR.X - Radius, PR.Y - Radius, PR.X + Radius, PR.Y + Radius);
-
-        // Highlight frame
-        Canvas.DrawEllipse(RE, 1);
-
-        // Body
-        RE.Inflate(-Radius * 0.4, -Radius * 0.4);
-        Canvas.FillEllipse(RE, 1);
-      end;
-    nvNormal:
-      begin
-        // Shadow
-        DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
-
-        // Fill Body
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := $FF1E2125;  //BodyColor
-        Canvas.Stroke.Kind := TBrushKind.None;
-        Canvas.FillRect(NodeBody, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Fill Head
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := ANode.HeaderColor;
-        Canvas.Stroke.Kind := TBrushKind.None;
-        if ANode.Collapsed then
-          Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
-        else
-          Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
-
-        // Frame
-        Canvas.Fill.Kind := TBrushKind.None;
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-
-        if ANode.Selected then
-        begin
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-        end
-        else if ANode.Highlighted then
-        begin
-          Canvas.Stroke.Color := ANode.HeaderColor;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-        end
-        else if ANode.Hovered then
-        begin
-          Canvas.Stroke.Color := ANode.HeaderColor;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-        end
-        else
-        begin
-          Canvas.Stroke.Color := ANode.HeaderColor;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end;
-
-        Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Head Text
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := 10 * Zoom;
-        Canvas.FillText(NodeHeadText, ANode.Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
-      end;
-  else
-    // Do nothing
-  end;
-end;
-
-procedure TNodeEditor.DefaultDrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
-begin
-  if APin = nil then
-    Exit;
-
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Color := TAlphaColors.Black;
   Canvas.Stroke.Thickness := 1 * Zoom;
@@ -1758,12 +1600,12 @@ begin
     SRadius := SRadius * 0.8;
   end;
 
-      // Highlight frame
+  // Highlight frame
   Canvas.Fill.Kind := TBrushKind.Solid;
   var RE := TRectF.Create(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
   Canvas.DrawEllipse(RE, 1);
 
-      // Body
+  // Body
   RE.Inflate(-SRadius * 0.4, -SRadius * 0.4);
   Canvas.FillEllipse(RE, 1);
 end;
@@ -1779,13 +1621,6 @@ var
   IsSelected: boolean;
   IsHovered: boolean;
 begin
-  if ANode = nil then
-    Exit;
-  if ANode.VisualKind in [nvComment, nvReroute] then
-    Exit;
-  if ANode.Collapsed then
-    Exit;
-
   PinRadiusScaled := Round(FPinRadius * FZoom);
 
   for i := 0 to ANode.InputCount - 1 do
@@ -1806,9 +1641,9 @@ begin
       FOnDrawPin(Self, Canvas, P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted, Handled);
 
     if not Handled then
-      DefaultDrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
+      DrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
 
-      // Text
+    // Text
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := TAlphaColors.White;
     var TextSize := TSize.Create(Round(Canvas.TextWidth(P.Name)), Round(Canvas.TextHeight(P.Name)));
@@ -1839,9 +1674,9 @@ begin
       FOnDrawPin(Self, Canvas, P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted, Handled);
 
     if not Handled then
-      DefaultDrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
+      DrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
 
-      // Text
+    // Text
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := TAlphaColors.White;
     var TextSize := TSize.Create(Round(Canvas.TextWidth(P.Name)), Round(Canvas.TextHeight(P.Name)));
@@ -1854,8 +1689,9 @@ begin
   end;
 end;
 
-procedure TNodeEditor.DefaultDrawLink(ALink: TNodeLink; const P0, P1, P2, P3: TPoint; ASelected, AHovered: boolean);
+procedure TNodeEditor.DrawLink(ALink: TNodeLink; const P0, P1, P2, P3: TPoint; ASelected, AHovered: boolean);
 begin
+  var LinkOpacity := 1.0 * AbsoluteOpacity;
   if ASelected then
   begin
     //Canvas.Pen.Color := FLinkSelectedColor;
@@ -1863,6 +1699,7 @@ begin
   end
   else if AHovered then
   begin
+    LinkOpacity := LinkOpacity * 0.8;
     //Canvas.Pen.Color := FLinkHoverColor;
     //Canvas.Pen.Width := FLinkSelectedThickness;
   end
@@ -1883,15 +1720,18 @@ begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := $AAC97200;
     Canvas.Stroke.Thickness := 12 * Zoom;
-    DrawCubicBezier(Canvas, P0, P1, P2, P3);
+    DrawCubicBezier(Canvas, P0, P1, P2, P3, 1);
   end;
 
-  Canvas.Stroke.Kind := TBrushKind.Gradient; //ALink.ToPin.OwnerNode.HeaderColor
+  // Draw gradient bezier
+  // Gradient colors
+  Canvas.Stroke.Kind := TBrushKind.Gradient;
   Canvas.Stroke.Gradient.Points.Clear;
   TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 0;
   TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 1;
   Canvas.Stroke.Gradient.Color := ALink.FromPin.OwnerNode.HeaderColor;
   Canvas.Stroke.Gradient.Color1 := ALink.ToPin.OwnerNode.HeaderColor;
+  // Gradient angle
   var S0 := ALink.FromPin.OwnerNode.GetPinScreenPosition(ALink.FromPin, FZoom, FOffsetX, FOffsetY);
   var S1 := ALink.ToPin.OwnerNode.GetPinScreenPosition(ALink.ToPin, FZoom, FOffsetX, FOffsetY);
   var Start: TPointF;
@@ -1899,9 +1739,10 @@ begin
   GetGradientPoints(S0, S1, Start, Stop);
   Canvas.Stroke.Gradient.StartPosition.Point := Start;
   Canvas.Stroke.Gradient.StopPosition.Point := Stop;
-      //Canvas.Stroke.Color := TAlphaColors.Yellow;
+  // Line width
   Canvas.Stroke.Thickness := 3 * Zoom;
-  DrawCubicBezier(Canvas, P0, P1, P2, P3);
+  // Draw bezier
+  DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
 end;
 
 function TNodeEditor.SnapWorldPoint(const P: TPointF): TPointF;
@@ -1918,7 +1759,6 @@ var
 begin
   Result := nil;
   W := ScreenToWorld(SX, SY);
-
   EnsureSortedNodes;
 
   for i := FPaintNodesSorted.Count - 1 downto 0 do
@@ -2064,21 +1904,21 @@ begin
   ACanvas.Stroke.Kind := TBrushKind.Solid;
   ACanvas.Stroke.Thickness := 1;
 
-  const SmallStep = 40;
+  var SmallStep := 40;
 
   var X := Floor(VR.Left / SmallStep) * SmallStep;
   while X <= VR.Right do
   begin
-    var SX := Round(X * AZoom + AOffsetX);
-    ACanvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, ARect.Height), 1);
+    var SX := Trunc(X * AZoom + AOffsetX);
+    ACanvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, ARect.Height), AbsoluteOpacity);
     X := X + SmallStep;
   end;
 
   var Y := Floor(VR.Top / SmallStep) * SmallStep;
   while Y <= VR.Bottom do
   begin
-    var SY := Round(Y * AZoom + AOffsetY);
-    ACanvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(ARect.Width, SY), 1);
+    var SY := Trunc(Y * AZoom + AOffsetY);
+    ACanvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(ARect.Width, SY), AbsoluteOpacity);
     Y := Y + SmallStep;
   end;
 
@@ -2087,126 +1927,107 @@ end;
 
 procedure TNodeEditor.DrawGrid;
 begin
-  var VR := GetVisibleWorldRect;
+  const LargeStep = 8;
+  var WR := GetVisibleWorldRect;
 
+  // Defaults
+  Canvas.Stroke.Thickness := 1 * FZoom;
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Color := FGridColor;
+
+  // Override draw
   var Handled := False;
   if Assigned(FOnDrawGrid) then
-    FOnDrawGrid(Self, Canvas, VR, FZoom, FOffsetX, FOffsetY, Handled);
+    FOnDrawGrid(Self, Canvas, WR, FZoom, FOffsetX, FOffsetY, Handled);
   if Handled then
     Exit;
 
   if FGridSize <= 0 then
     Exit;
 
-  Canvas.Stroke.Color := $22E0E0E0;
-  Canvas.Stroke.Kind := TBrushKind.Solid;
-  Canvas.Stroke.Thickness := 1 * FZoom;
-
-  const SmallStep = FGridSize;
-  const LargeStep = SmallStep * 8;
-  //
-
-  var X := Floor(VR.Left / SmallStep) * SmallStep;
-  while X <= VR.Right do
+  // Vert
+  var WorldX := Floor(WR.Left / FGridSize) * FGridSize;
+  while WorldX <= WR.Right do
   begin
-    var SX := Round(X * Zoom + FOffsetX);
-    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
-    X := X + SmallStep;
+    var ScreenX := WorldX * Zoom + FOffsetX;
+
+    if (Round(WorldX / FGridSize) mod LargeStep) = 0 then
+      Canvas.Stroke.Thickness := 2 * FZoom
+    else
+      Canvas.Stroke.Thickness := 1 * FZoom;
+
+    Canvas.DrawLine(TPointF.Create(ScreenX, 0), TPointF.Create(ScreenX, Height), AbsoluteOpacity);
+
+    WorldX := WorldX + FGridSize;
   end;
 
-  var Y := Floor(VR.Top / SmallStep) * SmallStep;
-  while Y <= VR.Bottom do
+  // Horz
+  var WorldY := Floor(WR.Top / FGridSize) * FGridSize;
+  while WorldY <= WR.Bottom do
   begin
-    var SY := Round(Y * Zoom + FOffsetY);
-    Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
-    Y := Y + SmallStep;
+    var ScreenY := WorldY * Zoom + FOffsetY;
+
+    if (Round(WorldY / FGridSize) mod LargeStep) = 0 then
+      Canvas.Stroke.Thickness := 2 * FZoom
+    else
+      Canvas.Stroke.Thickness := 1 * FZoom;
+
+    Canvas.DrawLine(TPointF.Create(0, ScreenY), TPointF.Create(Width, ScreenY), AbsoluteOpacity);
+
+    WorldY := WorldY + FGridSize;
   end;
-
-  Canvas.Stroke.Color := $33E0E0E0;
-
-  X := Floor(VR.Left / LargeStep) * LargeStep;
-  while X <= VR.Right do
-  begin
-    var SX := Round(X * Zoom + FOffsetX);
-    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
-    X := X + LargeStep;
-  end;
-
-  Y := Floor(VR.Top / LargeStep) * LargeStep;
-  while Y <= VR.Bottom do
-  begin
-    var SY := Round(Y * Zoom + FOffsetY);
-    Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
-    Y := Y + LargeStep;
-  end;
-
-  Canvas.Stroke.Dash := TStrokeDash.Solid;
 end;
 
 procedure TNodeEditor.DrawAxes;
-var
-  VR: TRectF;
-  SX, SY: integer;
 begin
-  VR := GetVisibleWorldRect;
+  var WR := GetVisibleWorldRect;
 
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Color := FAxesColor;
   Canvas.Stroke.Thickness := FAxesThickness;
 
-  if (VR.Left <= 0) and (VR.Right >= 0) then
+  if (WR.Left <= 0) and (WR.Right >= 0) then
   begin
-    SX := WorldToScreen(0, 0).X;
-    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
+    var SX := WorldToScreen(0, 0).X;
+    Canvas.DrawLine(Canvas.AlignToPixel(TPointF.Create(SX, 0)), Canvas.AlignToPixel(TPointF.Create(SX, Height)), 1);
   end;
-  if (VR.Top <= 0) and (VR.Bottom >= 0) then
+  if (WR.Top <= 0) and (WR.Bottom >= 0) then
   begin
-    SY := WorldToScreen(0, 0).Y;
-    Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
+    var SY := WorldToScreen(0, 0).Y;
+    Canvas.DrawLine(Canvas.AlignToPixel(TPointF.Create(0, SY)), Canvas.AlignToPixel(TPointF.Create(Width, SY)), 1);
   end;
-
-  Canvas.Stroke.Thickness := 1;
 end;
 
-procedure TNodeEditor.DrawLinks(WorldRect: TRectF);
-var
-  i: Integer;
-  Link: TNodeLink;
-  W0, W1, W2, W3: TPointF;
-  P0, P1, P2, P3: TPoint;
-  Handled: boolean;
-  IsSelected: boolean;
-  IsHovered: boolean;
+procedure TNodeEditor.DrawLinks;
 begin
-  for i := 0 to FGraph.Links.Count - 1 do
+  for var Link in FGraph.Links do
   begin
-    Link := FGraph.Links[i];
     if (Link.FromPin = nil) or (Link.ToPin = nil) then
       Continue;
 
+    var W0, W1, W2, W3: TPointF;
     GetLinkBezierWorldPoints(Link, W0, W1, W2, W3);
 
-    P0 := WorldToScreen(W0.X, W0.Y);
-    P1 := WorldToScreen(W1.X, W1.Y);
-    P2 := WorldToScreen(W2.X, W2.Y);
-    P3 := WorldToScreen(W3.X, W3.Y);
+    var P0 := WorldToScreen(W0.X, W0.Y);
+    var P3 := WorldToScreen(W3.X, W3.Y);
 
-    var R := TRect.Create(P0, P3);
-    R.NormalizeRect;
-    if not WorldRect.IntersectsWith(R) then
+    var R := TRect.Create(P0, P3, True);
+    if not FScreenRect.IntersectsWith(R) then
       Continue;
 
-    IsSelected := FController.Selection.ContainsLink(Link);
-    IsHovered := Link = FHoveredLink;
+    var P1 := WorldToScreen(W1.X, W1.Y);
+    var P2 := WorldToScreen(W2.X, W2.Y);
 
-    Handled := False;
+    var IsSelected := FController.Selection.ContainsLink(Link);
+    var IsHovered := Link = FHoveredLink;
+
+    var Handled := False;
     if Assigned(FOnDrawLink) then
       FOnDrawLink(Self, Canvas, Link, P0, P1, P2, P3, IsSelected, IsHovered, Handled);
 
     if not Handled then
-      DefaultDrawLink(Link, P0, P1, P2, P3, IsSelected, IsHovered);
+      DrawLink(Link, P0, P1, P2, P3, IsSelected, IsHovered);
   end;
-  Canvas.Stroke.Thickness := 1;
 end;
 
 procedure TNodeEditor.DrawTempLink;
@@ -2217,9 +2038,6 @@ var
   FixedPosW: TPointF;
   DX, DY, Dist, D: Single;
 begin
-  if FTempFromPin = nil then
-    Exit;
-
   Canvas.Stroke.Color := TAlphaColors.Yellow;
   Canvas.Stroke.Thickness := 3;
   Canvas.Stroke.Dash := TStrokeDash.Dot;
@@ -2275,7 +2093,7 @@ begin
   P2 := WorldToScreen(W2.X, W2.Y);
   P3 := WorldToScreen(W3.X, W3.Y);
 
-  DrawCubicBezier(Canvas, P0, P1, P2, P3);
+  DrawCubicBezier(Canvas, P0, P1, P2, P3, 1);
 
   Canvas.Stroke.Thickness := 1;
   Canvas.Stroke.Kind := TBrushKind.Solid;
@@ -2283,8 +2101,6 @@ end;
 
 procedure TNodeEditor.DrawBoxSelect;
 begin
-  if not FBoxSelecting then
-    Exit;
   var R := Rect(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y);
   R.NormalizeRect;
   Canvas.Fill.Kind := TBrushKind.Solid;
@@ -2299,199 +2115,179 @@ end;
 
 procedure TNodeEditor.DrawMoveHint;
 begin
-  if GetPrimarySelectedNode = nil then
-    Exit;
-
   var CX := GetPrimarySelectedNode.X;
   var CY := GetPrimarySelectedNode.Y;
   var Dx := CX - FDragStartWorldPos.X;
   var Dy := CY - FDragStartWorldPos.Y;
 
   var Text := Format('X: %.1f   Y: %.1f   (Δ %.1f, %.1f)', [CX, CY, Dx, Dy]);
+  Canvas.Font.Size := 12;
+  var TextW := Canvas.TextWidth(Text) + 20;
+  var TextH := Canvas.TextHeight(Text) + 20;
+
   var ArrowSize := 8;
   var Pos := WorldToScreen(CX, CY);
   Pos.Offset(Round(GetPrimarySelectedNode.Width * Zoom / 2), 0);
 
-  Canvas.Font.Size := 12;
+  // Bounds position
+  Pos.SetLocation(TPointF.Create(
+      EnsureRange(Pos.X, TextW / 2, Width - TextW / 2),
+      EnsureRange(Pos.Y, TextH + ArrowSize, Height)).Round);
 
-  var TextW := Canvas.TextWidth(Text) + 20;
-  var TextH := Canvas.TextHeight(Text) + 20;
-
-  //Pos.Offset(0, -Trunc(TextH));
-  var R := RectF(Pos.X - TextW * 0.5, Pos.Y, Pos.X + TextW * 0.5, Pos.Y + TextH);
+  // Bounds
+  var R := TRectF.Create(Pos.X - TextW * 0.5, Pos.Y, Pos.X + TextW * 0.5, Pos.Y + TextH);
   R.Offset(0, -R.Height - ArrowSize);
 
   Canvas.Fill.Kind := TBrushKind.Solid;
 
-  { shadow }
+  // Shadow
   Canvas.Fill.Color := $20000000;
-  Canvas.FillRect(RectF(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, 1);
+  Canvas.FillRect(TRectF.Create(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, 1);
 
-  { background }
+  // Background
   Canvas.Fill.Color := $CC2B2D30;
   Canvas.FillRect(R, 10, 10, AllCorners, 1);
 
-  { border }
+  // Border
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Dash := TStrokeDash.Solid;
   Canvas.Stroke.Thickness := 1;
   Canvas.Stroke.Color := $30FFFFFF;
-
   Canvas.DrawRect(R, 10, 10, AllCorners, 1);
 
-  { top inner highlight }
+  // Top inner highlight
   Canvas.Stroke.Color := $18FFFFFF;
+  Canvas.DrawLine(TPointF.Create(R.Left + 10, R.Top + 1), TPointF.Create(R.Right - 10, R.Top + 1), 1);
 
-  Canvas.DrawLine(
-    PointF(R.Left + 10, R.Top + 1),
-    PointF(R.Right - 10, R.Top + 1),
-    1
-  );
-
-  { arrow }
+  // Arrow
   var Arrow: TPolygon;
   SetLength(Arrow, 3);
-  Arrow[0] := PointF(Pos.X - ArrowSize, R.Bottom - 1);
-  Arrow[1] := PointF(Pos.X + ArrowSize, R.Bottom - 1);
-  Arrow[2] := PointF(Pos.X, R.Bottom + ArrowSize);
-
+  Arrow[0] := TPointF.Create(Pos.X - ArrowSize, R.Bottom - 1);
+  Arrow[1] := TPointF.Create(Pos.X + ArrowSize, R.Bottom - 1);
+  Arrow[2] := TPointF.Create(Pos.X, R.Bottom + ArrowSize);
   Canvas.Fill.Color := $EE2B2D30;
   Canvas.FillPolygon(Arrow, 1);
-
   Canvas.Stroke.Color := $30FFFFFF;
   Canvas.DrawPolygon(Arrow, 1);
 
-  { text }
+  // Text
   Canvas.Fill.Color := $FFF2F2F2;
   Canvas.FillText(R, Text, False, 1, [], TTextAlign.Center, TTextAlign.Center);
 end;
 
-procedure TNodeEditor.DrawGrip(const R: TRectF; const AOpacity: Single = 1.0);
-var
-  Size: Single;
-  Step: Single;
-  Margin: Single;
-  I: Integer;
-  X1, Y1: Single;
-  X2, Y2: Single;
+procedure TNodeEditor.DrawNodes(FirstLevel: Boolean);
 begin
-  Size := Min(R.Width, R.Height);
-  R.Offset(-Size, -Size);
-
-  Margin := Size * 0.18;
-  Step := Size * 0.28;
-
-  Canvas.Stroke.Kind := TBrushKind.Solid;
-  Canvas.Stroke.Cap := TStrokeCap.Round;
-  Canvas.Stroke.Thickness := Max(1.5, Size * 0.08);
-
-  for I := 0 to 2 do
+  if FirstLevel then
   begin
-    X1 := R.Left + Margin + I * Step;
-    Y1 := R.Bottom - Margin;
+    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    begin
+      var N := FPaintNodesSorted[i];
+      if (N.VisualKind = nvComment) and not N.Selected then
+      begin
+        var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+        if FScreenRect.IntersectsWith(R) then
+          DrawNode(N);
+      end;
+    end;
 
-    X2 := R.Right - Margin;
-    Y2 := R.Top + Margin + I * Step;
+    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    begin
+      var N := FPaintNodesSorted[i];
+      if (N.VisualKind = nvComment) and N.Selected then
+      begin
+        var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+        if FScreenRect.IntersectsWith(R) then
+          DrawNode(N);
+      end;
+    end;
+  end
+  else
+  begin
+    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    begin
+      var N := FPaintNodesSorted[i];
+      if (N.VisualKind <> nvComment) and not N.Selected then
+      begin
+        var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+        if FScreenRect.IntersectsWith(R) then
+          DrawNode(N);
+      end;
+    end;
 
-    { dark shadow }
-    Canvas.Stroke.Color :=
-      TAlphaColorF.Create(0, 0, 0, 0.55 * AOpacity).ToAlphaColor;
-
-    Canvas.DrawLine(
-      PointF(X1 + 1, Y1 + 1),
-      PointF(X2 + 1, Y2 + 1),
-      1
-    );
-
-    { bright line }
-    Canvas.Stroke.Color :=
-      TAlphaColorF.Create(1, 1, 1, 0.85 * AOpacity).ToAlphaColor;
-
-    Canvas.DrawLine(
-      PointF(X1, Y1),
-      PointF(X2, Y2),
-      1
-    );
+    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    begin
+      var N := FPaintNodesSorted[i];
+      if (N.VisualKind <> nvComment) and N.Selected then
+      begin
+        var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+        if FScreenRect.IntersectsWith(R) then
+          DrawNode(N);
+      end;
+    end;
   end;
+end;
+
+procedure TNodeEditor.BeginPaint;
+begin
+  FFrameTimeWatch := TStopWatch.StartNew;
+  Canvas.Stroke.Cap := TStrokeCap.Round;
+  Canvas.Stroke.Join := TStrokeJoin.Round;
+  EnsureSortedNodes;
+end;
+
+procedure TNodeEditor.EndPaint;
+begin
+  FFrameTimeWatch.Stop;
+end;
+
+procedure TNodeEditor.DrawFrameTime;
+begin
+  Canvas.Font.Size := 12;
+  Canvas.Fill.Color := TAlphaColors.White;
+  Canvas.FillText(
+    TRectF.Create(20, 20, 100, 100),
+    FFrameTimeWatch.ElapsedMilliseconds.ToString + 'ms',
+    False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 end;
 
 procedure TNodeEditor.Paint;
 begin
-  var TS := TStopWatch.StartNew;
+  BeginPaint;
 
-  Canvas.Stroke.Cap := TStrokeCap.Round;
-  Canvas.Stroke.Join := TStrokeJoin.Round;
-
+  // Grid
   if FShowGrid then
     DrawGrid;
+
+  // Axes
   if FShowAxes then
     DrawAxes;
 
-  var WorldRect := TRectF.Create(
-    ScreenToWorld(FOffsetX, FOffsetY),
-    TPointF.Create(Width, Height));
+  // Nodes and links
+  DrawNodes(True);
+  DrawLinks;
+  DrawNodes(False);
 
-  EnsureSortedNodes;
-
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
-  begin
-    var N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind = nvComment) and not N.Selected then
-    begin
-      var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-      if WorldRect.IntersectsWith(R) then
-        DrawSingleNode(N);
-    end;
-  end;
-
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
-  begin
-    var N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind = nvComment) and N.Selected then
-    begin
-      var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-      if WorldRect.IntersectsWith(R) then
-        DrawSingleNode(N);
-    end;
-  end;
-
-  DrawLinks(WorldRect);
-
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
-  begin
-    var N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind <> nvComment) and not N.Selected then
-    begin
-      var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-      if WorldRect.IntersectsWith(R) then
-        DrawSingleNode(N);
-    end;
-  end;
-
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
-  begin
-    var N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind <> nvComment) and N.Selected then
-    begin
-      var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-      if WorldRect.IntersectsWith(R) then
-        DrawSingleNode(N);
-    end;
-  end;
-
+  // Snap guides
   if FDraggingNode and FShowSnapGuides then
     DrawSnapGuides;
 
-  DrawTempLink;
-  DrawBoxSelect;
+  // Link connector
+  if FTempFromPin <> nil then
+    DrawTempLink;
 
-  if FDraggingNode and FShowDragCoordinates then
+  // Box selectiing
+  if FBoxSelecting then
+    DrawBoxSelect;
+
+  // Node hint
+  if FDraggingNode and FShowDragCoordinates and (GetPrimarySelectedNode <> nil) then
     DrawMoveHint;
 
-  TS.Stop;
-  Canvas.Font.Size := 12;
-  Canvas.Fill.Color := TAlphaColors.White;
-  Canvas.FillText(TRectF.Create(20, 20, 100, 100), TS.ElapsedMilliseconds.ToString + 'ms', False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+  EndPaint;
+
+  // Draw frame time
+  if FShowFrameTime then
+    DrawFrameTime;
 end;
 
 function TNodeEditor.GetResizeHandleRect(ANode: TCustomNode): TRect;
@@ -2774,6 +2570,7 @@ begin
   var MiniOffsetX: Single;
   var MiniOffsetY: Single;
 
+  // Optimal mini zoom
   var MiniZoom := 0.045;
   repeat
     MiniZoom := MiniZoom - 0.001;
@@ -2819,8 +2616,6 @@ begin
     end;
   end;
 
-  //DrawLinks(WorldRect);
-
   for var i := 0 to FPaintNodesSorted.Count - 1 do
   begin
     var N := FPaintNodesSorted[i];
@@ -2849,6 +2644,7 @@ begin
     end;
   end;
 
+  // Viewport frame
   ACanvas.Stroke.Kind := TBrushKind.Solid;
   ACanvas.Stroke.Color := TAlphaColors.White;
   ACanvas.Stroke.Thickness := 1;
@@ -2856,11 +2652,13 @@ begin
   ViewRect := ACanvas.AlignToPixel(ViewRect);
   ACanvas.DrawRect(ViewRect, 0, 0, [], 1);
 
-  if not FBoxSelecting then
-    Exit;
-  var R := ScreenToMini(TRectF.Create(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y), MiniZoom, MiniOffsetX, MiniOffsetY);
-  ACanvas.Fill.Color := TAlphaColors.White;
-  ACanvas.FillRect(R, 0, 0, [], 0.2);
+  // Box selecting
+  if FBoxSelecting then
+  begin
+    var R := ScreenToMini(TRectF.Create(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y), MiniZoom, MiniOffsetX, MiniOffsetY);
+    ACanvas.Fill.Color := TAlphaColors.White;
+    ACanvas.FillRect(R, 0, 0, [], 0.2);
+  end;
 end;
 
 procedure TNodeEditor.RenderNavigator(Bitmap: TBitmap);
@@ -2945,11 +2743,15 @@ begin
   SyncNodeSelectedFlags;
 end;
 
-procedure TNodeEditor.ClearHoverStates;
-var
-  i: Integer;
+procedure TNodeEditor.Resize;
 begin
-  for i := 0 to FGraph.Nodes.Count - 1 do
+  inherited;
+  FScreenRect := LocalRect;
+end;
+
+procedure TNodeEditor.ClearHoverStates;
+begin
+  for var i := 0 to FGraph.Nodes.Count - 1 do
   begin
     FGraph.Nodes[i].Hovered := False;
     FGraph.Nodes[i].Highlighted := False;
@@ -3077,6 +2879,7 @@ begin
 
   FOffsetX := Margin - Round(R.Left * FZoom);
   FOffsetY := Margin - Round(R.Top * FZoom);
+  InternalWorldChanged;
 
   Repaint;
 end;
@@ -3139,6 +2942,7 @@ begin
 
   FOffsetX := Round(Width * 0.5 - Cx * FZoom);
   FOffsetY := Round(Height * 0.5 - Cy * FZoom);
+  InternalWorldChanged;
 
   Repaint;
 end;
@@ -3379,25 +3183,6 @@ begin
   X := Round(AX);
   Y := Round(AY);
   FLastMousePos := Point(X, Y);
-  if (not FResizingNode) and (not FPanning) then
-    UpdateHoverStates(X, Y);
-
-  if (not FPanning) and (not FDraggingNode) and (not FBoxSelecting) and
-    (not FResizingNode) and (FTempFromPin = nil) then
-  begin
-    ResizeNode := GetNodeResizeUnderMouse(X, Y);
-    if ResizeNode <> nil then
-      Cursor := crSizeNWSE
-    else
-      Cursor := crDefault;
-
-    if (X <> FLastHoverMouseX) or (Y <> FLastHoverMouseY) then
-    begin
-      FLastHoverMouseX := X;
-      FLastHoverMouseY := Y;
-      UpdateHoverStates(X, Y);
-    end;
-  end;
 
   if FPanning then
   begin
@@ -3407,6 +3192,7 @@ begin
     FOffsetY := FOffsetY + (Y - FPanStartY);
     FPanStartX := X;
     FPanStartY := Y;
+    InternalWorldChanged;
   end
   else if FResizingNode and (FResizeNode <> nil) then
   begin                                   //40, 28
@@ -3461,11 +3247,33 @@ begin
 
     if (Abs(X - FTempStartMousePos.X) > 4) or (Abs(Y - FTempStartMousePos.Y) > 4) then
       FDraggingLink := True;
+
+    if (X <> FLastHoverMouseX) or (Y <> FLastHoverMouseY) then
+    begin
+      FLastHoverMouseX := X;
+      FLastHoverMouseY := Y;
+      UpdateHoverStates(X, Y);
+    end;
   end
   else if FBoxSelecting then
   begin
     FBoxCurrent := Point(X, Y);
     FBoxCurrentWorld := ScreenToWorld(X, Y);
+  end
+  else
+  begin
+    ResizeNode := GetNodeResizeUnderMouse(X, Y);
+    if ResizeNode <> nil then
+      Cursor := crSizeNWSE
+    else
+      Cursor := crDefault;
+
+    if (X <> FLastHoverMouseX) or (Y <> FLastHoverMouseY) then
+    begin
+      FLastHoverMouseX := X;
+      FLastHoverMouseY := Y;
+      UpdateHoverStates(X, Y);
+    end;
   end;
   Repaint;
 end;
@@ -3853,6 +3661,12 @@ begin
     FOnUpdatedStatus(Self);
 end;
 
+procedure TNodeEditor.SetGridColor(const Value: TAlphaColor);
+begin
+  FGridColor := Value;
+  Repaint;
+end;
+
 procedure TNodeEditor.SetGridSize(const Value: Integer);
 begin
   FGridSize := Value;
@@ -3862,11 +3676,18 @@ end;
 procedure TNodeEditor.SetGridType(const Value: TGridType);
 begin
   FGridType := Value;
+  Repaint;
 end;
 
 procedure TNodeEditor.SetOnUpdatedStatus(const Value: TNotifyEvent);
 begin
   FOnUpdatedStatus := Value;
+end;
+
+procedure TNodeEditor.SetShowFrameTime(const Value: Boolean);
+begin
+  FShowFrameTime := Value;
+  Repaint;
 end;
 
 procedure TNodeEditor.SetShowGrid(const Value: Boolean);
@@ -3883,6 +3704,7 @@ begin
   begin
     FOffsetX := TargetPos.X - Round((TargetPos.X - FOffsetX) * (NewZoom / FZoom));
     FOffsetY := TargetPos.Y - Round((TargetPos.Y - FOffsetY) * (NewZoom / FZoom));
+    InternalWorldChanged;
   end;
   FZoom := NewZoom;
 

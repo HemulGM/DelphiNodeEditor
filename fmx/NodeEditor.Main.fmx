@@ -114,16 +114,6 @@ object FormMain: TFormMain
           Text = 'Remove selection'
           OnClick = MenuItemEditDeselectClick
         end
-        object MenuItem7: TMenuItem
-          Locked = True
-          Text = '-'
-        end
-        object MenuItemSnapToGrid: TMenuItem
-          Locked = True
-          AutoCheck = True
-          Text = 'Snap to Grid'
-          OnClick = MenuItemSnapToGridClick
-        end
       end
       object MenuItemView: TMenuItem
         Text = 'View'
@@ -78083,14 +78073,14 @@ object FormMain: TFormMain
         Size.Height = 647.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
-        Viewport.Width = 250.000000000000000000
+        Viewport.Width = 238.000000000000000000
         Viewport.Height = 647.000000000000000000
         object LayoutNavigator: TLayout
           Align = Top
           Margins.Bottom = 20.000000000000000000
           Position.X = 25.000000000000000000
           Position.Y = 5.000000000000000000
-          Size.Width = 200.000000000000000000
+          Size.Width = 188.000000000000000000
           Size.Height = 181.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
@@ -78099,7 +78089,7 @@ object FormMain: TFormMain
             Fill.Bitmap.WrapMode = TileOriginal
             Fill.Kind = Bitmap
             Position.Y = 49.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 130.000000000000000000
             Size.PlatformDefault = False
             Stroke.Color = x28FFFFFF
@@ -78108,7 +78098,7 @@ object FormMain: TFormMain
           end
           object Layout15: TLayout
             Align = Top
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 40.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
@@ -78146,7 +78136,7 @@ object FormMain: TFormMain
               Align = Client
               Margins.Left = 10.000000000000000000
               Margins.Right = 10.000000000000000000
-              Size.Width = 120.000000000000000000
+              Size.Width = 108.000000000000000000
               Size.Height = 40.000000000000000000
               Size.PlatformDefault = False
               StyleLookup = 'labelstyle_bodystrong'
@@ -78159,7 +78149,7 @@ object FormMain: TFormMain
               Margins.Top = 6.000000000000000000
               Margins.Right = 6.000000000000000000
               Margins.Bottom = 6.000000000000000000
-              Position.X = 166.000000000000000000
+              Position.X = 154.000000000000000000
               Position.Y = 6.000000000000000000
               Size.Width = 28.000000000000000000
               Size.Height = 28.000000000000000000
@@ -78175,7 +78165,7 @@ object FormMain: TFormMain
             Margins.Top = 4.000000000000000000
             Margins.Bottom = 4.000000000000000000
             Position.Y = 44.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 1.000000000000000000
             Size.PlatformDefault = False
             StyleLookup = 'panelstyle_divider'
@@ -78186,14 +78176,14 @@ object FormMain: TFormMain
           Align = Top
           Margins.Bottom = 20.000000000000000000
           Position.X = 25.000000000000000000
-          Position.Y = 393.000000000000000000
-          Size.Width = 200.000000000000000000
+          Position.Y = 524.000000000000000000
+          Size.Width = 188.000000000000000000
           Size.Height = 181.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           object Layout16: TLayout
             Align = Top
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 40.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
@@ -78298,7 +78288,7 @@ object FormMain: TFormMain
               Align = Client
               Margins.Left = 10.000000000000000000
               Margins.Right = 10.000000000000000000
-              Size.Width = 120.000000000000000000
+              Size.Width = 108.000000000000000000
               Size.Height = 40.000000000000000000
               Size.PlatformDefault = False
               StyleLookup = 'labelstyle_bodystrong'
@@ -78311,7 +78301,7 @@ object FormMain: TFormMain
               Margins.Top = 6.000000000000000000
               Margins.Right = 6.000000000000000000
               Margins.Bottom = 6.000000000000000000
-              Position.X = 166.000000000000000000
+              Position.X = 154.000000000000000000
               Position.Y = 6.000000000000000000
               Size.Width = 28.000000000000000000
               Size.Height = 28.000000000000000000
@@ -78327,7 +78317,7 @@ object FormMain: TFormMain
             Margins.Top = 4.000000000000000000
             Margins.Bottom = 4.000000000000000000
             Position.Y = 44.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 1.000000000000000000
             Size.PlatformDefault = False
             StyleLookup = 'panelstyle_divider'
@@ -78339,20 +78329,21 @@ object FormMain: TFormMain
           Margins.Bottom = 20.000000000000000000
           Position.X = 25.000000000000000000
           Position.Y = 206.000000000000000000
-          Size.Width = 200.000000000000000000
-          Size.Height = 167.000000000000000000
+          Size.Width = 188.000000000000000000
+          Size.Height = 298.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 2
           object CheckBoxSnapToGrid: TCheckBox
             Align = Top
             Margins.Bottom = 5.000000000000000000
             Position.Y = 37.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 32.000000000000000000
             Size.PlatformDefault = False
             StyleLookup = 'checkboxstyle_switch_lefttext'
-            TabOrder = 2
+            TabOrder = 6
             Text = 'Snap to grid'
+            OnChange = CheckBoxSnapToGridChange
           end
           object SpinBoxSize: TSpinBox
             Touch.InteractiveGestures = [LongTap, DoubleTap]
@@ -78366,7 +78357,7 @@ object FormMain: TFormMain
             Position.Y = 111.000000000000000000
             Margins.Left = 100.000000000000000000
             Margins.Bottom = 5.000000000000000000
-            Size.Width = 100.000000000000000000
+            Size.Width = 88.000000000000000000
             Size.Height = 32.000000000000000000
             Size.PlatformDefault = False
             OnChange = SpinBoxSizeChange
@@ -78385,22 +78376,24 @@ object FormMain: TFormMain
           end
           object CheckBoxSnapToNodes: TCheckBox
             Align = Top
+            IsChecked = True
             Margins.Bottom = 5.000000000000000000
             Position.Y = 74.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 32.000000000000000000
             Size.PlatformDefault = False
             StyleLookup = 'checkboxstyle_switch_lefttext'
-            TabOrder = 1
+            TabOrder = 5
             Text = 'Snap to nodes'
+            OnChange = CheckBoxSnapToGridChange
           end
           object Layout17: TLayout
             Align = Top
             Margins.Bottom = 5.000000000000000000
-            Size.Width = 200.000000000000000000
+            Size.Width = 188.000000000000000000
             Size.Height = 32.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 3
+            TabOrder = 7
             object RadioButton1: TRadioButton
               Align = Left
               GroupName = 'tools'
@@ -78578,6 +78571,57 @@ object FormMain: TFormMain
                 WrapMode = Fit
               end
             end
+          end
+          object CheckBoxShowFrameTime: TCheckBox
+            Align = Top
+            IsChecked = True
+            Margins.Bottom = 5.000000000000000000
+            Position.Y = 148.000000000000000000
+            Size.Width = 188.000000000000000000
+            Size.Height = 32.000000000000000000
+            Size.PlatformDefault = False
+            StyleLookup = 'checkboxstyle_switch_lefttext'
+            TabOrder = 4
+            Text = 'Show frame time'
+            OnChange = CheckBoxSnapToGridChange
+          end
+          object CheckBoxShowSnapGuides: TCheckBox
+            Align = Top
+            IsChecked = True
+            Margins.Bottom = 5.000000000000000000
+            Position.Y = 259.000000000000000000
+            Size.Width = 188.000000000000000000
+            Size.Height = 32.000000000000000000
+            Size.PlatformDefault = False
+            StyleLookup = 'checkboxstyle_switch_lefttext'
+            TabOrder = 3
+            Text = 'Show snap guides'
+            OnChange = CheckBoxSnapToGridChange
+          end
+          object CheckBoxShowAxes: TCheckBox
+            Align = Top
+            Margins.Bottom = 5.000000000000000000
+            Position.Y = 222.000000000000000000
+            Size.Width = 188.000000000000000000
+            Size.Height = 32.000000000000000000
+            Size.PlatformDefault = False
+            StyleLookup = 'checkboxstyle_switch_lefttext'
+            TabOrder = 2
+            Text = 'Show axes'
+            OnChange = CheckBoxSnapToGridChange
+          end
+          object CheckBoxShowGrid: TCheckBox
+            Align = Top
+            IsChecked = True
+            Margins.Bottom = 5.000000000000000000
+            Position.Y = 185.000000000000000000
+            Size.Width = 188.000000000000000000
+            Size.Height = 32.000000000000000000
+            Size.PlatformDefault = False
+            StyleLookup = 'checkboxstyle_switch_lefttext'
+            TabOrder = 1
+            Text = 'Show grid'
+            OnChange = CheckBoxSnapToGridChange
           end
         end
       end

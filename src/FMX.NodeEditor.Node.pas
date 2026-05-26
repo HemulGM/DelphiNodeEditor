@@ -89,6 +89,8 @@ type
     const
       HeaderHeight = 28;
       BottomPad = 10;
+      PinRadius = 8;
+      ResizeEdgeSize = 6;
   private
     FInputs: TObjectList<TNodePin>;
     FOutputs: TObjectList<TNodePin>;
@@ -166,9 +168,12 @@ type
   protected
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
   private
-    procedure Paint(Canvas: TCanvas; Zoom: double; OffsetX, OffsetY: integer); //virtual;
-    function GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
+    function GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double; Radius: integer = 8): TRect;
     function GetPinAt(LocalX, LocalY: integer): TNodePin;
+    procedure DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single = 1.0);
+    function GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRect;
+  public
+    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); virtual;
   end;
 
 implementation
@@ -489,12 +494,10 @@ begin
   Result := TPointF.Create(X + LocalPos.X, Y + LocalPos.Y);
 end;
 
-function TCustomNode.GetPinScreenRect(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer; Radius: integer): TRect;
+function TCustomNode.GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double; Radius: integer): TRect;
 begin
   var P := GetPinScreenPosition(APin, Zoom, OffsetX, OffsetY);
-
   var R := if VisualKind = nvReroute then Max(5, Radius)else Radius;
-
   Result := TRect.Create(P.X - R, P.Y - R, P.X + R, P.Y + R);
 end;
 
@@ -630,331 +633,120 @@ begin
     Result := nil;
 end;
 
-procedure TCustomNode.Paint(Canvas: TCanvas; Zoom: double; OffsetX, OffsetY: integer);
-var
-  R, HeaderR, BodyR: TRect;
-  i: integer;
-  p: TNodePin;
-  PX, PY: integer;
-  HeaderH: integer;
-  PinRadius: integer;
-  CornerRadius: Single;
-  DoDrawPins: Boolean;
+procedure TCustomNode.Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double);
 begin
-  R := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
 
-  HeaderH := Round(28 * Zoom);
-  PinRadius := Round(8 * Zoom);
-  CornerRadius := 10 * Zoom;
+  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
 
-  if Collapsed and (VisualKind = nvNormal) then
-  begin
-    R.Bottom := R.Top + HeaderH;
-  end;
+  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeHeadText := NodeHead;
+  NodeHeadText.Inflate(-10 * Zoom, 0);
 
-  case VisualKind of
-    nvComment:
-      begin
-        // Fill
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := $FF1E2125; //BodyColor;
-        Canvas.FillRect(R, CornerRadius, CornerRadius, AllCorners, 1);
+  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+  var NodeBodyText := NodeBody;
+  NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
 
-        // Head
-        HeaderR := Rect(R.Left, R.Top, R.Right, R.Top + Round(24 * Zoom));
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := HeaderColor;
-        Canvas.FillRect(HeaderR, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+  var CornerRadius := 10 * Zoom;
 
-        // Frame
-        if Selected then
-        begin
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if Highlighted then
-        begin
-          Canvas.Stroke.Color := TAlphaColors.Red;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if Hovered then
-        begin
-          Canvas.Stroke.Color := HeaderColor;//TAlphaColors.Blue;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else
-        begin
-          Canvas.Stroke.Color := HeaderColor;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end;
-        Canvas.DrawRect(R, CornerRadius, CornerRadius, AllCorners, 1);
+  // Shadow
+  DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
 
-        // Text Head
-        Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := Round(10 * Zoom);
-        Canvas.Fill.Kind := TBrushKind.Solid;
-
-        var RF := TRectF.Create(R.Left + (8 * Zoom), R.Top + (5 * Zoom), R.Left + 1000, R.Top + 1000);
-        Canvas.FillText(RF, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-
-        // Text Body
-        if CommentText <> '' then
-          Canvas.FillText(TRectF.Create(R.Left + (8 * Zoom), HeaderR.Bottom + (8 * Zoom), R.Left + 1000, HeaderR.Bottom + 1000), CommentText, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-
-        DoDrawPins := False;
-      end;
-    nvReroute:
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        if Selected then
-        begin
-          Canvas.Fill.Kind := TBrushKind.Solid;
-          Canvas.Fill.Color := TAlphaColors.White;
-          Canvas.FillEllipse(TRectF.Create(R.Left - 5, R.Top - 5, R.Right + 5, R.Bottom + 5), 0.3);
-        end;
-
-        if Highlighted then
-        begin
-          Canvas.Stroke.Thickness := Round(3 * Zoom);
-        end
-        else if Hovered then
-        begin
-          Canvas.Fill.Color := TAlphaColors.Yellow;
-          Canvas.Stroke.Thickness := Round(2 * Zoom);
-        end
-        else
-        begin
-          Canvas.Fill.Color := TAlphaColors.White;
-          Canvas.Stroke.Thickness := Round(2 * Zoom);
-        end;
-                                 {
-        Canvas.Stroke.Color := TAlphaColors.Black;
-        Canvas.FillEllipse(TRectF.Create(R.Left, R.Top, R.Right, R.Bottom), 1);
-        Canvas.DrawEllipse(TRectF.Create(R.Left, R.Top, R.Right, R.Bottom), 1);    }
-
-        var Radius: Single := PinRadius;
-        if Hovered then
-        begin
-          Canvas.Stroke.Kind := TBrushKind.Solid;
-          if Highlighted then
-            Canvas.Fill.Color := GetInput(0).PinType.Color
-          else
-            Canvas.Fill.Color := $FFFFD740;
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-        end
-        else
-        begin
-          Canvas.Fill.Color := GetInput(0).PinType.Color;
-          Canvas.Stroke.Kind := TBrushKind.Solid;
-          Canvas.Stroke.Color := HeaderColor;
-          Canvas.Stroke.Thickness := 2 * Zoom;
-          Radius := Radius * 0.8;
-        end;
-
-        var PR := TRectF.Create(R.Left, R.Top, R.Right, R.Bottom).CenterPoint;
-
-      // Highlight frame
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        var RE := TRectF.Create(PR.X - Radius, PR.Y - Radius, PR.X + Radius, PR.Y + Radius);
-        Canvas.DrawEllipse(RE, 1);
-
-      // Body
-        RE.Inflate(-Radius * 0.4, -Radius * 0.4);
-        Canvas.FillEllipse(RE, 1);
-
-        DoDrawPins := False;
-      end;
-    nvNormal:
-      begin
-        BodyR := R;
-
-        // Shadow
-        DrawShadowedRect(Canvas, BodyR, CornerRadius, Zoom);
-
-        // Fill Body
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := $FF1E2125;  //BodyColor
-        Canvas.Stroke.Kind := TBrushKind.None;
-        Canvas.FillRect(BodyR, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Fill Head
-        HeaderR := Rect(R.Left, R.Top, R.Right, R.Top + HeaderH);
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := HeaderColor;
-        Canvas.Stroke.Kind := TBrushKind.None;
-        Canvas.FillRect(HeaderR, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
-
-        // Frame
-        Canvas.Fill.Kind := TBrushKind.None;
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-
-        if Selected then
-        begin
-          Canvas.Stroke.Color := $FFFFD740;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if Highlighted then
-        begin
-          Canvas.Stroke.Color := HeaderColor;//TAlphaColors.Blue;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else if Hovered then
-        begin
-          Canvas.Stroke.Color := HeaderColor;//TAlphaColors.Blue;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end
-        else
-        begin
-          Canvas.Stroke.Color := HeaderColor;
-          Canvas.Stroke.Thickness := 1 * Zoom;
-        end;
-
-        Canvas.DrawRect(R, CornerRadius, CornerRadius, AllCorners, 1);
-
-        // Head Text
-        Canvas.Fill.Kind := TBrushKind.Solid;
-        Canvas.Fill.Color := TAlphaColors.White;
-        Canvas.Font.Size := Round(10 * Zoom);
-        var RF := TRectF.Create(
-          R.Left + Round(8 * Zoom),
-          R.Top + Round(6 * Zoom),
-          R.Left + Round(8 * Zoom) + 1000,
-          R.Top + Round(8 * Zoom) + 1000);
-        Canvas.FillText(RF, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-
-        DoDrawPins := True;
-      end;
-  else
-    DoDrawPins := False;
-  end;
-
-  // Pins Input
-  if DoDrawPins then
-  begin
-    Canvas.Stroke.Kind := TBrushKind.Solid;
-    Canvas.Stroke.Color := TAlphaColors.Black;
-    Canvas.Stroke.Thickness := 1 * Zoom;
-
-    for i := 0 to InputCount - 1 do
-    begin
-      p := GetInput(i);
-      if Collapsed and (p.LocalY > HeaderH / Zoom) then
-        Continue;
-      PX := R.Left;
-      PY := R.Top + Round(p.LocalY * Zoom);
-
-      if p.Kind = pkExec then
-        Canvas.Fill.Color := TAlphaColors.White
-      else if p.PinType <> nil then
-        Canvas.Fill.Color := p.PinType.Color
-      else
-        Canvas.Fill.Color := TAlphaColors.Green;
-
-      var Radius: Single := PinRadius;
-      if p.Id = HoveredPinId then
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := $FFFFD740;
-        Canvas.Stroke.Thickness := 2 * Zoom;
-      end
-      else
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := HeaderColor;
-        Canvas.Stroke.Thickness := 2 * Zoom;
-        Radius := Radius * 0.8;
-      end;
-
-      // Highlight frame
-      Canvas.Fill.Kind := TBrushKind.Solid;
-      var RE := TRectF.Create(PX - Radius, PY - Radius, PX + Radius, PY + Radius);
-      Canvas.DrawEllipse(RE, 1);
-
-      // Body
-      RE.Inflate(-Radius * 0.4, -Radius * 0.4);
-      Canvas.FillEllipse(RE, 1);
-
-      // Text
-      Canvas.Fill.Kind := TBrushKind.Solid;
-      Canvas.Fill.Color := TAlphaColors.White;
-      Canvas.FillText(
-        TRectF.Create(
-          PX + PinRadius + 6,
-          PY - Round(Canvas.TextHeight(p.Name)) div 2,
-          PX + PinRadius + 1000,
-          PY - Round(Canvas.TextHeight(p.Name)) + 1000),
-        p.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-    end;
-
-    // Pins Output
-    Canvas.Stroke.Kind := TBrushKind.Solid;
-    Canvas.Stroke.Color := TAlphaColors.Black;
-    Canvas.Stroke.Thickness := 1 * Zoom;
-
-    for i := 0 to OutputCount - 1 do
-    begin
-      p := GetOutput(i);
-      if Collapsed and (p.LocalY > HeaderH / Zoom) then
-        Continue;
-      PX := R.Right;
-      PY := R.Top + Round(p.LocalY * Zoom);
-
-      if p.Kind = pkExec then
-        Canvas.Fill.Color := TAlphaColors.White
-      else if p.PinType <> nil then
-        Canvas.Fill.Color := p.PinType.Color
-      else
-        Canvas.Fill.Color := TAlphaColors.Lime;
-
-      if p.Id = HoveredPinId then
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := TAlphaColors.Red;
-        Canvas.Stroke.Thickness := 2;
-      end
-      else
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := TAlphaColors.Black;
-        Canvas.Stroke.Thickness := 1;
-      end;
-
-      var Radius: Single := PinRadius;
-      if p.Id = HoveredPinId then
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := $FFFFD740;
-        Canvas.Stroke.Thickness := 2 * Zoom;
-      end
-      else
-      begin
-        Canvas.Stroke.Kind := TBrushKind.Solid;
-        Canvas.Stroke.Color := HeaderColor;
-        Canvas.Stroke.Thickness := 2 * Zoom;
-        Radius := Radius * 0.8;
-      end;
-
-      Canvas.Fill.Kind := TBrushKind.Solid;
-      var RE := TRectF.Create(PX - Radius, PY - Radius, PX + Radius, PY + Radius);
-      Canvas.DrawEllipse(RE, 1);
-      RE.Inflate(-Radius * 0.4, -Radius * 0.4);
-      Canvas.FillEllipse(RE, 1);
-
-      Canvas.Fill.Kind := TBrushKind.Solid;
-      Canvas.Fill.Color := TAlphaColors.White;
-      Canvas.FillText(TRectF.Create(
-          PX - Round(Canvas.TextWidth(p.Name)) - PinRadius - 6,
-          PY - Round(Canvas.TextHeight(p.Name)) div 2,
-          PX - Round(Canvas.TextWidth(p.Name)) - PinRadius - 6 + 1000,
-          PY - Round(Canvas.TextHeight(p.Name)) div 2 + 1000), p.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-    end;
-  end;
-
-  // Reset
+  // Fill Body
   Canvas.Fill.Kind := TBrushKind.Solid;
-  Canvas.Stroke.Thickness := 1;
+  Canvas.Fill.Color := $FF1E2125;  //BodyColor
+  Canvas.Stroke.Kind := TBrushKind.None;
+  Canvas.FillRect(NodeBody, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Fill Head
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := HeaderColor;
+  Canvas.Stroke.Kind := TBrushKind.None;
+  if Collapsed then
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
+  else
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+
+  // Frame
+  Canvas.Fill.Kind := TBrushKind.None;
   Canvas.Stroke.Kind := TBrushKind.Solid;
+
+  if Selected then
+  begin
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+  end
+  else if Highlighted then
+  begin
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+  end
+  else if Hovered then
+  begin
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+  end
+  else
+  begin // default
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end;
+
+  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Head Text
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := TAlphaColors.White;
+  Canvas.Font.Size := 10 * Zoom;
+  Canvas.FillText(NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+
+  // Size grip
+  if Selected and (VisualKind <> TNodeVisualKind.nvReroute) and (not Collapsed) then
+    DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
+end;
+
+function TCustomNode.GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRect;
+begin
+  Result := Rect(0, 0, 0, 0);
+  if VisualKind = TNodeVisualKind.nvReroute then
+    Exit;
+  if FixedSize then
+    Exit;
+
+  var R := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  var S := Round(ResizeEdgeSize * Zoom);
+  Result := Rect(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
+end;
+
+procedure TCustomNode.DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
+begin
+  var R := GetResizeHandleRect(Zoom, OffsetX, OffsetY);
+  var GripSize := Min(R.Width, R.Height);
+  R.Offset(-GripSize, -GripSize);
+
+  var Margin := GripSize * 0.18;
+  var Step := GripSize * 0.28;
+
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Cap := TStrokeCap.Round;
+  Canvas.Stroke.Thickness := Max(1.5, GripSize * 0.08);
+
+  for var i := 0 to 2 do
+  begin
+    var X1 := R.Left + Margin + i * Step;
+    var Y1 := R.Bottom - Margin;
+
+    var X2 := R.Right - Margin;
+    var Y2 := R.Top + Margin + i * Step;
+
+    // Dark shadow
+    Canvas.Stroke.Color := TAlphaColorF.Create(0, 0, 0, 0.55 * AOpacity).ToAlphaColor;
+    Canvas.DrawLine(PointF(X1 + 1, Y1 + 1), PointF(X2 + 1, Y2 + 1), 1);
+
+    // Bright line
+    Canvas.Stroke.Color := TAlphaColorF.Create(1, 1, 1, 0.85 * AOpacity).ToAlphaColor;
+    Canvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), 1);
+  end;
 end;
 
 procedure TCustomNode.SaveToJSON(AObj: TJSONObject);

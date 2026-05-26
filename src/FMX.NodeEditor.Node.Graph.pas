@@ -80,6 +80,8 @@ type
   end;
 
   TNodeGraph = class
+    class var
+      UndoLimit: Integer;
   private
     FNodes: TNodeDAG;
     FLinks: TObjectList<TNodeLink>;
@@ -95,6 +97,7 @@ type
     FOnGraphChanged: TGraphChangedEvent;
 
     procedure RemoveLinksToInput(APin: TNodePin);
+    procedure TruncateUndo; inline;
 
   protected
     function PinHasIncomingLink(APin: TNodePin): boolean;
@@ -890,7 +893,7 @@ begin
   FUndoStack.Add(ACommand);
   FRedoStack.Clear;
 
-  while FUndoStack.Count > 100 do
+  while FUndoStack.Count > UndoLimit do
     FUndoStack.Delete(0);
 
   DoGraphChanged;
@@ -934,10 +937,15 @@ begin
   FUndoStack.Add(ACommand);
   FRedoStack.Clear;
 
-  while FUndoStack.Count > 100 do
-    FUndoStack.Delete(0);
+  TruncateUndo;
 
   DoGraphChanged;
+end;
+
+procedure TNodeGraph.TruncateUndo;
+begin
+  while FUndoStack.Count > UndoLimit do
+    FUndoStack.Delete(0);
 end;
 
 procedure TNodeGraph.PushUndoSnapshot;
@@ -953,8 +961,7 @@ begin
     Obj.Free;
   end;
 
-  while FUndoStack.Count > 100 do
-    FUndoStack.Delete(0);
+  TruncateUndo;
 end;
 
 function TNodeGraph.CaptureJSONText: string;
@@ -1477,6 +1484,9 @@ begin
   else
     Result := nil;
 end;
+
+initialization
+  TNodeGraph.UndoLimit := 100;
 
 end.
 

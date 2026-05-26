@@ -78,7 +78,7 @@ function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF;
 
 function DistancePointToSegment(const P, A, B: TPointF): Single;
 
-procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint);
+procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
 
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
 
@@ -93,6 +93,9 @@ procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPoint
 function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
 
 function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
+
+var
+  CachePathObject: TPathData;
 
 implementation
 
@@ -330,25 +333,19 @@ begin
 end;
 
 function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
-var
-  Poly: TPolygon;
-  I: Integer;
 begin
   Result := False;
-  var Path := TPathData.Create;
-  try
-    Path.MoveTo(P0);
-    Path.CurveTo(P1, P2, P3);
+  CachePathObject.Clear;
+  CachePathObject.MoveTo(P0);
+  CachePathObject.CurveTo(P1, P2, P3);
 
-    Path.FlattenToPolygon(Poly);
+  var Poly: TPolygon;
+  CachePathObject.FlattenToPolygon(Poly);
 
-    for I := 0 to High(Poly) - 1 do
-    begin
-      if DistancePointToSegment(P, Poly[I], Poly[I + 1]) <= Tolerance then
-        Exit(True);
-    end;
-  finally
-    Path.Free;
+  for var i := 0 to High(Poly) - 1 do
+  begin
+    if DistancePointToSegment(P, Poly[i], Poly[i + 1]) <= Tolerance then
+      Exit(True);
   end;
 end;
 
@@ -366,16 +363,12 @@ begin
   Result.Y := it3 * P0.Y + 3 * it2 * T * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
 end;
 
-procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint);
+procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
 begin
-  var Path := TPathData.Create;
-  try
-    Path.MoveTo(P0);
-    Path.CurveTo(P1, P2, P3);
-    C.DrawPath(Path, 1);
-  finally
-    Path.Free;
-  end;
+  CachePathObject.Clear;
+  CachePathObject.MoveTo(P0);
+  CachePathObject.CurveTo(P1, P2, P3);
+  C.DrawPath(CachePathObject, Opacity);
 end;
 
 function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
@@ -449,6 +442,27 @@ begin
   Canvas.Stroke.Thickness := 1;
   Canvas.DrawLine(P1, P2, 1);   }
 end;
+
+initialization
+  CachePathObject := TPathData.Create;
+  // Initiate private capacity for CachePathObject
+  var TMP := TPathData.Create;
+  try
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    TMP.MoveTo(TPointF.Create(0, 0));
+    CachePathObject.AddPath(TMP);
+  finally
+    TMP.Free;
+  end;
+
+finalization
+  CachePathObject.Free;
 
 end.
 
