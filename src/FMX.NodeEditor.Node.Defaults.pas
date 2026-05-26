@@ -25,9 +25,6 @@ type
   end;
 
   TRerouteNode = class(TCustomNode)
-  protected
-    procedure SetHeight(const Value: Integer); override;
-    procedure SetWidth(const Value: Integer); override;
   public
     function GetPinLocalPosition(APin: TNodePin): TPoint; override;
     constructor Create(ATitle: string; AX, AY: single); override;
@@ -136,12 +133,6 @@ begin
   Create(ATitle, AX, AY, 20, 20);
 end;
 
-procedure TRerouteNode.SetHeight(const Value: Integer);
-begin
-  inherited;
-  AutoLayoutPins;
-end;
-
 procedure TRerouteNode.SetupPins;
 begin
   ClearPins;
@@ -153,12 +144,6 @@ begin
 
   if OutputCount > 0 then
     GetOutput(0).AllowMultipleConnections := False;
-end;
-
-procedure TRerouteNode.SetWidth(const Value: Integer);
-begin
-  inherited;
-  AutoLayoutPins;
 end;
 
 { TCommentNode }

@@ -9,3 +9,5 @@
 *.dll
 fmx/Linux64/*
 *.local
+*.~*
+*.dsk

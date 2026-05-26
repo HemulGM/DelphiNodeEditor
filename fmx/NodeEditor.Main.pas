@@ -9,7 +9,8 @@ uses
   FMX.Grid.Style, FMX.Layouts, FMX.Menus, FMX.EditBox, FMX.SpinBox,
   FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
-  FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types;
+  FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
+  FMX.Ani, FMX.ExtCtrls;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -91,8 +92,7 @@ type
     MenuItemAddComment: TMenuItem;
     MenuItemAddDefault: TMenuItem;
     Layout2: TLayout;
-    SpinBoxSize: TSpinBox;
-    Layout3: TLayout;
+    LayoutLeft: TLayout;
     StyleBookWinUI3Light: TStyleBook;
     PanelInspector: TPanel;
     Layout4: TLayout;
@@ -147,13 +147,49 @@ type
     LabelStat5: TLabel;
     Layout14: TLayout;
     TrackBarZoom: TTrackBar;
-    Layout15: TLayout;
+    LayoutClient: TLayout;
     Panel1: TPanel;
     SaveDialogJSON: TSaveDialog;
     OpenDialogJSON: TOpenDialog;
     MenuItemJSON: TMenuItem;
     MenuItemJSONLoad: TMenuItem;
     MenuItemJSONSave: TMenuItem;
+    LayoutRight: TLayout;
+    Panel2: TPanel;
+    VertScrollBoxRight: TVertScrollBox;
+    LayoutNavigator: TLayout;
+    RectangleNav: TRectangle;
+    Layout15: TLayout;
+    PathLabel1: TPathLabel;
+    Label2: TLabel;
+    Button1: TButton;
+    Panel3: TPanel;
+    LayoutSettings: TLayout;
+    Layout16: TLayout;
+    PathLabel2: TPathLabel;
+    Label13: TLabel;
+    Button2: TButton;
+    Panel4: TPanel;
+    Layout3: TLayout;
+    CheckBoxSnapToGrid: TCheckBox;
+    SpinBoxSize: TSpinBox;
+    Label14: TLabel;
+    CheckBoxSnapToNodes: TCheckBox;
+    Layout17: TLayout;
+    RadioButton1: TRadioButton;
+    RadioButton2: TRadioButton;
+    RadioButton3: TRadioButton;
+    RadioButton4: TRadioButton;
+    PathLabel3: TPathLabel;
+    PathLabel4: TPathLabel;
+    PathLabel5: TPathLabel;
+    PathLabel6: TPathLabel;
+    PopupBox1: TPopupBox;
+    Panel5: TPanel;
+    PathLabel7: TPathLabel;
+    Button3: TButton;
+    Button4: TButton;
+    Panel6: TPanel;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -190,6 +226,9 @@ type
     procedure TrackBarZoomChange(Sender: TObject);
     procedure MenuItemJSONLoadClick(Sender: TObject);
     procedure MenuItemJSONSaveClick(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+  protected
+    procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
     FEditor: TNodeEditor;
     FJsonNodeEditor: TJsonNodeEditor;
@@ -214,6 +253,7 @@ type
     procedure ClearAllSections;
     procedure OnUpdatedStatus(Sender: TObject);
     procedure OnJsonNodeEditorChanged(Sender: TObject);
+    procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
   public
     { Public declarations }
   end;
@@ -452,6 +492,11 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
+begin
+  //
+end;
+
 procedure TFormMain.BuildEditorArea;
 begin
   FEditor := TNodeEditor.Create(LayoutRender);
@@ -459,6 +504,7 @@ begin
   FEditor.Align := TAlignLayout.Client;
   FEditor.SnapToGrid := False;
   FEditor.GridSize := 40;
+  FEditor.OnPaint := FOnEditorPaint;
 
   FEditor.OnSelectionChanged := OnSelectionChanged;
   FEditor.OnNodeChanged := OnNodeChanged;
@@ -515,6 +561,11 @@ begin
   else
     StringGridNodeValues.Options := StringGridNodeValues.Options - [TGridOption.Editing];
   CanSelect := True;
+end;
+
+procedure TFormMain.Timer1Timer(Sender: TObject);
+begin
+  //
 end;
 
 procedure TFormMain.TrackBarZoomChange(Sender: TObject);
@@ -575,6 +626,7 @@ begin
   // ── Math Expression (exec + values) ───────────────────────────
   NMath := FEditor.Graph.Registry.CreateNode('math_expr', 520, 180);
   NMath.Title := 'Math Expr';
+  NMath.FixedSize := True;
   FEditor.AddNode(NMath);
 
   // ── String node ────────────────────────────────────────────────
@@ -1033,6 +1085,13 @@ end;
 procedure TFormMain.OnUpdatedStatus(Sender: TObject);
 begin
   UpdateStatus;
+end;
+
+procedure TFormMain.PaintRects(const UpdateRects: array of TRectF);
+begin
+  RectangleNav.Fill.Bitmap.Bitmap.SetSize(RectangleNav.Size.Size.Round);
+  FEditor.RenderNavigator(RectangleNav.Fill.Bitmap.Bitmap);
+  inherited;
 end;
 
 procedure TFormMain.UpdateStatus;

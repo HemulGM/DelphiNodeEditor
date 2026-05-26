@@ -68,6 +68,7 @@ type
     Advanced: boolean;
     AllowMultipleConnections: boolean;
     SortIndex: integer;
+    Connected: boolean;
 
     constructor Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
     destructor Destroy; override;
@@ -85,6 +86,9 @@ type
   end;
 
   TCustomNode = class
+    const
+      HeaderHeight = 28;
+      BottomPad = 10;
   private
     FInputs: TObjectList<TNodePin>;
     FOutputs: TObjectList<TNodePin>;
@@ -96,6 +100,8 @@ type
     procedure SetWidth(const Value: Integer); virtual;
     function GetDefaultHeaderColor: TAlphaColor; virtual;
     function GetDefaultBodyColor: TAlphaColor; virtual;
+  private
+    function GetHeight: Integer;
   public
     Id: string;
     NodeType: string;
@@ -112,9 +118,11 @@ type
     HoveredPinId: string;
     // On pin hover
     Highlighted: boolean;
+    FixedSize: Boolean;
 
     Collapsed: boolean;
     ZOrder: integer;
+    Connected: boolean;
 
     constructor Create(ATitle: string; AX, AY: single); overload; virtual;
     constructor Create(ATitle: string; AX, AY: single; AWidth, AHeight: integer); overload; virtual;
@@ -136,13 +144,11 @@ type
     function GetInput(Index: integer): TNodePin;
     function GetOutput(Index: integer): TNodePin;
     function FindPinById(const AId: string): TNodePin;
+    function OutputsIsBusy: Boolean;
 
-    function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
     function GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
     function GetPinWorldPosition(APin: TNodePin): TPointF;
-    function GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
 
-    function GetPinAt(LocalX, LocalY: integer): TNodePin;
     function HitTest(WX, WY: single): boolean;
     function GetScreenBounds(Zoom: double; OffsetX, OffsetY: Double): TRect;
 
@@ -152,50 +158,23 @@ type
     function ValueCount: integer;
     function GetValue(Index: integer): TNodeValue;
 
-    procedure Paint(Canvas: TCanvas; Zoom: double; OffsetX, OffsetY: integer); virtual;
     property Width: Integer read FWidth write SetWidth;
-    property Height: Integer read FHeight write SetHeight;
+    property Height: Integer read GetHeight write SetHeight;
 
     procedure SaveToJSON(AObj: TJSONObject); virtual;
     procedure LoadFromJSON(AObj: TJSONObject); virtual;
+  protected
+    function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
+  private
+    procedure Paint(Canvas: TCanvas; Zoom: double; OffsetX, OffsetY: integer); //virtual;
+    function GetPinScreenRect(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: integer; Radius: integer = 8): TRect;
+    function GetPinAt(LocalX, LocalY: integer): TNodePin;
   end;
 
 implementation
 
 uses
   System.Math, FMX.Types;
-
-function PinKindToStr(AKind: TPinKind): string;
-begin
-  if AKind = pkExec then
-    Result := 'exec'
-  else
-    Result := 'data';
-end;
-
-function StrToPinKind(const S: string): TPinKind;
-begin
-  if SameText(S, 'exec') then
-    Result := pkExec
-  else
-    Result := pkData;
-end;
-
-function PinDirectionToStr(ADir: TPinDirection): string;
-begin
-  if ADir = pdInput then
-    Result := 'input'
-  else
-    Result := 'output';
-end;
-
-function StrToPinDirection(const S: string): TPinDirection;
-begin
-  if SameText(S, 'output') then
-    Result := pdOutput
-  else
-    Result := pdInput;
-end;
 
 constructor TCustomNode.Create(ATitle: string; AX, AY: single);
 begin
@@ -231,6 +210,7 @@ begin
   Hovered := False;
   Highlighted := False;
   Collapsed := False;
+  FixedSize := False;
   ZOrder := 0;
 end;
 
@@ -249,6 +229,14 @@ begin
   Result := $FFC8C800;
 end;
 
+function TCustomNode.GetHeight: Integer;
+begin
+  if Collapsed and (VisualKind <> TNodeVisualKind.nvReroute) then
+    Result := HeaderHeight
+  else
+    Result := FHeight;
+end;
+
 function TCustomNode.GetDefaultBodyColor: TAlphaColor;
 begin
   Result := TAlphaColors.White;
@@ -256,16 +244,29 @@ end;
 
 procedure TCustomNode.SetHeight(const Value: Integer);
 begin
-  FHeight := Value;
+  if Collapsed or FixedSize then
+    Exit;
+  if VisualKind <> TNodeVisualKind.nvReroute then
+    FHeight := Max(60, Max(Max(InputCount, OutputCount) * 30 + HeaderHeight + BottomPad, Value))
+  else
+    FHeight := Value;
+  AutoLayoutPins;
 end;
 
 procedure TCustomNode.SetupPins;
 begin
+
 end;
 
 procedure TCustomNode.SetWidth(const Value: Integer);
 begin
-  FWidth := Value;
+  if FixedSize then
+    Exit;
+  if VisualKind <> TNodeVisualKind.nvReroute then
+    FWidth := Max(100, Value)
+  else
+    FWidth := Value;
+  AutoLayoutPins;
 end;
 
 procedure TCustomNode.ClearPins;
@@ -277,7 +278,7 @@ end;
 function TCustomNode.AddInputPin(const AName, ADataType: string; AKind: TPinKind; ALocalY: integer): TNodePin;
 begin
   if ALocalY < 0 then
-    ALocalY := 44 + FInputs.Count * 26;
+    ALocalY := (HeaderHeight + 16) + FInputs.Count * 26;
 
   Result := TNodePin.Create(AName, pdInput, AKind, ALocalY);
   Result.OwnerNode := Self;
@@ -292,7 +293,7 @@ end;
 function TCustomNode.AddOutputPin(const AName, ADataType: string; AKind: TPinKind; ALocalY: integer): TNodePin;
 begin
   if ALocalY < 0 then
-    ALocalY := 44 + FOutputs.Count * 26;
+    ALocalY := (HeaderHeight + 16) + FOutputs.Count * 26;
 
   Result := TNodePin.Create(AName, pdOutput, AKind, ALocalY);
   Result.OwnerNode := Self;
@@ -357,17 +358,17 @@ begin
   if VisualKind = nvComment then
     Exit;
 
+  var MaxCount := Max(FInputs.Count, FOutputs.Count);
+  if MaxCount <= 0 then
+    Exit;
+
+  var WorkH := Height - HeaderHeight - BottomPad;
+
   for var i := 0 to FInputs.Count - 1 do
-    FInputs[i].LocalY := 44 + i * 26;
+    FInputs[i].LocalY := HeaderHeight + (i + 1) * WorkH div (FInputs.Count + 1);
 
   for var i := 0 to FOutputs.Count - 1 do
-    FOutputs[i].LocalY := 44 + i * 26;
-
-  var MaxCount := Max(FInputs.Count, FOutputs.Count);
-  var NeededHeight := 44 + MaxCount * 26 + 18;
-
-  if NeededHeight <> Height then
-    Height := NeededHeight;
+    FOutputs[i].LocalY := HeaderHeight + (i + 1) * WorkH div (FOutputs.Count + 1);
 end;
 
 procedure TCustomNode.AddInput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
@@ -381,6 +382,7 @@ begin
   p.SortIndex := FInputs.Count;
   FInputs.Add(p);
   ReindexPins;
+  AutoLayoutPins;
 end;
 
 procedure TCustomNode.AddOutput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
@@ -394,6 +396,7 @@ begin
   p.SortIndex := FOutputs.Count;
   FOutputs.Add(p);
   ReindexPins;
+  AutoLayoutPins;
 end;
 
 function TCustomNode.InputCount: integer;
@@ -410,6 +413,14 @@ begin
     Result := FOutputs.Count
   else
     Result := 0;
+end;
+
+function TCustomNode.OutputsIsBusy: Boolean;
+begin
+  Result := True;
+  for var Pin in FOutputs do
+    if not Pin.Connected then
+      Exit(False);
 end;
 
 function TCustomNode.GetInput(Index: integer): TNodePin;
@@ -429,64 +440,62 @@ begin
 end;
 
 function TCustomNode.FindPinById(const AId: string): TNodePin;
-var
-  i: integer;
 begin
   Result := nil;
 
-  for i := 0 to InputCount - 1 do
+  for var i := 0 to InputCount - 1 do
     if GetInput(i).Id = AId then
       Exit(GetInput(i));
 
-  for i := 0 to OutputCount - 1 do
+  for var i := 0 to OutputCount - 1 do
     if GetOutput(i).Id = AId then
       Exit(GetOutput(i));
 end;
 
 function TCustomNode.GetPinLocalPosition(APin: TNodePin): TPoint;
 begin
-  if APin = nil then
-    Exit(Point(0, 0));
-
   if APin.Direction = pdInput then
-    Result := Point(0, APin.LocalY)
+  begin
+    if Collapsed then
+      Result := TPoint.Create(0, HeaderHeight div 2)
+    else
+      Result := TPoint.Create(0, APin.LocalY);
+  end
   else
-    Result := Point(Width, APin.LocalY);
+  begin
+    if Collapsed then
+      Result := TPoint.Create(Width, HeaderHeight div 2)
+    else
+      Result := TPoint.Create(Width, APin.LocalY);
+  end;
 end;
 
-function TCustomNode.GetPinScreenPosition(APin: TNodePin; Zoom: double; OffsetX, OffsetY: Double): TPoint;
-var
-  P: TPoint;
+function TCustomNode.GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
 begin
-  P := GetPinLocalPosition(APin);
-  Result.X := Round((x + P.X) * Zoom + OffsetX);
-  Result.Y := Round((y + P.Y) * Zoom + OffsetY);
+  if (APin = nil) or (APin.OwnerNode <> Self) then
+    Exit(TPoint.Create(0, 0));
+
+  var P := GetPinLocalPosition(APin);
+  Result.X := Round((X + P.X) * Zoom + OffsetX);
+  Result.Y := Round((Y + P.Y) * Zoom + OffsetY);
 end;
 
 function TCustomNode.GetPinWorldPosition(APin: TNodePin): TPointF;
-var
-  local: TPoint;
 begin
   if (APin = nil) or (APin.OwnerNode <> Self) then
-    Exit(PointF(0, 0));
+    Exit(TPointF.Create(0, 0));
 
-  local := GetPinLocalPosition(APin);
-  Result := PointF(X + local.X, Y + local.Y);
+  var LocalPos := GetPinLocalPosition(APin);
+  Result := TPointF.Create(X + LocalPos.X, Y + LocalPos.Y);
 end;
 
 function TCustomNode.GetPinScreenRect(APin: TNodePin; Zoom: double; OffsetX, OffsetY: integer; Radius: integer): TRect;
-var
-  P: TPoint;
-  R: integer;
 begin
-  P := GetPinScreenPosition(APin, Zoom, OffsetX, OffsetY);
+  var P := GetPinScreenPosition(APin, Zoom, OffsetX, OffsetY);
 
-  if VisualKind = nvReroute then
-    R := Max(5, Radius)
-  else
-    R := Radius;
+  var R := if VisualKind = nvReroute then Max(5, Radius)else Radius;
 
-  Result := Rect(P.X - R, P.Y - R, P.X + R, P.Y + R);
+  Result := TRect.Create(P.X - R, P.Y - R, P.X + R, P.Y + R);
 end;
 
 function TCustomNode.GetPinAt(LocalX, LocalY: integer): TNodePin;
@@ -563,8 +572,10 @@ begin
     Result := (DX * DX * RY2 + DY * DY * RX2) <= (RX2 * RY2);
     Exit;
   end;
-
-  Result := (WX >= X) and (WY >= Y) and (WX <= X + Width) and (WY <= Y + Height);
+  if Collapsed then
+    Result := (WX >= X) and (WY >= Y) and (WX <= X + Width) and (WY <= Y + HeaderHeight)
+  else
+    Result := (WX >= X) and (WY >= Y) and (WX <= X + Width) and (WY <= Y + Height);
 end;
 
 function TCustomNode.GetScreenBounds(Zoom: double; OffsetX, OffsetY: Double): TRect;

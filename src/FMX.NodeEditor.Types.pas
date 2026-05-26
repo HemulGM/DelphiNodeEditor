@@ -3,7 +3,7 @@ unit FMX.NodeEditor.Types;
 interface
 
 uses
-  System.Classes, System.SysUtils, System.Types, FMX.Graphics;
+  System.Classes, System.SysUtils, System.Types, System.UITypes, FMX.Graphics;
 
 type
   TGridType = (Lines, Dots);
@@ -45,6 +45,16 @@ function IntToTypeFlags(AValue: integer): TNodePinTypeFlags;
 
 function TypeFlagsToInt(AFlags: TNodePinTypeFlags): integer;
 
+//
+
+function PinKindToStr(AKind: TPinKind): string;
+
+function StrToPinKind(const S: string): TPinKind;
+
+function PinDirectionToStr(ADir: TPinDirection): string;
+
+function StrToPinDirection(const S: string): TPinDirection;
+
 
 //
 
@@ -72,16 +82,31 @@ procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint);
 
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
 
+procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor);
+
 function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
 
 function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF;
 
 procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
 
+function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
+
+function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
+
 implementation
 
 uses
   System.Math, FMX.Types, System.Math.Vectors;
+
+function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
+var
+  C: TAlphaColorRec;
+begin
+  C.Color := Color;
+  C.A := Round(255 * Alpha);
+  Result := C.Color;
+end;
 
 procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
 var
@@ -110,6 +135,38 @@ begin
   StopPos := PointF(
     0.5 + DX * 0.5,
     0.5 + DY * 0.5);
+end;
+
+function PinKindToStr(AKind: TPinKind): string;
+begin
+  if AKind = pkExec then
+    Result := 'exec'
+  else
+    Result := 'data';
+end;
+
+function StrToPinKind(const S: string): TPinKind;
+begin
+  if SameText(S, 'exec') then
+    Result := pkExec
+  else
+    Result := pkData;
+end;
+
+function PinDirectionToStr(ADir: TPinDirection): string;
+begin
+  if ADir = pdInput then
+    Result := 'input'
+  else
+    Result := 'output';
+end;
+
+function StrToPinDirection(const S: string): TPinDirection;
+begin
+  if SameText(S, 'output') then
+    Result := pdOutput
+  else
+    Result := pdInput;
 end;
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
@@ -321,6 +378,13 @@ begin
   end;
 end;
 
+function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
+begin
+  Result := TGradientPoint(Gradient.Points.Add);
+  Result.Color := Color;
+  Result.Offset := Offset;
+end;
+
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
 const
   sL = 6;
@@ -361,6 +425,29 @@ begin
   // Rect
   Canvas.Fill.Color := $FF2B2B2B;
   Canvas.FillRect(R, Radius, Radius, AllCorners, 1);
+end;
+
+procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor);
+begin
+  // outer glow
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+
+  Canvas.Stroke.Color := MakeColor(Color, 0.08);
+  Canvas.Stroke.Thickness := 10;
+  Canvas.DrawLine(P1, P2, 1);
+
+  Canvas.Stroke.Color := MakeColor(Color, 0.15);
+  Canvas.Stroke.Thickness := 6;
+  Canvas.DrawLine(P1, P2, 1);
+
+  Canvas.Stroke.Color := MakeColor(Color, 0.25);
+  Canvas.Stroke.Thickness := 3;
+  Canvas.DrawLine(P1, P2, 1);
+              {
+  // core line
+  Canvas.Stroke.Color := MakeColor(Color, 1.0);
+  Canvas.Stroke.Thickness := 1;
+  Canvas.DrawLine(P1, P2, 1);   }
 end;
 
 end.

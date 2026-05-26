@@ -22,6 +22,10 @@ uses
 
 begin
   //GlobalUseSkia := True;
+  //GlobalUseDX := False;
+  //GlobalUseGPUCanvas := False;
+  //GlobalUseDirect2D := False;
+  //GlobalUseDXSoftware := False;
   Application.Initialize;
   Application.CreateForm(TFormMain, FormMain);
   Application.Run;
