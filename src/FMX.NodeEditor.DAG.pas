@@ -82,7 +82,7 @@ type
     property Count: integer read FCount;
     property Capacity: integer read FCapacity write SetCapacityInternal;
     property Items[AIndex: integer]: T read GetItem write SetItem; default;
-    procedure Clear;
+    procedure Clear; virtual;
     procedure TrimExcess;
     function Add(const AValue: T): integer;
     procedure AddRange(const AValues: array of T);
@@ -90,7 +90,8 @@ type
     procedure Delete(AIndex: integer);
     procedure DeleteRange(AIndex, ACount: integer);
     function Remove(const AValue: T): integer;
-    procedure Extract(AIndex: integer; out AValue: T);
+    procedure Extract(AIndex: integer; out AValue: T); overload;
+    procedure Extract(AValue: T); overload;
     function First: T;
     function Last: T;
     function IndexOf(const AValue: T): integer;
@@ -123,6 +124,7 @@ type
   public
     constructor Create(AOwnsObjects: boolean = False);
     destructor Destroy; override;
+    procedure Clear; override;
     function Remove(const AValue: T): integer; reintroduce;
   end;
 
@@ -275,10 +277,8 @@ begin
 end;
 
 procedure TDAG<T>.FreeEdgesFrom(AFrom, AToExclusive: integer);
-var
-  I: integer;
 begin
-  for I := AFrom to AToExclusive - 1 do
+  for var I := AFrom to AToExclusive - 1 do
     FreeAndNil(FEdges[I]);
 end;
 
@@ -441,6 +441,13 @@ begin
   CheckIndex(AIndex);
   AValue := FItems[AIndex];
   Delete(AIndex);
+end;
+
+procedure TDAG<T>.Extract(AValue: T);
+begin
+  var Index := Self.IndexOf(AValue);
+  CheckIndex(Index);
+  Delete(Index);
 end;
 
 function TDAG<T>.First: T;
@@ -686,12 +693,10 @@ begin
 end;
 
 procedure TDAG<T>.CopyTo(var ADest: array of T);
-var
-  I: integer;
 begin
   if Length(ADest) < FCount then
     raise EListError.Create('Destination array is too small');
-  for I := 0 to FCount - 1 do
+  for var I := 0 to FCount - 1 do
     ADest[I] := FItems[I];
 end;
 
@@ -906,6 +911,14 @@ begin
     raise;
   end;
   Result := True;
+end;
+
+procedure TObjectDAG<T>.Clear;
+begin
+  if FOwnsObjects then
+    for var I := 0 to Count - 1 do
+      Items[I].Free;
+  inherited;
 end;
 
 { TObjectDAG }

@@ -94,6 +94,8 @@ function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
 
 function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
 
+function ColorToAlphaColor(Color: TColor): TAlphaColor;
+
 var
   CachePathObject: TPathData;
 
@@ -101,6 +103,11 @@ implementation
 
 uses
   System.Math, FMX.Types, System.Math.Vectors;
+
+function ColorToAlphaColor(Color: TColor): TAlphaColor;
+begin
+  Result := TAlphaColorF.Create(TColorRec(Color).R / 255, TColorRec(Color).G / 255, TColorRec(Color).B / 255, 1).ToAlphaColor;
+end;
 
 function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
 var
@@ -384,12 +391,6 @@ const
   sM = 3;
   sS = 2;
   sR = 1;
-  {
-  sL = 12;
-  sM = 6;
-  sS = 3;
-  sR = 1;
-  }
 begin
   // Large
   var S := R;//ScaleRectFFromCenter(R, -Zoom, -Zoom);

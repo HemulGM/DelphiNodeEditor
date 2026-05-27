@@ -124,12 +124,12 @@ end;
 
 procedure TJSONSnapshotCommand.DoExecute;
 begin
-  LoadGraphFromJSONText(FGraph, FAfterJSON);
+  LoadGraphFromJSONText(FGraph, FAfterJSON, True);
 end;
 
 procedure TJSONSnapshotCommand.Undo;
 begin
-  LoadGraphFromJSONText(FGraph, FBeforeJSON);
+  LoadGraphFromJSONText(FGraph, FBeforeJSON, True);
 end;
 
 { TAddNodeCommand }
@@ -201,7 +201,7 @@ begin
 
   if FGraphAfterJSON <> '' then
   begin
-    LoadGraphFromJSONText(FGraph, FGraphAfterJSON);
+    LoadGraphFromJSONText(FGraph, FGraphAfterJSON, True);
     Exit;
   end;
 
@@ -222,7 +222,7 @@ begin
   Data := TJSONValue.ParseJSONValue(FGraphBeforeJSON);
   try
     if Data is TJSONObject then
-      FGraph.LoadGraphFromJSON(TJSONObject(Data));
+      FGraph.LoadGraphFromJSON(TJSONObject(Data), True);
   finally
     Data.Free;
   end;
@@ -468,7 +468,7 @@ begin
   var Data := TJSONValue.ParseJSONValue(FNewJSON);
   try
     if Data is TJSONObject then
-      ApplyNodePropertiesFromJSON(N, TJSONObject(Data));
+      N.ApplyPropertiesFromJSON(TJSONObject(Data));
   finally
     Data.Free;
   end;
@@ -488,7 +488,7 @@ begin
   var Data := TJSONValue.ParseJSONValue(FOldJSON);
   try
     if Data is TJSONObject then
-      ApplyNodePropertiesFromJSON(N, TJSONObject(Data));
+      N.ApplyPropertiesFromJSON(TJSONObject(Data));
   finally
     Data.Free;
   end;

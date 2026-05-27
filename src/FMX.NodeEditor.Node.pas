@@ -26,7 +26,7 @@ type
     function Clone: TNodePinType;
 
     procedure SaveToJSON(AObj: TJSONObject);
-    procedure LoadFromJSON(AObj: TJSONObject);
+    procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
   end;
 
   TNodeValue = class
@@ -85,7 +85,7 @@ type
     constructor Create(AFrom, ATo: TNodePin);
   end;
 
-  TCustomNode = class
+  TCustomNode = class abstract
     const
       HeaderHeight = 28;
       BottomPad = 10;
@@ -108,6 +108,7 @@ type
     Id: string;
     NodeType: string;
     Title: string;
+    IconPath: string;
     X, Y: Single;
     MinWidth, MinHeight: Integer;
     HeaderColor: TAlphaColor;
@@ -132,8 +133,6 @@ type
 
     procedure SetupPins; virtual;
 
-    procedure AddInput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
-    procedure AddOutput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
     procedure ClearPins;
     function AddInputPin(const AName, ADataType: string; AKind: TPinKind = pkData; ALocalY: integer = -1): TNodePin;
     function AddOutputPin(const AName, ADataType: string; AKind: TPinKind = pkData; ALocalY: integer = -1): TNodePin;
@@ -147,6 +146,7 @@ type
     function GetOutput(Index: integer): TNodePin;
     function FindPinById(const AId: string): TNodePin;
     function OutputsIsBusy: Boolean;
+    function InputsIsBusy: Boolean;
 
     function GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
     function GetPinWorldPosition(APin: TNodePin): TPointF;
@@ -164,7 +164,7 @@ type
     property Height: Integer read GetHeight write SetHeight;
 
     procedure SaveToJSON(AObj: TJSONObject); virtual;
-    procedure LoadFromJSON(AObj: TJSONObject); virtual;
+    procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean); virtual;
   protected
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
   private
@@ -173,7 +173,32 @@ type
     procedure DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single = 1.0);
     function GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRect;
   public
+    procedure ApplyPropertiesFromJSON(AObj: TJSONObject); virtual;
     procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); virtual;
+  end;
+
+  TDefaultNode = class(TCustomNode)
+  public
+    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 180; AHeight: integer = 120); override;
+    procedure SetupPins; override;
+  end;
+
+  TRerouteNode = class(TCustomNode)
+  public
+    function GetPinLocalPosition(APin: TNodePin): TPoint; override;
+    constructor Create(ATitle: string; AX, AY: single); override;
+    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 20; AHeight: integer = 20); override;
+    procedure SetupPins; override;
+  public
+    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
+  end;
+
+  TCommentNode = class(TCustomNode)
+  public
+    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 320; AHeight: integer = 200); override;
+    procedure SetupPins; override;
+  public
+    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
 
 implementation
@@ -231,7 +256,7 @@ end;
 
 function TCustomNode.GetDefaultHeaderColor: TAlphaColor;
 begin
-  Result := $FFC8C800;
+  Result := $FF1D8EA7;
 end;
 
 function TCustomNode.GetHeight: Integer;
@@ -292,6 +317,7 @@ begin
   Result.SortIndex := FInputs.Count;
   FInputs.Add(Result);
 
+  ReindexPins;
   AutoLayoutPins;
 end;
 
@@ -307,6 +333,7 @@ begin
   Result.SortIndex := FOutputs.Count;
   FOutputs.Add(Result);
 
+  ReindexPins;
   AutoLayoutPins;
 end;
 
@@ -376,40 +403,20 @@ begin
     FOutputs[i].LocalY := HeaderHeight + (i + 1) * WorkH div (FOutputs.Count + 1);
 end;
 
-procedure TCustomNode.AddInput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
-var
-  p: TNodePin;
-begin
-  p := TNodePin.Create(AName, pdInput, AKind, ALocalY);
-  p.OwnerNode := Self;
-  p.SetTypeId(ADataType);
-  p.AllowMultipleConnections := False;
-  p.SortIndex := FInputs.Count;
-  FInputs.Add(p);
-  ReindexPins;
-  AutoLayoutPins;
-end;
-
-procedure TCustomNode.AddOutput(AName, ADataType: string; AKind: TPinKind; ALocalY: integer);
-var
-  p: TNodePin;
-begin
-  p := TNodePin.Create(AName, pdOutput, AKind, ALocalY);
-  p.OwnerNode := Self;
-  p.SetTypeId(ADataType);
-  p.AllowMultipleConnections := True;
-  p.SortIndex := FOutputs.Count;
-  FOutputs.Add(p);
-  ReindexPins;
-  AutoLayoutPins;
-end;
-
 function TCustomNode.InputCount: integer;
 begin
   if FInputs <> nil then
     Result := FInputs.Count
   else
     Result := 0;
+end;
+
+function TCustomNode.InputsIsBusy: Boolean;
+begin
+  Result := True;
+  for var Pin in FInputs do
+    if not Pin.Connected then
+      Exit(False);
 end;
 
 function TCustomNode.OutputCount: integer;
@@ -763,6 +770,7 @@ begin
   AObj.AddPair('id', Id);
   AObj.AddPair('type', NodeType);
   AObj.AddPair('title', Title);
+  AObj.AddPair('icon', IconPath);
   AObj.AddPair('x', x);
   AObj.AddPair('y', y);
   AObj.AddPair('width', Width);
@@ -774,7 +782,7 @@ begin
   AObj.AddPair('collapsed', Collapsed);
   AObj.AddPair('zOrder', ZOrder);
 
-  // === PINS ===
+  // Pins
   PinsArr := TJSONArray.Create;
   for i := 0 to InputCount - 1 do
   begin
@@ -834,7 +842,7 @@ begin
 
   AObj.AddPair('pins', PinsArr);
 
-  // === VALUES ===
+  // Values
   ValuesArr := TJSONArray.Create;
   for i := 0 to ValueCount - 1 do
   begin
@@ -846,7 +854,7 @@ begin
   AObj.AddPair('values', ValuesArr);
 end;
 
-procedure TCustomNode.LoadFromJSON(AObj: TJSONObject);
+procedure TCustomNode.LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
 var
   PinsArr, ValuesArr: TJSONArray;
   PinObj, PinTypeObj, ValueObj: TJSONValue;
@@ -860,17 +868,27 @@ begin
 
   Id := AObj.GetValue('id', Id);
   NodeType := AObj.GetValue('type', NodeType);
+
   Title := AObj.GetValue('title', Title);
-  x := AObj.GetValue('x', x);
-  y := AObj.GetValue('y', y);
+  IconPath := AObj.GetValue('icon', IconPath);
+  X := AObj.GetValue('x', X);
+  Y := AObj.GetValue('y', Y);
   Width := AObj.GetValue('width', Width);
   Height := AObj.GetValue('height', Height);
-  HeaderColor := TAlphaColor(AObj.GetValue('headerColor', Cardinal(HeaderColor)));
-  BodyColor := TAlphaColor(AObj.GetValue('bodyColor', Cardinal(BodyColor)));
+  if UseAlphaColor then
+  begin
+    HeaderColor := TAlphaColor(AObj.GetValue('headerColor', Cardinal(HeaderColor)));
+    BodyColor := TAlphaColor(AObj.GetValue('bodyColor', Cardinal(BodyColor)));
+  end
+  else
+  begin
+    HeaderColor := ColorToAlphaColor(TColor(AObj.GetValue('headerColor', Integer(HeaderColor))));
+    BodyColor := ColorToAlphaColor(TColor(AObj.GetValue('bodyColor', Integer(BodyColor))));
+  end;
+  Collapsed := AObj.GetValue('collapsed', False);
+  CommentText := AObj.GetValue('commentText', CommentText);
 
   VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(nvNormal)));
-  CommentText := AObj.GetValue('commentText', CommentText);
-  Collapsed := AObj.GetValue('collapsed', False);
   ZOrder := AObj.GetValue<Integer>('zOrder', 0);
 
   // Pins
@@ -894,7 +912,7 @@ begin
 
       PinTypeObj := PinObj.GetValue<TJSONObject>('pinType', nil);
       if PinTypeObj <> nil then
-        P.PinType.LoadFromJSON(TJSONObject(PinTypeObj));
+        P.PinType.LoadFromJSON(TJSONObject(PinTypeObj), UseAlphaColor);
 
       P.IsRequired := PinObj.GetValue('isRequired', False);
       P.DefaultValue := PinObj.GetValue('defaultValue', '');
@@ -911,6 +929,7 @@ begin
       else
         FOutputs.Add(P);
     end;
+    AutoLayoutPins;
   end
   else
     SetupPins;
@@ -919,13 +938,53 @@ begin
   ClearValues;
   ValuesArr := AObj.GetValue<TJSONArray>('values');
   if ValuesArr <> nil then
-  begin
     for var i := 0 to ValuesArr.Count - 1 do
     begin
       ValueObj := ValuesArr.Items[i];
       V := TNodeValue.Create;
       V.LoadFromJSON(TJSONObject(ValueObj));
       FValues.Add(V);
+    end;
+end;
+
+procedure TCustomNode.ApplyPropertiesFromJSON(AObj: TJSONObject);
+begin
+  if AObj = nil then
+    Exit;
+
+  Title := AObj.GetValue('title', Title);
+  IconPath := AObj.GetValue('icon', IconPath);
+  X := AObj.GetValue('x', X);
+  Y := AObj.GetValue('y', Y);
+  Width := AObj.GetValue('width', Width);
+  Height := AObj.GetValue('height', Height);
+  HeaderColor := TAlphaColor(AObj.GetValue('headerColor', Cardinal(HeaderColor)));
+  BodyColor := TAlphaColor(AObj.GetValue('bodyColor', Cardinal(BodyColor)));
+  Collapsed := AObj.GetValue('collapsed', Collapsed);
+  CommentText := AObj.GetValue('comment', CommentText);
+
+  var ValuesArr := AObj.GetValue<TJSONArray>('values', nil);
+  if ValuesArr <> nil then
+  begin
+    for var i := 0 to Min(ValueCount, ValuesArr.Count) - 1 do
+    begin
+      var V := GetValue(i);
+      var VObj := ValuesArr.Items[i] as TJSONObject;
+      if (V = nil) or (VObj = nil) then
+        Continue;
+
+      case V.Kind of
+        nvkFloat:
+          V.FloatValue := VObj.GetValue('value', V.FloatValue);
+        nvkInteger:
+          V.IntegerValue := VObj.GetValue('value', V.IntegerValue);
+        nvkString:
+          V.StringValue := VObj.GetValue('value', V.StringValue);
+        nvkBoolean:
+          V.BooleanValue := VObj.GetValue('value', V.BooleanValue);
+        nvkJSON:
+          V.JSONValue := VObj.GetValue('value', V.JSONValue);
+      end;
     end;
   end;
 end;
@@ -999,25 +1058,25 @@ begin
   AObj.AddPair('flags', TypeFlagsToInt(Flags));
 end;
 
-procedure TNodePinType.LoadFromJSON(AObj: TJSONObject);
+procedure TNodePinType.LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
 begin
   if AObj = nil then
     Exit;
 
   TypeId := AObj.GetValue('typeId', TypeId);
   Category := AObj.GetValue('category', Category);
-  DisplayName := AObj.GetValue('displayName', DisplayName);
-  Color := TAlphaColor(AObj.GetValue('color', Cardinal(Color)));
+  DisplayName := AObj.GetValue('displayName', DisplayName);   {
+  if UseAlphaColor then
+    Color := TAlphaColor(AObj.GetValue('color', Cardinal(Color)))
+  else
+    Color := ColorToAlphaColor(AObj.GetValue('color', Integer(Color)));   }
   Flags := IntToTypeFlags(AObj.GetValue('flags', TypeFlagsToInt(Flags)));
 
   if TypeId = '' then
     TypeId := 'any';
 end;
 
-
-// =============================================================================
-// TNodeValue
-// =============================================================================
+{ TNodeValue }
 
 constructor TNodeValue.Create(const AName: string; AKind: TNodeValueKind);
 begin
@@ -1078,9 +1137,7 @@ begin
   end;
 end;
 
-// =============================================================================
-// TNodePin
-// =============================================================================
+{ TNodePin }
 
 constructor TNodePin.Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
 begin
@@ -1142,9 +1199,7 @@ begin
   end;
 end;
 
-// =============================================================================
-// TNodeLink
-// =============================================================================
+{ TNodeLink }
 
 constructor TNodeLink.Create(AFrom, ATo: TNodePin);
 begin
@@ -1152,6 +1207,190 @@ begin
   Id := NewId;
   FromPin := AFrom;
   ToPin := ATo;
+end;
+
+{ TDefaultNode }
+
+constructor TDefaultNode.Create(ATitle: string; AX, AY: single; AWidth, AHeight: integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'default';
+end;
+
+procedure TDefaultNode.SetupPins;
+begin
+  ClearPins;
+  AddInputPin('In', 'float', pkData, 45);
+  AddOutputPin('Out', 'float', pkData, 45);
+end;
+
+{ TRerouteNode }
+
+constructor TRerouteNode.Create(ATitle: string; AX, AY: single; AWidth, AHeight: integer);
+begin
+  inherited Create(ATitle, AX, AY, Max(10, AWidth), Max(10, AHeight));
+  MinWidth := 20;
+  MinHeight := 20;
+  NodeType := 'reroute';
+  VisualKind := nvReroute;
+  Title := '';
+  HeaderColor := $FF737373;
+  BodyColor := $FF737373;
+end;
+
+function TRerouteNode.GetPinLocalPosition(APin: TNodePin): TPoint;
+begin
+  if APin = nil then
+    Exit(Point(0, 0));
+
+  Result := TRect.Create(0, 0, Width, Height).CenterPoint;
+end;
+
+procedure TRerouteNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+begin
+  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  var Radius := PinRadius * Zoom;
+  var Center := NodeBounds.CenterPoint;
+
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+
+  // Frame
+  if Selected then
+  begin
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := TAlphaColors.White;
+    var SelRect := NodeBounds;
+    SelRect.Inflate(3 * Zoom, 3 * Zoom);
+    Canvas.FillEllipse(SelRect, 0.3);
+  end;
+
+  // Body
+  if Hovered or Highlighted then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    if Highlighted then
+      Canvas.Fill.Color := GetInput(0).PinType.Color
+    else
+      Canvas.Fill.Color := $FFFFD740;
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+  end
+  else
+  begin
+    Canvas.Fill.Color := GetInput(0).PinType.Color;
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+    Radius := Radius * 0.8;
+  end;
+
+  var BodyRect := TRectF.Create(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
+
+  // Highlight frame
+  Canvas.DrawEllipse(BodyRect, 1);
+
+  // Body
+  BodyRect.Inflate(-Radius * 0.4, -Radius * 0.4);
+  Canvas.FillEllipse(BodyRect, 1);
+end;
+
+constructor TRerouteNode.Create(ATitle: string; AX, AY: single);
+begin
+  Create(ATitle, AX, AY, 20, 20);
+end;
+
+procedure TRerouteNode.SetupPins;
+begin
+  ClearPins;
+  AddOutputPin('', 'any', pkData, Height div 2);
+  AddInputPin('', 'any', pkData, Height div 2);
+
+  if InputCount > 0 then
+    GetInput(0).AllowMultipleConnections := False;
+
+  if OutputCount > 0 then
+    GetOutput(0).AllowMultipleConnections := False;
+end;
+
+{ TCommentNode }
+
+constructor TCommentNode.Create(ATitle: string; AX, AY: single; AWidth, AHeight: integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'comment';
+  VisualKind := nvComment;
+  HeaderColor := $FF646464;
+  BodyColor := $FFFFFFCC;
+  CommentText := 'Comment';
+end;
+
+procedure TCommentNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+begin
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
+
+  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+
+  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeHeadText := NodeHead;
+  NodeHeadText.Inflate(-10 * Zoom, 0);
+
+  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+  var NodeBodyText := NodeBody;
+  NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
+
+  var CornerRadius := 10 * Zoom;
+
+  // Fill
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := $FF1E2125; //BodyColor;
+  Canvas.FillRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Head
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := HeaderColor;
+  if Collapsed then
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
+  else
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+
+  // Frame
+  if Selected then
+  begin
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else if Highlighted then
+  begin
+    Canvas.Stroke.Color := TAlphaColors.Red;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else if Hovered then
+  begin
+    Canvas.Stroke.Color := HeaderColor;//TAlphaColors.Blue;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end
+  else
+  begin
+    Canvas.Stroke.Color := HeaderColor;
+    Canvas.Stroke.Thickness := 1 * Zoom;
+  end;
+  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+
+  // Text Head
+  Canvas.Fill.Color := TAlphaColors.White;
+  Canvas.Font.Size := (10 * Zoom);
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.FillText(NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+
+  // Text Body
+  if (CommentText <> '') and (not Collapsed) then
+    Canvas.FillText(NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+end;
+
+procedure TCommentNode.SetupPins;
+begin
+  ClearPins;
 end;
 
 end.

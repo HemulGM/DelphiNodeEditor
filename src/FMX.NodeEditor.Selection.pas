@@ -86,10 +86,7 @@ begin
 end;
 
 procedure TNodeSelectionModel.Clear;
-begin     {
-  for var i := 0 to FNodes.Count - 1 do
-    if FNodes[i] <> nil then
-      FNodes[i].Selected := False;  }
+begin   
   FNodes.Clear;
   FSelectedLinks.Clear;
   NotifyChanged;
@@ -190,7 +187,7 @@ begin
       (FSelectedLinks[i].FromPin.OwnerNode = ANode)) or
       ((FSelectedLinks[i].ToPin <> nil) and
       (FSelectedLinks[i].ToPin.OwnerNode = ANode))
-    then
+      then
       FSelectedLinks.Delete(i);
   end;
 

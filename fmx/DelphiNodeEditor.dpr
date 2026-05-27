@@ -21,7 +21,9 @@ uses
 {$R *.res}
 
 begin
-  //GlobalUseSkia := True;
+  {$IF DEFINED(ANDROID) or DEFINED(IOS)}
+  GlobalUseSkia := True;
+  {$ENDIF}
   //GlobalUseDX := False;
   //GlobalUseGPUCanvas := False;
   //GlobalUseDirect2D := False;

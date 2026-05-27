@@ -160,6 +160,9 @@ type
     FOnAfterConnectPins: TEditorPinsConnectedEvent;
     FShowGrid: Boolean;
     FShowFrameTime: Boolean;
+    FLockedAll: Boolean;
+
+    FLastZoomDistance: Single;
 
     // Internal Logic
     procedure ClearPinSelection;
@@ -210,7 +213,7 @@ type
     procedure ShowNodeSearchPopup(AScreenX, AScreenY: Integer; AWorldX, AWorldY: Single);
     procedure ResetStateAfterGraphReload;
     procedure ClearHoverStates;
-    procedure UpdateHoverStates(SX, SY: Integer);
+    procedure UpdateHoverStates(SX, SY: Integer; HitLinks: Boolean = True);
     procedure SetZoom(Value: Double); overload;
     procedure SetZoomStep(AValue: Double);
     procedure UpdatedStatus;
@@ -230,6 +233,11 @@ type
     procedure EndPaint;
     procedure SetShowFrameTime(const Value: Boolean);
     procedure SetGridColor(const Value: TAlphaColor);
+    procedure SetLockedAll(const Value: Boolean);
+    procedure FOnGesture(Sender: TObject; const EventInfo: TGestureEventInfo; var Handled: Boolean);
+    procedure InternalMouseDown(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
+    procedure InternalMouseMove(Shift: TShiftState; AX, AY: Single);
+    procedure InternalMouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
   protected
     function SelectedPinCount: integer;
     function GetSelectedPin(Index: integer): TNodePin;
@@ -304,7 +312,7 @@ type
     procedure SetZoom(Value: Double; TargetPos: TPoint); overload;
 
     function SaveToJSONText: string;
-    procedure LoadFromJSONText(const S: string);
+    procedure LoadFromJSONText(const JSON: string);
     procedure SaveToFile(const AFileName: string);
     procedure LoadFromFile(const AFileName: string);
 
@@ -360,6 +368,7 @@ type
     property ZoomStep: Double read FZoomStep write SetZoomStep;
     property GridType: TGridType read FGridType write SetGridType;
     property ShowFrameTime: Boolean read FShowFrameTime write SetShowFrameTime;
+    property LockedAll: Boolean read FLockedAll write SetLockedAll;
 
     // Events
     property OnSelectionChanged: TNodeSelectionChangedEvent read FOnSelectionChanged write FOnSelectionChanged;
@@ -511,6 +520,12 @@ begin
   AutoCapture := True;
   CanFocus := True;
   TabStop := True;
+  Touch.InteractiveGestures := [
+      TInteractiveGesture.Zoom,
+      TInteractiveGesture.Pan,
+      TInteractiveGesture.LongTap,
+      TInteractiveGesture.DoubleTap];
+  OnGesture := FOnGesture;
 
   FGraph := TNodeGraph.Create;
   FGraph.OnGraphChanged := NodeGraphChanged;
@@ -520,8 +535,8 @@ begin
   FController.PinSelection.OnChanged := DoPinSelectionChanged;
 
   FDragCommandNodes := TList<TCustomNode>.Create;
-
   FPaintNodesSorted := TList<TCustomNode>.Create;
+
   FPaintNodesDirty := True;
   FLastHoverMouseX := Low(integer);
   FLastHoverMouseY := Low(integer);
@@ -602,6 +617,54 @@ begin
   inherited Destroy;
 end;
 
+procedure TNodeEditor.FOnGesture(Sender: TObject; const EventInfo: TGestureEventInfo; var Handled: Boolean);
+begin
+  var Point := ScreenToLocal(EventInfo.Location);
+  Handled := True;
+  if TInteractiveGestureFlag.gfBegin in EventInfo.Flags then
+  begin
+    case EventInfo.GestureID of
+      igiPan:
+        InternalMouseDown(TMouseButton.mbMiddle, [], Point.X, Point.Y);
+      igiLongTap:
+        InternalMouseDown(TMouseButton.mbRight, [], Point.X, Point.Y);
+      igiDoubleTap:
+        InternalMouseDown(TMouseButton.mbLeft, [], Point.X, Point.Y);
+      igiZoom:
+        begin
+          FLastZoomDistance := EventInfo.Distance;
+        end;
+    end;
+  end
+  else if TInteractiveGestureFlag.gfEnd in EventInfo.Flags then
+  begin
+    case EventInfo.GestureID of
+      igiPan:
+        InternalMouseUp(TMouseButton.mbMiddle, [], Point.X, Point.Y);
+      igiLongTap:
+        InternalMouseUp(TMouseButton.mbRight, [], Point.X, Point.Y);
+      igiDoubleTap:
+        InternalMouseUp(TMouseButton.mbLeft, [], Point.X, Point.Y);
+      igiZoom:
+        begin
+          var WheelDelta: Integer;
+          if EventInfo.Distance > FLastZoomDistance then
+            WheelDelta := 120
+          else
+            WheelDelta := -120;
+
+          MouseWheel([], WheelDelta, Handled);
+
+          FLastZoomDistance := EventInfo.Distance;
+        end;
+    end;
+  end
+  else
+  begin
+    InternalMouseMove([], Point.X, Point.Y);
+  end;
+end;
+
 procedure TNodeEditor.ExecuteNodePropertyChange(ANode: TCustomNode; const AOldJSON, ANewJSON: string);
 begin
   if ANode = nil then
@@ -610,12 +673,7 @@ begin
   if AOldJSON = ANewJSON then
     Exit;
 
-  if Controller <> nil then
-    Controller.ExecuteCommand(
-      TChangeNodePropertyCommand.Create(Graph, ANode, AOldJSON, ANewJSON))
-  else if Graph <> nil then
-    Graph.ExecuteCommand(
-      TChangeNodePropertyCommand.Create(Graph, ANode, AOldJSON, ANewJSON));
+  FController.ExecuteCommand(TChangeNodePropertyCommand.Create(Graph, ANode, AOldJSON, ANewJSON));
 end;
 
 procedure TNodeEditor.InvalidateSortedNodes;
@@ -893,10 +951,7 @@ end;
 
 procedure TNodeEditor.AddNode(ANode: TCustomNode);
 begin
-  if FController <> nil then
-    FController.AddNode(ANode)
-  else if (FGraph <> nil) and (ANode <> nil) then
-    FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode));
+  FController.AddNode(ANode);
   Repaint;
 end;
 
@@ -905,10 +960,7 @@ begin
   if ANode = nil then
     Exit;
 
-  if FController <> nil then
-    FController.RemoveNode(ANode)
-  else
-    FGraph.RemoveNode(ANode);
+  FController.RemoveNode(ANode);
 
   UpdatePinsConnectedState;
   SyncControllerSelectionToView;
@@ -921,10 +973,7 @@ begin
   if ALink = nil then
     Exit;
 
-  if FController <> nil then
-    FController.RemoveLink(ALink)
-  else
-    FGraph.ExecuteCommand(TRemoveLinkCommand.Create(FGraph, ALink));
+  FController.RemoveLink(ALink);
 
   UpdatePinsConnectedState;
   SyncControllerSelectionToView;
@@ -934,11 +983,7 @@ end;
 
 procedure TNodeEditor.Clear;
 begin
-  if FController <> nil then
-    FController.Clear
-  else
-    FGraph.Clear;
-
+  FController.Clear;
   UpdatePinsConnectedState;
   ResetStateAfterGraphReload;
   Repaint;
@@ -946,11 +991,7 @@ end;
 
 procedure TNodeEditor.Undo;
 begin
-  if FController <> nil then
-    FController.Undo
-  else
-    FGraph.Undo;
-
+  FController.Undo;
   UpdatePinsConnectedState;
   ResetStateAfterGraphReload;
   Repaint;
@@ -958,38 +999,30 @@ end;
 
 procedure TNodeEditor.Redo;
 begin
-  if FController <> nil then
-    FController.Redo
-  else
-    FGraph.Redo;
+  FController.Redo;
+  UpdatePinsConnectedState;
   ResetStateAfterGraphReload;
   Repaint;
 end;
 
 function TNodeEditor.SaveToJSONText: string;
 begin
-  if FController <> nil then
-    Result := FController.SaveToJSONText(FZoom, FOffsetX, FOffsetY)
-  else
-    Result := '';
+  Result := FController.SaveToJSONText(FZoom, FOffsetX, FOffsetY);
 end;
 
-procedure TNodeEditor.LoadFromJSONText(const S: string);
+procedure TNodeEditor.LoadFromJSONText(const JSON: string);
 var
-  Z: double;
+  Z: Double;
   OX, OY: Double;
 begin
-  if S.Trim.IsEmpty then
+  if JSON.Trim.IsEmpty then
     Exit;
 
-  if FController <> nil then
-  begin
-    FController.LoadFromJSONText(S, Z, OX, OY);
-    FZoom := Z;
-    FOffsetX := OX;
-    FOffsetY := OY;
-    InternalWorldChanged;
-  end;
+  FController.LoadFromJSONText(JSON, Z, OX, OY);
+  FZoom := Z;
+  FOffsetX := OX;
+  FOffsetY := OY;
+  InternalWorldChanged;
 
   UpdatePinsConnectedState;
   ResetStateAfterGraphReload;
@@ -998,8 +1031,7 @@ end;
 
 procedure TNodeEditor.SaveToFile(const AFileName: string);
 begin
-  if FController <> nil then
-    FController.SaveToFile(AFileName, FZoom, FOffsetX, FOffsetY);
+  FController.SaveToFile(AFileName, FZoom, FOffsetX, FOffsetY);
 end;
 
 procedure TNodeEditor.LoadFromFile(const AFileName: string);
@@ -1007,14 +1039,11 @@ var
   Z: Double;
   OX, OY: Double;
 begin
-  if FController <> nil then
-  begin
-    FController.LoadFromFile(AFileName, Z, OX, OY);
-    FZoom := Z;
-    FOffsetX := OX;
-    FOffsetY := OY;
-    InternalWorldChanged;
-  end;
+  FController.LoadFromFile(AFileName, Z, OX, OY);
+  FZoom := Z;
+  FOffsetX := OX;
+  FOffsetY := OY;
+  InternalWorldChanged;
 
   UpdatePinsConnectedState;
   ResetStateAfterGraphReload;
@@ -1023,20 +1052,17 @@ end;
 
 procedure TNodeEditor.ClearPinSelection;
 begin
-  if FController.PinSelection <> nil then
-    FController.PinSelection.Clear;
+  FController.PinSelection.Clear;
 end;
 
 procedure TNodeEditor.SelectPinInternal(APin: TNodePin; AAppend: boolean);
 begin
-  if FController.PinSelection <> nil then
-    FController.PinSelection.SelectPin(APin, AAppend);
+  FController.PinSelection.SelectPin(APin, AAppend);
 end;
 
 procedure TNodeEditor.TogglePinSelection(APin: TNodePin);
 begin
-  if FController.PinSelection <> nil then
-    FController.PinSelection.TogglePin(APin);
+  FController.PinSelection.TogglePin(APin);
 end;
 
 procedure TNodeEditor.DoPinSelectionChanged(Sender: TObject);
@@ -1047,7 +1073,7 @@ end;
 
 function TNodeEditor.GetPrimarySelectedNode: TCustomNode;
 begin
-  if (FController.Selection <> nil) and (FController.Selection.NodeCount > 0) then
+  if FController.Selection.NodeCount > 0 then
     Result := GetSelectedNode(0)
   else
     Result := nil;
@@ -1055,18 +1081,12 @@ end;
 
 function TNodeEditor.SelectedPinCount: integer;
 begin
-  if FController.PinSelection <> nil then
-    Result := FController.PinSelection.Count
-  else
-    Result := 0;
+  Result := FController.PinSelection.Count;
 end;
 
 function TNodeEditor.GetSelectedPin(Index: integer): TNodePin;
 begin
-  if FController.PinSelection <> nil then
-    Result := FController.PinSelection.GetPin(Index)
-  else
-    Result := nil;
+  Result := FController.PinSelection.GetPin(Index);
 end;
 
 function TNodeEditor.CanConnectSelectedPins: Boolean;
@@ -1151,13 +1171,9 @@ end;
 
 procedure TNodeEditor.ClearSelectionInternal;
 begin
-  if FController.Selection <> nil then
-    FController.Selection.Clear;
-
   ClearPinSelection;
 
-  if (FController <> nil) and ((FController.Selection.NodeCount > 0) or
-    (FController.Selection.LinkCount > 0)) then
+  if ((FController.Selection.NodeCount > 0) or (FController.Selection.LinkCount > 0)) then
     FController.Selection.Clear;
 
   SyncNodeSelectedFlags;
@@ -1165,7 +1181,7 @@ end;
 
 function TNodeEditor.GetPrimarySelectedLink: TNodeLink;
 begin
-  if (FController.Selection <> nil) and (FController.Selection.LinkCount > 0) then
+  if FController.Selection.LinkCount > 0 then
     Result := FController.Selection.GetLink(0)
   else
     Result := nil;
@@ -1173,11 +1189,8 @@ end;
 
 procedure TNodeEditor.DeleteSelection;
 begin
-  if FController = nil then
-    Exit;
-
   FController.DeleteSelection;
-  SyncControllerSelectionToView;
+  ResetStateAfterGraphReload;
   Repaint;
 end;
 
@@ -1198,8 +1211,7 @@ begin
   else if FController.Selection.LinkCount > 0 then
     FController.Selection.Links.Clear;
 
-  if FController <> nil then
-    FController.Selection.SelectNode(ANode, AAppend);
+  FController.Selection.SelectNode(ANode, AAppend);
 
   SyncNodeSelectedFlags;
   InvalidateSortedNodes;
@@ -1207,8 +1219,9 @@ end;
 
 procedure TNodeEditor.SelectLinkInternal(ALink: TNodeLink; AKeepNodes: Boolean);
 begin
-  if (ALink = nil) or (FController = nil) or (FController.Selection = nil) then
+  if ALink = nil then
     Exit;
+
   if not AKeepNodes then
   begin
     FController.Selection.Clear;
@@ -1225,13 +1238,9 @@ begin
     Exit;
 
   if FController.Selection.ContainsNode(ANode) then
-  begin
-    RemoveNodeFromSelection(ANode);
-  end
+    RemoveNodeFromSelection(ANode)
   else
-  begin
     AddNodeToSelection(ANode);
-  end;
 
   NotifySelectionChanged;
   Repaint;
@@ -1242,13 +1251,11 @@ begin
   if ANode = nil then
     Exit;
 
-  if FController.Selection <> nil then
-    FController.Selection.AddNodeToSelection(ANode);
+  FController.Selection.AddNodeToSelection(ANode);
 
   ClearPinSelection;
 
-  if FController <> nil then
-    FController.Selection.SelectNode(ANode, True);
+  FController.Selection.SelectNode(ANode, True);
 
   SyncNodeSelectedFlags;
   InvalidateSortedNodes;
@@ -1259,11 +1266,7 @@ begin
   if ANode = nil then
     Exit;
 
-  if FController.Selection <> nil then
-    FController.Selection.RemoveNode(ANode);
-
-  if FController <> nil then
-    FController.Selection.RemoveNode(ANode);
+  FController.Selection.RemoveNode(ANode);
 
   SyncNodeSelectedFlags;
   InvalidateSortedNodes;
@@ -1285,60 +1288,47 @@ end;
 
 procedure TNodeEditor.AddLinkToSelection(ALink: TNodeLink);
 begin
-  if (ALink = nil) or (FController.Selection = nil) then
+  if ALink = nil then
     Exit;
 
   FController.Selection.AddLinkToSelection(ALink);
   ClearPinSelection;
-
-  if FController <> nil then
-    FController.Selection.AddLinkToSelection(ALink);
 end;
 
 procedure TNodeEditor.RemoveLinkFromSelection(ALink: TNodeLink);
 begin
-  if (ALink = nil) or (FController.Selection = nil) then
+  if ALink = nil then
     Exit;
 
   FController.Selection.RemoveLinkFromSelection(ALink);
-
-  if FController <> nil then
-    FController.Selection.RemoveLinkFromSelection(ALink);
 end;
 
 procedure TNodeEditor.SyncNodeSelectedFlags;
-var
-  i: integer;
-  N: TCustomNode;
 begin
   if FGraph = nil then
     Exit;
 
-  for i := 0 to FGraph.Nodes.Count - 1 do
+  for var i := 0 to FGraph.Nodes.Count - 1 do
   begin
-    N := TCustomNode(FGraph.Nodes[i]);
+    var N := FGraph.Nodes[i];
     if N <> nil then
-      N.Selected := (FController.Selection <> nil) and FController.Selection.ContainsNode(N);
+      N.Selected := FController.Selection.ContainsNode(N);
   end;
 end;
 
 function TNodeEditor.IsMouseNearLinkStart(ALink: TNodeLink; SX, SY: Integer): Boolean;
-var
-  P0, P1: TPointF; // Using World points now
-  D0, D1: Double;
-  MouseW: TPointF;
 begin
   Result := False;
 
   if (ALink = nil) or (ALink.FromPin = nil) or (ALink.ToPin = nil) then
     Exit;
 
-  MouseW := ScreenToWorld(SX, SY);
-  P0 := GetPinWorldPosition(ALink.FromPin);
-  P1 := GetPinWorldPosition(ALink.ToPin);
+  var MouseW := ScreenToWorld(SX, SY);
+  var P0 := GetPinWorldPosition(ALink.FromPin);
+  var P1 := GetPinWorldPosition(ALink.ToPin);
 
-  D0 := Hypot(MouseW.X - P0.X, MouseW.Y - P0.Y);
-  D1 := Hypot(MouseW.X - P1.X, MouseW.Y - P1.Y);
+  var D0 := Hypot(MouseW.X - P0.X, MouseW.Y - P0.Y);
+  var D1 := Hypot(MouseW.X - P1.X, MouseW.Y - P1.Y);
 
   Result := D0 <= D1;
 end;
@@ -1347,25 +1337,16 @@ function TNodeEditor.GetPinWorldPosition(APin: TNodePin): TPointF;
 begin
   if (APin = nil) or (APin.OwnerNode = nil) then
     Exit(PointF(0, 0));
-  Result := TCustomNode(APin.OwnerNode).GetPinWorldPosition(APin);
+  Result := APin.OwnerNode.GetPinWorldPosition(APin);
 end;
 
 procedure TNodeEditor.GetLinkBezierWorldPoints(ALink: TNodeLink; out P0, P1, P2, P3: TPointF);
-var
-  DX, DY: single;
-  Dist: single;
-  D: single;
 begin
   P0 := GetPinWorldPosition(ALink.FromPin);
   P3 := GetPinWorldPosition(ALink.ToPin);
 
-  DX := P3.X - P0.X;
-  DY := P3.Y - P0.Y;
-  Dist := Hypot(DX, DY);
-
   // Divide by FZoom to keep the visual curve consistent
-  D := Dist * 0.35;
-  D := EnsureRange(D, 30 / FZoom, 150 / FZoom);
+  var D := EnsureRange(Hypot(P3.X - P0.X, P3.Y - P0.Y) * 0.35, 30 / FZoom, 150 / FZoom);
 
   P1 := P0;
   P1.X := P1.X + D;
@@ -1387,9 +1368,6 @@ end;
 
 procedure TNodeEditor.SyncControllerSelectionToView;
 begin
-  if FController = nil then
-    Exit;
-
   InvalidateSortedNodes;
   NotifySelectionChanged;
   Repaint;
@@ -1432,18 +1410,12 @@ end;
 
 function TNodeEditor.SelectedNodeCount: Integer;
 begin
-  if FController.Selection <> nil then
-    Result := FController.Selection.NodeCount
-  else
-    Result := 0;
+  Result := FController.Selection.NodeCount;
 end;
 
 function TNodeEditor.SelectedLinkCount: Integer;
 begin
-  if FController.Selection <> nil then
-    Result := FController.Selection.LinkCount
-  else
-    Result := 0;
+  Result := FController.Selection.LinkCount;
 end;
 
 function TNodeEditor.IsLinkInsideWorldRect(ALink: TNodeLink; const R: TRectF): boolean;
@@ -1492,10 +1464,7 @@ end;
 
 function TNodeEditor.GetSelectedNode(Index: Integer): TCustomNode;
 begin
-  if FController.Selection <> nil then
-    Result := FController.Selection.GetNode(Index)
-  else
-    Result := nil;
+  Result := FController.Selection.GetNode(Index);
 end;
 
 procedure TNodeEditor.SelectNode(ANode: TCustomNode; AAppend: Boolean);
@@ -1743,6 +1712,7 @@ begin
   Canvas.Stroke.Thickness := 3 * Zoom;
   // Draw bezier
   DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
+  Canvas.Stroke.Kind := TBrushKind.Solid;
 end;
 
 function TNodeEditor.SnapWorldPoint(const P: TPointF): TPointF;
@@ -1804,6 +1774,8 @@ begin
     var SkipInput := False;
     if N.VisualKind = nvReroute then
     begin
+      if N.OutputsIsBusy and N.InputsIsBusy then
+        Continue;
       SkipInput := not N.OutputsIsBusy;
       if FReconnectFixedPin <> nil then
         SkipInput := FReconnectFixedPin.Direction = TPinDirection.pdInput
@@ -2038,7 +2010,8 @@ var
   FixedPosW: TPointF;
   DX, DY, Dist, D: Single;
 begin
-  Canvas.Stroke.Color := TAlphaColors.Yellow;
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Color := $FFFFD740;
   Canvas.Stroke.Thickness := 3;
   Canvas.Stroke.Dash := TStrokeDash.Dot;
 
@@ -2432,7 +2405,7 @@ end;
 
 procedure TNodeEditor.OnContextInsertReroute(Sender: TObject);
 begin
-  if (FController = nil) or (GetPrimarySelectedLink = nil) then
+  if GetPrimarySelectedLink = nil then
     Exit;
 
   FController.InsertRerouteOnLink(GetPrimarySelectedLink,
@@ -2447,8 +2420,6 @@ end;
 
 procedure TNodeEditor.OnContextAddComment(Sender: TObject);
 begin
-  if FController = nil then
-    Exit;
   FController.AddCommentNode(
     SnapWorldValue(FContextWorldPos.X),
     SnapWorldValue(FContextWorldPos.Y));
@@ -2459,31 +2430,22 @@ end;
 
 procedure TNodeEditor.CopySelectionToClipboard;
 begin
-  if FController <> nil then
-    FController.CopySelectionToClipboard;
+  FController.CopySelectionToClipboard;
 end;
 
 procedure TNodeEditor.PasteFromClipboard;
 begin
-  if FController <> nil then
-  begin
-    FController.PasteFromClipboard(
-      SnapWorldValue(FContextWorldPos.X),
-      SnapWorldValue(FContextWorldPos.Y)
-    );
-    SyncControllerSelectionToView;
-    Repaint;
-  end;
+  FController.PasteFromClipboard(
+    SnapWorldValue(FContextWorldPos.X),
+    SnapWorldValue(FContextWorldPos.Y)
+  );
+  SyncControllerSelectionToView;
+  Repaint;
 end;
 
 procedure TNodeEditor.DuplicateSelection;
-var
-  W: TPointF;
 begin
-  if FController = nil then
-    Exit;
-
-  W := ScreenToWorld(Round(Width) div 2, Round(Height) div 2);
+  var W := ScreenToWorld(Round(Width) div 2, Round(Height) div 2);
 
   FController.DuplicateSelection(
     SnapWorldValue(W.X + 25),
@@ -2496,10 +2458,7 @@ end;
 
 function TNodeEditor.AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
 begin
-  Result := nil;
-
-  if FController <> nil then
-    Result := FController.AddInputPinToNode(ANode, AName, ADataType, AKind);
+  Result := FController.AddInputPinToNode(ANode, AName, ADataType, AKind);
 
   if (Result <> nil) and Assigned(FOnNodeChanged) then
     FOnNodeChanged(Self, ANode);
@@ -2509,10 +2468,7 @@ end;
 
 function TNodeEditor.AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
 begin
-  Result := nil;
-
-  if FController <> nil then
-    Result := FController.AddOutputPinToNode(ANode, AName, ADataType, AKind);
+  Result := FController.AddOutputPinToNode(ANode, AName, ADataType, AKind);
 
   if (Result <> nil) and Assigned(FOnNodeChanged) then
     FOnNodeChanged(Self, ANode);
@@ -2520,18 +2476,15 @@ begin
   Repaint;
 end;
 
-function TNodeEditor.RemovePinFromNode(APin: TNodePin): boolean;
-var
-  N: TCustomNode;
+function TNodeEditor.RemovePinFromNode(APin: TNodePin): Boolean;
 begin
-  Result := False;
-  N := nil;
-
+  var N: TCustomNode;
   if APin <> nil then
-    N := TCustomNode(APin.OwnerNode);
+    N := APin.OwnerNode
+  else
+    N := nil;
 
-  if FController <> nil then
-    Result := FController.RemovePinFromNode(APin);
+  Result := FController.RemovePinFromNode(APin);
 
   if Result and Assigned(FOnNodeChanged) and (N <> nil) then
     FOnNodeChanged(Self, N);
@@ -2696,22 +2649,14 @@ begin
 end;
 
 procedure TNodeEditor.ResetStateAfterGraphReload;
-var
-  OldHandler: TNotifyEvent;
 begin
-  if FController.Selection <> nil then
+  var OldHandler := FController.Selection.OnChanged;
+  FController.Selection.OnChanged := nil;
+  try
     FController.Selection.Clear;
-  ClearPinSelection;
-
-  if FController <> nil then
-  begin
-    OldHandler := FController.Selection.OnChanged;
-    FController.Selection.OnChanged := nil;
-    try
-      FController.Selection.Clear;
-    finally
-      FController.Selection.OnChanged := OldHandler;
-    end;
+    ClearPinSelection;
+  finally
+    FController.Selection.OnChanged := OldHandler;
   end;
 
   FHoveredNode := nil;
@@ -2764,7 +2709,7 @@ begin
   FHoveredPinCompatible := False;
 end;
 
-procedure TNodeEditor.UpdateHoverStates(SX, SY: Integer);
+procedure TNodeEditor.UpdateHoverStates(SX, SY: Integer; HitLinks: Boolean);
 var
   N: TCustomNode;
   P: TNodePin;
@@ -2817,7 +2762,7 @@ begin
     N := GetNodeUnderMouse(SX, SY);
     if N <> nil then
     begin
-      if (N.VisualKind = nvComment) and GetLinkUnderMouse(SX, SY, L) then
+      if (N.VisualKind = nvComment) and HitLinks and GetLinkUnderMouse(SX, SY, L) then
       begin
         FHoveredLink := L;
       end
@@ -2827,7 +2772,7 @@ begin
         N.Hovered := True;
       end;
     end
-    else if GetLinkUnderMouse(SX, SY, L) then
+    else if HitLinks and GetLinkUnderMouse(SX, SY, L) then
     begin
       FHoveredLink := L;
     end;
@@ -2842,23 +2787,16 @@ begin
 end;
 
 procedure TNodeEditor.FitToSelection;
-var
-  i: Integer;
-  N: TCustomNode;
-  R, NR: TRect;
-  First: Boolean;
-  W, H: Double;
-  Margin: Integer;
 begin
   if FController.Selection.NodeCount = 0 then
     Exit;
 
-  First := True;
-
-  for i := 0 to FController.Selection.NodeCount - 1 do
+  var First := True;
+  var R: TRect;
+  for var i := 0 to FController.Selection.NodeCount - 1 do
   begin
-    N := FController.Selection.GetNode(i);
-    NR := Rect(Round(N.X), Round(N.Y), Round(N.X + N.Width), Round(N.Y + N.Height));
+    var N := FController.Selection.GetNode(i);
+    var NR := Rect(Round(N.X), Round(N.Y), Round(N.X + N.Width), Round(N.Y + N.Height));
 
     if First then
     begin
@@ -2869,10 +2807,9 @@ begin
       R.Union(NR);
   end;
 
-  W := Max(1, R.Right - R.Left);
-  H := Max(1, R.Bottom - R.Top);
-
-  Margin := 60;
+  var W := Max(1, R.Right - R.Left);
+  var H := Max(1, R.Bottom - R.Top);
+  var Margin := 60;
 
   FZoom := Min((Width - Margin * 2) / W, (Height - Margin * 2) / H);
   FZoom := EnsureRange(FZoom, 0.25, 3.0);
@@ -2949,10 +2886,7 @@ end;
 
 function TNodeEditor.ValidateGraphToStrings(AStrings: TStrings): Boolean;
 begin
-  if FController <> nil then
-    Result := FController.ValidateGraphToStrings(AStrings)
-  else
-    Result := False;
+  Result := FController.ValidateGraphToStrings(AStrings);
 end;
 
 function TNodeEditor.NodeIsAbove(const Current, Target: TCustomNode): Boolean;
@@ -2973,7 +2907,7 @@ begin
   Result := Current.ZOrder > Target.ZOrder;
 end;
 
-procedure TNodeEditor.MouseDown(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
+procedure TNodeEditor.InternalMouseDown(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
 var
   Node: TCustomNode;
   Pin: TNodePin;
@@ -2983,6 +2917,10 @@ var
   function ClickLink: Boolean;
   begin
     Result := False;
+
+    if FLockedAll then
+      Exit;
+
     if GetLinkUnderMouse(X, Y, Link) then
     begin
       if Assigned(FOnLinkClick) then
@@ -2995,10 +2933,7 @@ var
       else
       begin
         ClearSelectionInternal;
-        if FController.Selection <> nil then
-          FController.Selection.SelectLink(Link, False);
-        if FController <> nil then
-          FController.Selection.SelectLink(Link, False);
+        FController.Selection.SelectLink(Link, False);
       end;
       FDraggingNode := False;
 
@@ -3028,79 +2963,88 @@ var
   end;
 
 begin
-  inherited MouseDown(Button, Shift, AX, AY);
   X := Round(AX);
   Y := Round(AY);
   SetFocus;
   if Button = TMouseButton.mbLeft then
   begin
     ClearSnapGuides;
-    Node := GetNodeResizeUnderMouse(X, Y);
-    if Node <> nil then
-    begin
-      if not FController.Selection.ContainsNode(Node) then
-      begin
-        SelectNodeInternal(Node, False);
-        NotifySelectionChanged;
-      end;
 
-      FResizingNode := True;
-      FResizeNode := Node;
-      FResizeStartMouseX := X;
-      FResizeStartMouseY := Y;
-      FResizeStartWidth := Node.Width;
-      FResizeStartHeight := Node.Height;
-      FResizeStartX := Node.X;
-      FResizeStartY := Node.Y;
-      FResizeOldWidth := Node.Width;
-      FResizeOldHeight := Node.Height;
-      FDragUndoPushed := False;
-      Repaint;
-      Exit;
+    // Click resize
+    if not FLockedAll then
+    begin
+      Node := GetNodeResizeUnderMouse(X, Y);
+      if Node <> nil then
+      begin
+        if not FController.Selection.ContainsNode(Node) then
+        begin
+          SelectNodeInternal(Node, False);
+          NotifySelectionChanged;
+        end;
+
+        FResizingNode := True;
+        FResizeNode := Node;
+        FResizeStartMouseX := X;
+        FResizeStartMouseY := Y;
+        FResizeStartWidth := Node.Width;
+        FResizeStartHeight := Node.Height;
+        FResizeStartX := Node.X;
+        FResizeStartY := Node.Y;
+        FResizeOldWidth := Node.Width;
+        FResizeOldHeight := Node.Height;
+        FDragUndoPushed := False;
+        Repaint;
+        Exit;
+      end;
     end;
 
     var ZNode := GetNodeUnderMouse(X, Y);
 
-    if GetPinUnderMouse(X, Y, Node, Pin) then
-      if NodeIsAbove(Node, ZNode) then
-      begin
-        if Assigned(FOnPinClick) then
-          FOnPinClick(Self, Pin);
+    // Click pins
+    if not FLockedAll then
+    begin
+      if GetPinUnderMouse(X, Y, Node, Pin) then
+        if NodeIsAbove(Node, ZNode) then
+        begin
+          if Assigned(FOnPinClick) then
+            FOnPinClick(Self, Pin);
 
-        if ssCtrl in Shift then
-        begin
-          TogglePinSelection(Pin);
-          NotifySelectionChanged;
-          Repaint;
-          Exit;
-        end
-        else if ssShift in Shift then
-        begin
-          SelectPinInternal(Pin, True);
-          NotifySelectionChanged;
-          Repaint;
-          Exit;
-        end;
+          if ssCtrl in Shift then
+          begin
+            TogglePinSelection(Pin);
+            NotifySelectionChanged;
+            Repaint;
+            Exit;
+          end
+          else if ssShift in Shift then
+          begin
+            SelectPinInternal(Pin, True);
+            NotifySelectionChanged;
+            Repaint;
+            Exit;
+          end;
 
-        if not CanPinAcceptMoreConnections(Pin) then
-        begin
+          if not CanPinAcceptMoreConnections(Pin) then
+          begin
+            ClearPinSelection;
+            //SelectPinInternal(Pin, False);
+            NotifySelectionChanged;
+            Repaint;
+            Exit;
+          end;
+
           ClearPinSelection;
-          //SelectPinInternal(Pin, False);
-          NotifySelectionChanged;
+          FTempFromPin := Pin;
+          FTempMousePos := Point(X, Y);
+          FTempStartMousePos := Point(X, Y);
+          FDraggingLink := False;
           Repaint;
           Exit;
         end;
-
-        ClearPinSelection;
-        FTempFromPin := Pin;
-        FTempMousePos := Point(X, Y);
-        FTempStartMousePos := Point(X, Y);
-        FDraggingLink := False;
-        Repaint;
-        Exit;
-      end;
+    end;
 
     Node := ZNode;
+    // Click nodes
     if Node <> nil then
     begin
       if Node.VisualKind = nvComment then
@@ -3118,28 +3062,32 @@ begin
         if not FController.Selection.ContainsNode(Node) then
           SelectNodeInternal(Node, False);
       end;
-      FDraggingNode := True;
-      FDragUndoPushed := False;
-      FDragStartX := X;
-      FDragStartY := Y;
-      FDragAnchorX := X;
-      FDragAnchorY := Y;
 
-      FShowDragCoordinates := True;
-
-      if GetPrimarySelectedNode <> nil then
-        FDragStartWorldPos := PointF(GetPrimarySelectedNode.X, GetPrimarySelectedNode.Y)
-      else if FController.Selection.NodeCount > 0 then
-        FDragStartWorldPos := PointF(FController.Selection.GetNode(0).X,
-          FController.Selection.GetNode(0).Y);
-
-      FDragCommandNodes.Clear;
-      SetLength(FDragOldPositions, FController.Selection.NodeCount);
-
-      for var i := 0 to FController.Selection.NodeCount - 1 do
+      if not FLockedAll then
       begin
-        FDragCommandNodes.Add(FController.Selection.GetNode(i));
-        FDragOldPositions[i] := PointF(FController.Selection.GetNode(i).X, FController.Selection.GetNode(i).Y);
+        FDraggingNode := True;
+        FDragUndoPushed := False;
+        FDragStartX := X;
+        FDragStartY := Y;
+        FDragAnchorX := X;
+        FDragAnchorY := Y;
+
+        FShowDragCoordinates := True;
+
+        if GetPrimarySelectedNode <> nil then
+          FDragStartWorldPos := PointF(GetPrimarySelectedNode.X, GetPrimarySelectedNode.Y)
+        else if FController.Selection.NodeCount > 0 then
+          FDragStartWorldPos := PointF(FController.Selection.GetNode(0).X,
+            FController.Selection.GetNode(0).Y);
+
+        FDragCommandNodes.Clear;
+        SetLength(FDragOldPositions, FController.Selection.NodeCount);
+
+        for var i := 0 to FController.Selection.NodeCount - 1 do
+        begin
+          FDragCommandNodes.Add(FController.Selection.GetNode(i));
+          FDragOldPositions[i] := PointF(FController.Selection.GetNode(i).X, FController.Selection.GetNode(i).Y);
+        end;
       end;
 
       NotifySelectionChanged;
@@ -3169,7 +3117,7 @@ begin
   end;
 end;
 
-procedure TNodeEditor.MouseMove(Shift: TShiftState; AX, AY: Single);
+procedure TNodeEditor.InternalMouseMove(Shift: TShiftState; AX, AY: Single);
 var
   Dx, Dy: Single;
   X, Y: Integer;
@@ -3178,8 +3126,6 @@ var
   RawDx, RawDy: single;
   ResizeNode: TCustomNode;
 begin
-  inherited MouseMove(Shift, AX, AY);
-
   X := Round(AX);
   Y := Round(AY);
   FLastMousePos := Point(X, Y);
@@ -3252,7 +3198,7 @@ begin
     begin
       FLastHoverMouseX := X;
       FLastHoverMouseY := Y;
-      UpdateHoverStates(X, Y);
+      UpdateHoverStates(X, Y, False);
     end;
   end
   else if FBoxSelecting then
@@ -3272,44 +3218,13 @@ begin
     begin
       FLastHoverMouseX := X;
       FLastHoverMouseY := Y;
-      UpdateHoverStates(X, Y);
+      UpdateHoverStates(X, Y, False);
     end;
   end;
   Repaint;
 end;
 
-procedure TNodeEditor.CancelMouseOperations(const KeepSelectionRect: boolean);
-begin
-  FPanning := False;
-  FRightButtonDown := False;
-  FRightMouseMoved := False;
-
-  FDraggingNode := False;
-  FDragUndoPushed := False;
-  FDragCommandNodes.Clear;
-  SetLength(FDragOldPositions, 0);
-
-  FTempFromPin := nil;
-  FDraggingLink := False;
-  FReconnectingLink := False;
-  FReconnectLink := nil;
-  FReconnectFixedPin := nil;
-  FReconnectMovingFromSide := False;
-
-  FResizingNode := False;
-  FResizeNode := nil;
-
-  if not KeepSelectionRect then
-    FBoxSelecting := False;
-
-  ClearSnapGuides;
-  ClearHoverStates;
-  ReleaseCapture;
-  Cursor := crDefault;
-  Repaint;
-end;
-
-procedure TNodeEditor.MouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
+procedure TNodeEditor.InternalMouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
 var
   TargetNode: TCustomNode;
   TargetPin: TNodePin;
@@ -3329,6 +3244,29 @@ begin
 
   if Button = TMouseButton.mbLeft then
   begin
+    // Insert reroute on Double click
+    if (ssDouble in Shift) and (GetPrimarySelectedLink <> nil) then
+    begin
+      if GetPrimarySelectedLink = nil then
+        Exit;
+      FContextWorldPos := ScreenToWorld(X, Y);
+
+      var Reroute := FController.InsertRerouteOnLink(GetPrimarySelectedLink,
+        SnapWorldValue(FContextWorldPos.X),
+        SnapWorldValue(FContextWorldPos.Y));
+
+      FTempFromPin := nil;
+      FDraggingLink := False;
+      FReconnectingLink := False;
+      FReconnectLink := nil;
+      FReconnectFixedPin := nil;
+      ClearSnapGuides;
+      SyncControllerSelectionToView;
+      AddNodeToSelection(Reroute);
+      NotifySelectionChanged;
+      Repaint;
+      Exit;
+    end;
     if FResizingNode then
     begin
       if (FResizeNode <> nil) and ((FResizeNode.Width <> FResizeOldWidth) or
@@ -3451,12 +3389,9 @@ begin
       end
       else if FDraggingLink then
       begin
-        if FController <> nil then
-          TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin,
-            SnapWorldValue(ScreenToWorld(X, Y).X),
-            SnapWorldValue(ScreenToWorld(X, Y).Y))
-        else
-          TargetNode := nil;
+        TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin,
+          SnapWorldValue(ScreenToWorld(X, Y).X),
+          SnapWorldValue(ScreenToWorld(X, Y).Y));
 
         if TargetNode <> nil then
         begin
@@ -3638,6 +3573,37 @@ begin
   end;
 end;
 
+procedure TNodeEditor.CancelMouseOperations(const KeepSelectionRect: boolean);
+begin
+  FPanning := False;
+  FRightButtonDown := False;
+  FRightMouseMoved := False;
+
+  FDraggingNode := False;
+  FDragUndoPushed := False;
+  FDragCommandNodes.Clear;
+  SetLength(FDragOldPositions, 0);
+
+  FTempFromPin := nil;
+  FDraggingLink := False;
+  FReconnectingLink := False;
+  FReconnectLink := nil;
+  FReconnectFixedPin := nil;
+  FReconnectMovingFromSide := False;
+
+  FResizingNode := False;
+  FResizeNode := nil;
+
+  if not KeepSelectionRect then
+    FBoxSelecting := False;
+
+  ClearSnapGuides;
+  ClearHoverStates;
+  ReleaseCapture;
+  Cursor := crDefault;
+  Repaint;
+end;
+
 procedure TNodeEditor.DoMouseLeave;
 begin
   inherited;
@@ -3677,6 +3643,11 @@ procedure TNodeEditor.SetGridType(const Value: TGridType);
 begin
   FGridType := Value;
   Repaint;
+end;
+
+procedure TNodeEditor.SetLockedAll(const Value: Boolean);
+begin
+  FLockedAll := Value;
 end;
 
 procedure TNodeEditor.SetOnUpdatedStatus(const Value: TNotifyEvent);
@@ -3722,6 +3693,33 @@ begin
   if FZoomStep = AValue then
     Exit;
   FZoomStep := AValue;
+end;
+
+procedure TNodeEditor.MouseDown(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
+begin
+  inherited;
+  {$IF DEFINED(ANDROID) OR DEFINED(IOS)}
+  Exit;
+  {$ENDIF}
+  InternalMouseDown(Button, Shift, AX, AY);
+end;
+
+procedure TNodeEditor.MouseMove(Shift: TShiftState; AX, AY: Single);
+begin
+  inherited;
+  {$IF DEFINED(ANDROID) OR DEFINED(IOS)}
+  Exit;
+  {$ENDIF}
+  InternalMouseMove(Shift, AX, AY);
+end;
+
+procedure TNodeEditor.MouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
+begin
+  inherited;
+  {$IF DEFINED(ANDROID) OR DEFINED(IOS)}
+  Exit;
+  {$ENDIF}
+  InternalMouseUp(Button, Shift, AX, AY);
 end;
 
 procedure TNodeEditor.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);

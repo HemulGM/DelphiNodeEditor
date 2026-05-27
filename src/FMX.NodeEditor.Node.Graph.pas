@@ -89,6 +89,7 @@ type
     FUndoStack: TObjectList<TGraphCommand>;
     FRedoStack: TObjectList<TGraphCommand>;
     FUndoLock: boolean;
+    FUpdateLock: Integer;
     FExecutingCommand: boolean;
     FOnNodeAdded: TGraphNodeEvent;
     FOnNodeRemoved: TGraphNodeEvent;
@@ -98,6 +99,8 @@ type
 
     procedure RemoveLinksToInput(APin: TNodePin);
     procedure TruncateUndo; inline;
+    procedure BeginUpdate;
+    procedure EndUpdate;
 
   protected
     function PinHasIncomingLink(APin: TNodePin): boolean;
@@ -131,12 +134,11 @@ type
     function LinkExists(FromPin, ToPin: TNodePin): boolean;
 
     procedure Clear;
-    procedure PushUndoSnapshot;
     procedure Undo;
     procedure Redo;
 
     function SaveGraphToJSON: TJSONObject;
-    procedure LoadGraphFromJSON(AObj: TJSONObject);
+    procedure LoadGraphFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
 
     function ValidateGraph: boolean;
     function ValidateGraphIssues(AIssues: TObjectList<TGraphValidationIssue>): boolean;
@@ -163,81 +165,28 @@ type
     property OnGraphChanged: TGraphChangedEvent read FOnGraphChanged write FOnGraphChanged;
   end;
 
-procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string);
-
-procedure ApplyNodePropertiesFromJSON(ANode: TCustomNode; AObj: TJSONObject);
+procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string; UseAlphaColor: Boolean);
 
 implementation
 
 uses
-  System.Math, FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.Node.Command;
+  System.Math, FMX.NodeEditor.Node.Defaults, FMX.Types,
+  FMX.NodeEditor.Node.Command;
 
-procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string);
-var
-  Data: TJSONValue;
+procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string; UseAlphaColor: Boolean);
 begin
   if AGraph = nil then
     Exit;
 
-  if Trim(S) = '' then
+  if S.Trim.IsEmpty then
     Exit;
 
-  Data := TJSONValue.ParseJSONValue(S);
+  var Data := TJSONValue.ParseJSONValue(S);
   try
     if Data is TJSONObject then
-      AGraph.LoadGraphFromJSON(TJSONObject(Data));
+      AGraph.LoadGraphFromJSON(TJSONObject(Data), UseAlphaColor);
   finally
     Data.Free;
-  end;
-end;
-
-procedure ApplyNodePropertiesFromJSON(ANode: TCustomNode; AObj: TJSONObject);
-var
-  i: integer;
-  ValuesArr: TJSONArray;
-  VObj: TJSONObject;
-  V: TNodeValue;
-  S: string;
-begin
-  if (ANode = nil) or (AObj = nil) then
-    Exit;
-
-  ANode.Title := AObj.GetValue('title', ANode.Title);
-  ANode.X := AObj.GetValue('x', ANode.X);
-  ANode.Y := AObj.GetValue('y', ANode.Y);
-  ANode.Width := AObj.GetValue('width', ANode.Width);
-  ANode.Height := AObj.GetValue('height', ANode.Height);
-  ANode.HeaderColor := TAlphaColor(AObj.GetValue('headerColor', Cardinal(ANode.HeaderColor)));
-  ANode.BodyColor := TAlphaColor(AObj.GetValue('bodyColor', Cardinal(ANode.BodyColor)));
-  ANode.Collapsed := AObj.GetValue('collapsed', ANode.Collapsed);
-  ANode.CommentText := AObj.GetValue('comment', ANode.CommentText);
-
-  ValuesArr := AObj.GetValue<TJSONArray>('values', nil);
-  if ValuesArr <> nil then
-  begin
-    for i := 0 to Min(ANode.ValueCount, ValuesArr.Count) - 1 do
-    begin
-      V := ANode.GetValue(i);
-      VObj := ValuesArr.Items[i] as TJSONObject;
-      if (V = nil) or (VObj = nil) then
-        Continue;
-
-      case V.Kind of
-        nvkFloat:
-          V.FloatValue := VObj.GetValue('value', V.FloatValue);
-        nvkInteger:
-          V.IntegerValue := VObj.GetValue('value', V.IntegerValue);
-        nvkString:
-          V.StringValue := VObj.GetValue('value', V.StringValue);
-        nvkBoolean:
-          V.BooleanValue := VObj.GetValue('value', V.BooleanValue);
-        nvkJSON:
-          begin
-            S := VObj.GetValue('value', V.JSONValue);
-            V.JSONValue := S;
-          end;
-      end;
-    end;
   end;
 end;
 
@@ -294,11 +243,26 @@ begin
   inherited Destroy;
 end;
 
+procedure TNodeGraph.BeginUpdate;
+begin
+  Inc(FUpdateLock);
+end;
+
+procedure TNodeGraph.EndUpdate;
+begin
+  if FUpdateLock > 0 then
+    Dec(FUpdateLock);
+
+  if FUpdateLock = 0 then
+    DoGraphChanged;
+end;
+
 procedure TNodeGraph.AddNode(ANode: TCustomNode);
 begin
   if ANode = nil then
     Exit;
-  if FNodes.IndexOf(ANode) >= 0 then
+
+  if FNodes.Contains(ANode) then
     Exit;
 
   if ANode.ZOrder = 0 then
@@ -313,9 +277,6 @@ begin
 end;
 
 function TNodeGraph.DetachNode(ANode: TCustomNode): boolean;
-var
-  i: integer;
-  L: TNodeLink;
 begin
   Result := False;
 
@@ -325,9 +286,9 @@ begin
   if not FNodes.Contains(ANode) then
     Exit;
 
-  for i := FLinks.Count - 1 downto 0 do
+  for var i := FLinks.Count - 1 downto 0 do
   begin
-    L := FLinks[i];
+    var L := FLinks[i];
 
     if (((L.FromPin <> nil) and (L.FromPin.OwnerNode = ANode)) or
       ((L.ToPin <> nil) and (L.ToPin.OwnerNode = ANode))) then
@@ -342,23 +303,20 @@ begin
   if Assigned(FOnNodeRemoved) then
     FOnNodeRemoved(Self, ANode);
 
-  FNodes.Remove(ANode);
+  FNodes.Extract(ANode);
 
   Result := True;
   DoGraphChanged;
 end;
 
 procedure TNodeGraph.RemoveNode(ANode: TCustomNode);
-var
-  i: integer;
-  L: TNodeLink;
 begin
   if ANode = nil then
     Exit;
 
-  for i := FLinks.Count - 1 downto 0 do
+  for var i := FLinks.Count - 1 downto 0 do
   begin
-    L := FLinks[i];
+    var L := FLinks[i];
 
     if (((L.FromPin <> nil) and (L.FromPin.OwnerNode = ANode)) or
       ((L.ToPin <> nil) and (L.ToPin.OwnerNode = ANode))) then
@@ -455,44 +413,39 @@ begin
   NFrom := nil;
   NTo := nil;
 
-  if (ALink.FromPin <> nil) and (ALink.FromPin.OwnerNode <> nil) then
-    NFrom := TCustomNode(ALink.FromPin.OwnerNode);
-
-  if (ALink.ToPin <> nil) and (ALink.ToPin.OwnerNode <> nil) then
-    NTo := TCustomNode(ALink.ToPin.OwnerNode);
+  if FLinks.Remove(ALink) <= 0 then
+    Exit;
 
   if Assigned(FOnLinkRemoved) then
     FOnLinkRemoved(Self, ALink);
 
-  if FLinks.Remove(ALink) >= 0 then
-  begin
-    if (NFrom <> nil) and (NTo <> nil) then
-    begin
-      if not HasLinksBetweenNodes(NFrom, NTo) then
-        FNodes.RemoveEdge(NFrom, NTo);
-    end;
-    DoGraphChanged;
-  end;
+  if (ALink.FromPin <> nil) and (ALink.FromPin.OwnerNode <> nil) then
+    NFrom := ALink.FromPin.OwnerNode;
+
+  if (ALink.ToPin <> nil) and (ALink.ToPin.OwnerNode <> nil) then
+    NTo := ALink.ToPin.OwnerNode;
+
+  if (NFrom <> nil) and (NTo <> nil) then
+    if not HasLinksBetweenNodes(NFrom, NTo) then
+      FNodes.RemoveEdge(NFrom, NTo);
+
+  DoGraphChanged;
 end;
 
 function TNodeGraph.HasLinksBetweenNodes(ANodeA, ANodeB: TCustomNode): boolean;
-var
-  i: integer;
-  L: TNodeLink;
-  OwnerA, OwnerB: TCustomNode;
 begin
   Result := False;
   if (ANodeA = nil) or (ANodeB = nil) then
     Exit;
 
-  for i := 0 to FLinks.Count - 1 do
+  for var i := 0 to FLinks.Count - 1 do
   begin
-    L := FLinks[i];
+    var L := FLinks[i];
     if (L.FromPin = nil) or (L.ToPin = nil) then
       Continue;
 
-    OwnerA := TCustomNode(L.FromPin.OwnerNode);
-    OwnerB := TCustomNode(L.ToPin.OwnerNode);
+    var OwnerA := L.FromPin.OwnerNode;
+    var OwnerB := L.ToPin.OwnerNode;
 
     if (OwnerA = ANodeA) and (OwnerB = ANodeB) then
       Exit(True);
@@ -544,15 +497,15 @@ begin
 
       if N = nil then
       begin
-        AddError('Node list contains nil node.');
+        AddError(Translate('Node list contains nil node.'));
         Continue;
       end;
 
       if N.Id = '' then
-        AddError('Node "' + N.Title + '" has empty Id.');
+        AddError(Format(Translate('Node "%s" has empty Id.'), [N.Title]));
 
       if NodeIds.IndexOf(N.Id) >= 0 then
-        AddError('Duplicate node Id: ' + N.Id)
+        AddError(Format(Translate('Duplicate node Id: %s'), [N.Id]))
       else
         NodeIds.Add(N.Id);
 
@@ -562,24 +515,24 @@ begin
 
         if P = nil then
         begin
-          AddError('Node "' + N.Title + '" contains nil input pin.');
+          AddError(Format(Translate('Node "%s" contains nil input pin.'), [N.Title]));
           Continue;
         end;
 
         if P.OwnerNode <> N then
-          AddError('Input pin "' + P.Name + '" has invalid OwnerNode.');
+          AddError(Format(Translate('Input pin "%s" has invalid OwnerNode.'), [P.Name]));
 
         if P.Direction <> pdInput then
-          AddError('Pin "' + P.Name + '" in input list has non-input direction.');
+          AddError(Format(Translate('Pin "%s" in input list has non-input direction.'), [P.Name]));
 
         if P.SortIndex <> j then
-          AddError('Input pin "' + P.Name + '" has invalid SortIndex.');
+          AddError(Format(Translate('Input pin "%s" has invalid SortIndex.'), [P.Name]));
 
         if P.Id = '' then
-          AddError('Input pin "' + P.Name + '" has empty Id.');
+          AddError(Format(Translate('Input pin "%s" has empty Id.'), [P.Name]));
 
         if PinIds.IndexOf(P.Id) >= 0 then
-          AddError('Duplicate pin Id: ' + P.Id)
+          AddError(Format(Translate('Duplicate pin Id: %s'), [P.Id]))
         else
           PinIds.Add(P.Id);
       end;
@@ -654,18 +607,15 @@ begin
 end;
 
 function TNodeGraph.IsNodeIdUnique(const AId: string; AExcept: TCustomNode): boolean;
-var
-  i: integer;
-  N: TCustomNode;
 begin
   Result := True;
 
   if AId = '' then
     Exit(False);
 
-  for i := 0 to FNodes.Count - 1 do
+  for var i := 0 to FNodes.Count - 1 do
   begin
-    N := FNodes[i];
+    var N := FNodes[i];
 
     if N = AExcept then
       Continue;
@@ -676,23 +626,19 @@ begin
 end;
 
 function TNodeGraph.IsPinIdUnique(const AId: string; AExcept: TNodePin): boolean;
-var
-  i, j: integer;
-  N: TCustomNode;
-  P: TNodePin;
 begin
   Result := True;
 
   if AId = '' then
     Exit(False);
 
-  for i := 0 to FNodes.Count - 1 do
+  for var i := 0 to FNodes.Count - 1 do
   begin
-    N := FNodes[i];
+    var N := FNodes[i];
 
-    for j := 0 to N.InputCount - 1 do
+    for var j := 0 to N.InputCount - 1 do
     begin
-      P := N.GetInput(j);
+      var P := N.GetInput(j);
 
       if P = AExcept then
         Continue;
@@ -701,9 +647,9 @@ begin
         Exit(False);
     end;
 
-    for j := 0 to N.OutputCount - 1 do
+    for var j := 0 to N.OutputCount - 1 do
     begin
-      P := N.GetOutput(j);
+      var P := N.GetOutput(j);
 
       if P = AExcept then
         Continue;
@@ -733,8 +679,7 @@ begin
   Result := nil;
   for var i := 0 to FNodes.Count - 1 do
   begin
-    var N := FNodes[i];
-    Result := N.FindPinById(AId);
+    Result := FNodes[i].FindPinById(AId);
     if Result <> nil then
       Exit;
   end;
@@ -833,6 +778,9 @@ end;
 
 procedure TNodeGraph.DoGraphChanged;
 begin
+  if FUpdateLock > 0 then
+    Exit;
+
   if Assigned(FOnGraphChanged) then
     FOnGraphChanged(Self);
 end;
@@ -841,12 +789,30 @@ procedure TNodeGraph.RemoveLinksToInput(APin: TNodePin);
 begin
   if APin = nil then
     Exit;
+
   for var i := FLinks.Count - 1 downto 0 do
-  begin
-    var L := FLinks[i];
-    if L.ToPin = APin then
+    if FLinks[i].ToPin = APin then
+    begin
+      var Link := FLinks[i];
       FLinks.Delete(i);
-  end;
+
+      if Assigned(FOnLinkRemoved) then
+        FOnLinkRemoved(Self, Link);
+
+      var NFrom: TCustomNode := nil;
+      var NTo: TCustomNode := nil;
+      if (Link.FromPin <> nil) and (Link.FromPin.OwnerNode <> nil) then
+        NFrom := Link.FromPin.OwnerNode;
+
+      if (Link.ToPin <> nil) and (Link.ToPin.OwnerNode <> nil) then
+        NTo := Link.ToPin.OwnerNode;
+
+      if (NFrom <> nil) and (NTo <> nil) then
+        if not HasLinksBetweenNodes(NFrom, NTo) then
+          FNodes.RemoveEdge(NFrom, NTo);
+    end;
+
+  DoGraphChanged;
 end;
 
 function TNodeGraph.PinHasIncomingLink(APin: TNodePin): boolean;
@@ -857,11 +823,8 @@ begin
     Exit;
 
   for var i := 0 to FLinks.Count - 1 do
-  begin
-    var L := FLinks[i];
-    if L.ToPin = APin then
+    if FLinks[i].ToPin = APin then
       Exit(True);
-  end;
 end;
 
 function TNodeGraph.PinHasOutgoingLink(APin: TNodePin): boolean;
@@ -872,11 +835,8 @@ begin
     Exit;
 
   for var i := 0 to FLinks.Count - 1 do
-  begin
-    var L := FLinks[i];
-    if L.FromPin = APin then
+    if FLinks[i].FromPin = APin then
       Exit(True);
-  end;
 end;
 
 procedure TNodeGraph.PushExecutedCommand(ACommand: TGraphCommand);
@@ -902,10 +862,7 @@ end;
 procedure TNodeGraph.Clear;
 begin
   FLinks.Clear;
-  for var i := 0 to FNodes.Count - 1 do
-    FNodes[i].Free;
   FNodes.Clear;
-
   DoGraphChanged;
 end;
 
@@ -948,22 +905,6 @@ begin
     FUndoStack.Delete(0);
 end;
 
-procedure TNodeGraph.PushUndoSnapshot;
-begin
-  if FUndoLock then
-    Exit;
-
-  var Obj := SaveGraphToJSON;
-  try
-    var Cmd := TJSONSnapshotCommand.Create(Self, Obj.ToJSON, Obj.ToJSON, 'Snapshot');
-    FUndoStack.Add(Cmd);
-  finally
-    Obj.Free;
-  end;
-
-  TruncateUndo;
-end;
-
 function TNodeGraph.CaptureJSONText: string;
 begin
   var Obj := SaveGraphToJSON;
@@ -979,19 +920,14 @@ begin
   if ABeforeJSON = AAfterJSON then
     Exit;
 
-  PushExecutedCommand(TJSONSnapshotCommand.Create(Self, ABeforeJSON,
-      AAfterJSON, ADescription));
+  PushExecutedCommand(TJSONSnapshotCommand.Create(Self, ABeforeJSON, AAfterJSON, ADescription));
 end;
 
 function TNodeGraph.NextZOrder: integer;
 begin
   Result := 1;
-
   for var i := 0 to FNodes.Count - 1 do
-  begin
-    var N := FNodes[i];
-    Result := Max(Result, N.ZOrder + 1);
-  end;
+    Result := Max(Result, FNodes[i].ZOrder + 1);
 end;
 
 procedure TNodeGraph.BringNodeToFront(ANode: TCustomNode);
@@ -1094,51 +1030,48 @@ begin
   end;
 end;
 
-procedure TNodeGraph.LoadGraphFromJSON(AObj: TJSONObject);
-var
-  NodesArr, LinksArr: TJSONArray;
-  NodeObj, LinkObj: TJSONObject;
-  i: integer;
-  N: TCustomNode;
-  L: TNodeLink;
-  FromPin, ToPin: TNodePin;
-  NodeType: string;
+procedure TNodeGraph.LoadGraphFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
 begin
-  Clear;
+  BeginUpdate;
+  try
+    Clear;
 
-  NodesArr := AObj.GetValue<TJSONArray>('nodes', nil);
-  if NodesArr <> nil then
-  begin
-    for i := 0 to NodesArr.Count - 1 do
+    var NodesArr := AObj.GetValue<TJSONArray>('nodes', nil);
+    if NodesArr <> nil then
     begin
-      NodeObj := NodesArr.Items[i] as TJSONObject;
-      NodeType := NodeObj.GetValue('type', 'default');
-
-      N := FRegistry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0));
-      N.LoadFromJSON(NodeObj);
-      FNodes.Add(N);
-    end;
-  end;
-
-  LinksArr := AObj.GetValue<TJSONArray>('links', nil);
-  if LinksArr <> nil then
-  begin
-    for i := 0 to LinksArr.Count - 1 do
-    begin
-      LinkObj := LinksArr.Items[i] as TJSONObject;
-      FromPin := FindPinById(LinkObj.GetValue('fromPinId', ''));
-      ToPin := FindPinById(LinkObj.GetValue('toPinId', ''));
-
-      if (FromPin <> nil) and (ToPin <> nil) and CanConnect(FromPin, ToPin) then
+      for var i := 0 to NodesArr.Count - 1 do
       begin
-        L := TNodeLink.Create(FromPin, ToPin);
-        L.Id := LinkObj.GetValue('id', L.Id);
-        // AddLink handles FLinks and FNodes sync
-        AddLink(L);
+        var NodeObj := NodesArr.Items[i] as TJSONObject;
+        var NodeType := NodeObj.GetValue('type', 'default');
+
+        var N := FRegistry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0));
+        N.LoadFromJSON(NodeObj, UseAlphaColor);
+        FNodes.Add(N);
       end;
     end;
+
+    var LinksArr := AObj.GetValue<TJSONArray>('links', nil);
+    if LinksArr <> nil then
+    begin
+      for var i := 0 to LinksArr.Count - 1 do
+      begin
+        var LinkObj := LinksArr.Items[i] as TJSONObject;
+        var FromPin := FindPinById(LinkObj.GetValue('fromPinId', ''));
+        var ToPin := FindPinById(LinkObj.GetValue('toPinId', ''));
+
+        if (FromPin <> nil) and (ToPin <> nil) and CanConnect(FromPin, ToPin) then
+        begin
+          var L := TNodeLink.Create(FromPin, ToPin);
+          L.Id := LinkObj.GetValue('id', L.Id);
+          // AddLink handles FLinks and FNodes sync
+          AddLink(L);
+        end;
+      end;
+    end;
+  finally
+    EndUpdate;
+    DoGraphChanged;
   end;
-  DoGraphChanged;
 end;
 
 function TNodeGraph.AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
@@ -1176,33 +1109,28 @@ begin
 end;
 
 function TNodeGraph.RemoveDynamicPin(APin: TNodePin): boolean;
-var
-  BeforeJSON, AfterJSON: string;
-  N: TCustomNode;
-  i: integer;
-  L: TNodeLink;
 begin
   Result := False;
 
   if APin = nil then
     Exit;
 
-  N := APin.OwnerNode;
+  var N := APin.OwnerNode;
   if N = nil then
     Exit;
 
-  BeforeJSON := CaptureJSONText;
+  var BeforeJSON := CaptureJSONText;
 
-  for i := FLinks.Count - 1 downto 0 do
+  for var i := FLinks.Count - 1 downto 0 do
   begin
-    L := TNodeLink(FLinks[i]);
+    var L := TNodeLink(FLinks[i]);
     if (L.FromPin = APin) or (L.ToPin = APin) then
       FLinks.Delete(i);
   end;
 
   Result := N.RemovePin(APin);
 
-  AfterJSON := CaptureJSONText;
+  var AfterJSON := CaptureJSONText;
   ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, 'Remove pin');
 
   DoGraphChanged;
@@ -1210,12 +1138,7 @@ end;
 
 function TNodeGraph.ValidateGraph: boolean;
 begin
-  var Issues := TObjectList<TGraphValidationIssue>.Create;
-  try
-    Result := ValidateGraphIssues(Issues);
-  finally
-    Issues.Free;
-  end;
+  Result := ValidateGraphIssues(nil);
 end;
 
 function TNodeGraph.ValidateGraphIssues(AIssues: TObjectList<TGraphValidationIssue>): boolean;
@@ -1223,15 +1146,11 @@ function TNodeGraph.ValidateGraphIssues(AIssues: TObjectList<TGraphValidationIss
   procedure AddIssue(AKind: TGraphValidationIssueKind; const AMsg: string; ANode: TCustomNode; ALink: TNodeLink);
   begin
     var Issue := TGraphValidationIssue.Create;
+    AIssues.Add(Issue);
     Issue.Kind := AKind;
     Issue.MessageText := AMsg;
     Issue.Node := ANode;
     Issue.Link := ALink;
-
-    if AIssues <> nil then
-      AIssues.Add(Issue)
-    else
-      Issue.Free;
   end;
 
 begin
@@ -1243,14 +1162,16 @@ begin
 
     if (L.FromPin = nil) or (L.ToPin = nil) then
     begin
-      AddIssue(gviError, 'Broken link: nil pin.', nil, L);
+      if AIssues <> nil then
+        AddIssue(gviError, 'Broken link: nil pin.', nil, L);
       Result := False;
       Continue;
     end;
 
     if not CanConnect(L.FromPin, L.ToPin) then
     begin
-      AddIssue(gviError, 'Invalid link type/direction.', nil, L);
+      if AIssues <> nil then
+        AddIssue(gviError, 'Invalid link type/direction.', nil, L);
       Result := False;
     end;
   end;
@@ -1267,12 +1188,13 @@ begin
       begin
         if not PinHasIncomingLink(P) and (Trim(P.DefaultValue) = '') then
         begin
-          AddIssue(
-            gviWarning,
-            'Required input "' + P.Name + '" is not connected on node "' +
-            N.Title + '".',
-            N,
-            nil);
+          if AIssues <> nil then
+            AddIssue(
+              gviWarning,
+              'Required input "' + P.Name + '" is not connected on node "' +
+              N.Title + '".',
+              N,
+              nil);
         end;
       end;
     end;
@@ -1280,7 +1202,8 @@ begin
 
   if HasCycle then
   begin
-    AddIssue(gviError, 'Graph contains cycle.', nil, nil);
+    if AIssues <> nil then
+      AddIssue(gviError, 'Graph contains cycle.', nil, nil);
     Result := False;
   end;
 end;
@@ -1306,6 +1229,8 @@ begin
   OldTo := ALink.ToPin;
 
   N := FRegistry.CreateNode('reroute', AX, AY);
+  N.X := N.X - N.Width / 2;
+  N.Y := N.Y - N.Height / 2;
 
   if (N.InputCount > 0) and (N.OutputCount > 0) then
   begin
@@ -1342,10 +1267,12 @@ end;
 function TNodeGraph.GetCompatibleNodesForPin(APin: TNodePin): TStringList;
 begin
   Result := TStringList.Create;
-  for var i := 0 to FRegistry.Count - 1 do
-  begin
-    var RegItem := FRegistry.Item(i);
-    Result.Add(RegItem.NodeType);
+  try
+    for var i := 0 to FRegistry.Count - 1 do
+      Result.Add(FRegistry.Item(i).NodeType);
+  except
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -1423,33 +1350,16 @@ begin
   It.Hidden := AHidden;
   It.IsDeprecated := ADeprecated;
   It.Version := AVersion;
-
-  var TagsSL := TStringList.Create;
-  try
-    TagsSL.Delimiter := ',';
-    TagsSL.StrictDelimiter := True;
-    TagsSL.DelimitedText := ATags;
-
-    for var i := 0 to TagsSL.Count - 1 do
-      if Trim(TagsSL[i]) <> '' then
-        It.Tags.Add(Trim(TagsSL[i]));
-  finally
-    TagsSL.Free;
-  end;
-
+  It.Tags.AddStrings(ATags.Split([',']));
   FItems.Add(It);
 end;
 
 function TNodeRegistry.FindItem(const ANodeType: string): TNodeRegistryItem;
 begin
+  for var Item in FItems do
+    if Item.NodeType.Equals(ANodeType) then
+      Exit(Item);
   Result := nil;
-
-  for var i := 0 to FItems.Count - 1 do
-  begin
-    var It := FItems[i];
-    if SameText(It.NodeType, ANodeType) then
-      Exit(It);
-  end;
 end;
 
 function TNodeRegistry.CreateNode(const ANodeType: string; AX, AY: single): TCustomNode;
@@ -1466,7 +1376,7 @@ begin
   end
   else
   begin
-    Result := TDefaultNode.Create('Unknown: ' + ANodeType, AX, AY);
+    Result := TDefaultNode.Create(Translate('Unknown') + ': ' + ANodeType, AX, AY);
     Result.NodeType := ANodeType;
     Result.SetupPins;
   end;

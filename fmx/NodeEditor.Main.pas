@@ -10,7 +10,7 @@ uses
   FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
-  FMX.Ani, FMX.ExtCtrls;
+  FMX.Ani, FMX.ExtCtrls, FMX.TabControl;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -45,6 +45,13 @@ type
     procedure SetupPins; override;
   end;
 
+  TPrintNode = class(TCustomNode)
+  public
+    constructor Create(ATitle: string; AX, AY: Single); override;
+    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 70); override;
+    procedure SetupPins; override;
+  end;
+
   TTrackBar = class(FMX.StdCtrls.TTrackBar)
   protected
     procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
@@ -52,7 +59,7 @@ type
 
   TFormMain = class(TForm)
     LayoutRender: TLayout;
-    Layout1: TLayout;
+    LayoutHead: TLayout;
     MenuBar1: TMenuBar;
     MenuItemFile: TMenuItem;
     MenuItemEdit: TMenuItem;
@@ -93,51 +100,16 @@ type
     LayoutLeft: TLayout;
     StyleBookWinUI3Light: TStyleBook;
     PanelInspector: TPanel;
-    Layout4: TLayout;
     VertScrollBox1: TVertScrollBox;
-    Layout5: TLayout;
-    Layout6: TLayout;
-    Label1: TLabel;
-    EditNodeTitle: TEdit;
-    Layout7: TLayout;
-    LabelNodeType: TLabel;
-    SpinBoxNodeX: TSpinBox;
-    Label3: TLabel;
     SpinBoxNodeWidth: TSpinBox;
     Label4: TLabel;
-    SpinBoxNodeY: TSpinBox;
-    Label5: TLabel;
     SpinBoxNodeHeight: TSpinBox;
     Label6: TLabel;
-    Layout8: TLayout;
-    Label7: TLabel;
-    Layout9: TLayout;
-    ComboColorBoxNodeBodyColor: TComboColorBox;
-    Label8: TLabel;
-    ComboColorBoxNodeHeadColor: TComboColorBox;
-    Label9: TLabel;
-    CheckBoxNodeCollapsed: TCheckBox;
-    Layout10: TLayout;
-    Label10: TLabel;
-    MemoNodeComment: TMemo;
-    Layout11: TLayout;
-    Label11: TLabel;
-    StringGridNodePins: TStringGrid;
-    Layout12: TLayout;
-    Label12: TLabel;
-    StringGridNodeValues: TStringGrid;
     Layout13: TLayout;
     ButtonNodeApply: TButton;
     ButtonNodeRevert: TButton;
-    StringColumnVName: TStringColumn;
-    StringColumnVKind: TStringColumn;
-    StringColumnVValue: TStringColumn;
-    StringColumnPName: TStringColumn;
-    StringColumnPDir: TStringColumn;
-    StringColumnPType: TStringColumn;
-    StringColumnPKind: TStringColumn;
     StyleBookWinUI3: TStyleBook;
-    StatusBar1: TStatusBar;
+    StatusBar: TStatusBar;
     LabelStat1: TLabel;
     LabelStat4: TLabel;
     LabelStat3: TLabel;
@@ -162,17 +134,13 @@ type
     Label2: TLabel;
     Button1: TButton;
     Panel3: TPanel;
-    LayoutSettings: TLayout;
+    LayoutLayers: TLayout;
     Layout16: TLayout;
     PathLabel2: TPathLabel;
     Label13: TLabel;
     Button2: TButton;
     Panel4: TPanel;
     Layout3: TLayout;
-    CheckBoxSnapToGrid: TCheckBox;
-    SpinBoxSize: TSpinBox;
-    Label14: TLabel;
-    CheckBoxSnapToNodes: TCheckBox;
     Layout17: TLayout;
     RadioButton1: TRadioButton;
     RadioButton2: TRadioButton;
@@ -188,10 +156,65 @@ type
     Button3: TButton;
     Button4: TButton;
     Panel6: TPanel;
+    MenuItem4: TMenuItem;
+    MenuItemFileExit: TMenuItem;
+    Layout11: TLayout;
+    Layout12: TLayout;
+    PathLabel8: TPathLabel;
+    Label11: TLabel;
+    Button5: TButton;
+    Panel7: TPanel;
+    Layout18: TLayout;
+    SpinBoxNodeX: TSpinBox;
+    Label3: TLabel;
+    SpinBoxNodeY: TSpinBox;
+    Label5: TLabel;
+    Layout19: TLayout;
+    Layout5: TLayout;
+    Layout6: TLayout;
+    PathLabel9: TPathLabel;
+    LabelNodeType: TLabel;
+    Button6: TButton;
+    Panel8: TPanel;
+    Layout4: TLayout;
+    EditNodeTitle: TEdit;
+    CheckBoxNodeCollapsed: TCheckBox;
+    ComboColorBoxNodeHeadColor: TComboColorBox;
+    Label9: TLabel;
+    Layout7: TLayout;
+    Layout8: TLayout;
+    PathLabel10: TPathLabel;
+    Label1: TLabel;
+    Button7: TButton;
+    Panel9: TPanel;
+    CheckBoxSnapToGrid: TCheckBox;
+    CheckBoxSnapToNodes: TCheckBox;
+    SpinBoxSize: TSpinBox;
+    Label14: TLabel;
     CheckBoxShowFrameTime: TCheckBox;
-    CheckBoxShowSnapGuides: TCheckBox;
-    CheckBoxShowAxes: TCheckBox;
     CheckBoxShowGrid: TCheckBox;
+    CheckBoxShowAxes: TCheckBox;
+    CheckBoxShowSnapGuides: TCheckBox;
+    CheckBoxLockedAll: TCheckBox;
+    Layout9: TLayout;
+    Layout20: TLayout;
+    PathLabel11: TPathLabel;
+    Label7: TLabel;
+    Button8: TButton;
+    Panel10: TPanel;
+    MemoNodeComment: TMemo;
+    TabControlPins: TTabControl;
+    TabItemValues: TTabItem;
+    StringGridNodeValues: TStringGrid;
+    StringColumnVName: TStringColumn;
+    StringColumnVKind: TStringColumn;
+    StringColumnVValue: TStringColumn;
+    TabItemPins: TTabItem;
+    StringGridNodePins: TStringGrid;
+    StringColumnPName: TStringColumn;
+    StringColumnPDir: TStringColumn;
+    StringColumnPType: TStringColumn;
+    StringColumnPKind: TStringColumn;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -229,6 +252,7 @@ type
     procedure MenuItemJSONSaveClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure CheckBoxSnapToGridChange(Sender: TObject);
+    procedure MenuItemFileExitClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -266,128 +290,9 @@ var
 implementation
 
 uses
-  System.Math, System.JSON, FMX.NodeEditor.Node.Command, FMX.Platform.Win;
+  System.Math, System.JSON, FMX.NodeEditor.Node.Command;
 
 {$R *.fmx}
-
-{ TMathExprNode }
-
-constructor TMathExprNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
-begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
-
-  NodeType := 'math_expr';
-  HeaderColor := $FF4080FF;
-  BodyColor := $FFF0F8FF;
-  // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
-  var V := AddValue('expression', nvkString);
-  V.StringValue := 'A + B * C';
-
-  V := AddValue('precision', nvkInteger);
-  V.IntegerValue := 6;
-
-  V := AddValue('scale', nvkFloat);
-  V.FloatValue := 1.0;
-
-  V := AddValue('enabled', nvkBoolean);
-  V.BooleanValue := True;
-
-  V := AddValue('meta', nvkJSON);
-  V.JSONValue := '{"mode":"fast"}';
-end;
-
-constructor TMathExprNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 200, 170);
-end;
-
-procedure TMathExprNode.SetupPins;
-begin
-  ClearPins;
-  // Exec-пины
-  AddInput('▶ Exec In', 'exec', pkExec, 35);
-  AddOutput('▶ Exec Out', 'exec', pkExec, 35);
-  // Data-пины
-  AddInput('A', 'float', pkData, 75);
-  AddInput('B', 'float', pkData, 105);
-  AddInput('C', 'float', pkData, 135);
-  AddOutput('Result', 'float', pkData, 90);
-  // IsRequired demo
-  GetInput(1).IsRequired := True;
-  GetInput(2).IsRequired := True;
-  GetInput(1).DefaultValue := '0.0';
-  GetInput(1).Tooltip := 'First operand';
-end;
-
-{ TMultiplyNode }
-
-constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
-begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType := 'multiply_node';
-  HeaderColor := $FF00A0FF;
-end;
-
-constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 130);
-end;
-
-procedure TMultiplyNode.SetupPins;
-begin
-  ClearPins;
-  AddInput('A', 'float', pkData, 45);
-  AddInput('B', 'float', pkData, 75);
-  AddOutput('Result', 'float', pkData, 60);
-  GetInput(0).IsRequired := True;
-  GetInput(1).IsRequired := True;
-end;
-
-{ TStringNode }
-
-constructor TStringNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
-begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType := 'string_node';
-  HeaderColor := $FF00C080;
-  var V := AddValue('text', nvkString);
-  V.StringValue := 'Hello, Node!';
-end;
-
-constructor TStringNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 100);
-end;
-
-procedure TStringNode.SetupPins;
-begin
-  ClearPins;
-  AddOutput('Text', 'string', pkData, 45);
-end;
-
-{ TBranchNode }
-
-constructor TBranchNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
-begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
-  NodeType := 'branch_node';
-  HeaderColor := $FFC04000;
-end;
-
-constructor TBranchNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 140);
-end;
-
-procedure TBranchNode.SetupPins;
-begin
-  ClearPins;
-  AddInput('▶ Exec', 'exec', pkExec, 35);
-  AddInput('Condition', 'boolean', pkData, 75);
-  AddOutput('▶ True', 'exec', pkExec, 55);
-  AddOutput('▶ False', 'exec', pkExec, 90);
-  GetInput(1).IsRequired := True;
-end;
 
 { TFormMain }
 
@@ -444,7 +349,6 @@ begin
   N.Height := Round(SpinBoxNodeHeight.Value);
 
   N.HeaderColor := ComboColorBoxNodeHeadColor.Color;
-  N.BodyColor := ComboColorBoxNodeBodyColor.Color;
   N.Collapsed := CheckBoxNodeCollapsed.IsChecked;
 
   N.CommentText := MemoNodeComment.Text;
@@ -504,13 +408,6 @@ begin
   FEditor := TNodeEditor.Create(LayoutRender);
   FEditor.Parent := LayoutRender;
   FEditor.Align := TAlignLayout.Client;
-  FEditor.SnapToGrid := CheckBoxSnapToGrid.IsChecked;
-  FEditor.SnapToNodes := CheckBoxSnapToNodes.IsChecked;
-  FEditor.GridSize := Trunc(SpinBoxSize.Value);
-  FEditor.ShowFrameTime := CheckBoxShowFrameTime.IsChecked;
-  FEditor.ShowSnapGuides := CheckBoxShowSnapGuides.IsChecked;
-  FEditor.ShowAxes := CheckBoxShowAxes.IsChecked;
-  FEditor.ShowGrid := CheckBoxShowGrid.IsChecked;
   FEditor.OnPaint := FOnEditorPaint;
 
   FEditor.OnSelectionChanged := OnSelectionChanged;
@@ -520,6 +417,8 @@ begin
   FJsonNodeEditor := TJsonNodeEditor.Create(Self);
   FJsonNodeEditor.NodeEditor := FEditor;
   FJsonNodeEditor.OnChanged := OnJsonNodeEditorChanged;
+
+  CheckBoxSnapToGridChange(nil);
 end;
 
 procedure TFormMain.OnJsonNodeEditorChanged(Sender: TObject);
@@ -549,6 +448,11 @@ begin
     'branch_node', 'Branch', 'Flow',
     'Conditional exec branch (if/else).', 'branch,if,else,exec,flow',
     TBranchNode, $FFC04000);
+
+  FEditor.Graph.Registry.RegisterNodeEx(
+    'print_node', 'Print', 'Common',
+    'Print input text', 'common,string,print,text',
+    TPrintNode, $FF843482);
 end;
 
 procedure TFormMain.SpinBoxSizeChange(Sender: TObject);
@@ -829,6 +733,11 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.MenuItemFileExitClick(Sender: TObject);
+begin
+  Application.Terminate;
+end;
+
 procedure TFormMain.MenuItemFileLoadClick(Sender: TObject);
 begin
   if OpenDialogJSON.Execute then
@@ -923,6 +832,7 @@ begin
   FEditor.ShowGrid := CheckBoxShowGrid.IsChecked;
   FEditor.ShowAxes := CheckBoxShowAxes.IsChecked;
   FEditor.ShowSnapGuides := CheckBoxShowSnapGuides.IsChecked;
+  FEditor.LockedAll := CheckBoxLockedAll.IsChecked;
   UpdateStatus;
 end;
 
@@ -947,7 +857,7 @@ begin
   FNodeUpdating := True;
   try
     ClearAllSections;
-    LabelNodeType.Text := 'Info (no selection)';
+    LabelNodeType.Text := 'Node (no selection)';
     ButtonNodeApply.Enabled := False;
     PanelInspector.Enabled := False;
     ButtonNodeRevert.Enabled := False;
@@ -960,13 +870,12 @@ procedure TFormMain.ClearAllSections;
 begin
   FNodeUpdating := True;
   try
-    LabelNodeType.Text := 'Info';
+    LabelNodeType.Text := 'Node';
     EditNodeTitle.Text := '';
     SpinBoxNodeX.Value := 0;
     SpinBoxNodeY.Value := 0;
     SpinBoxNodeWidth.Value := 0;
     SpinBoxNodeHeight.Value := 0;
-    ComboColorBoxNodeBodyColor.Color := TAlphaColors.Null;
     ComboColorBoxNodeHeadColor.Color := TAlphaColors.Null;
     CheckBoxNodeCollapsed.IsChecked := False;
     MemoNodeComment.Text := '';
@@ -1003,7 +912,7 @@ begin
     ClearAllSections;
 
     // --- Info ---
-    LabelNodeType.Text := 'Info (' + N.NodeType + ')';
+    LabelNodeType.Text := 'Node (' + N.NodeType + ')';
 
     // --- Basic ---
     EditNodeTitle.Text := N.Title;
@@ -1014,7 +923,6 @@ begin
 
     // --- Visual ---
     ComboColorBoxNodeHeadColor.Color := N.HeaderColor;
-    ComboColorBoxNodeBodyColor.Color := N.BodyColor;
     CheckBoxNodeCollapsed.IsChecked := N.Collapsed;
 
     // --- Comment ---
@@ -1136,6 +1044,8 @@ begin
   end;
 end;
 
+{ TTrackBar }
+
 procedure TTrackBar.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
 var
   LValue: Double;
@@ -1150,6 +1060,145 @@ begin
   OldValue := Value;
   Value := LValue;
   Handled := not SameValue(Value, OldValue);
+end;
+
+{ TMathExprNode }
+
+constructor TMathExprNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+
+  NodeType := 'math_expr';
+  HeaderColor := $FF4080FF;
+  BodyColor := $FFF0F8FF;
+  // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
+  var V := AddValue('expression', nvkString);
+  V.StringValue := 'A + B * C';
+
+  V := AddValue('precision', nvkInteger);
+  V.IntegerValue := 6;
+
+  V := AddValue('scale', nvkFloat);
+  V.FloatValue := 1.0;
+
+  V := AddValue('enabled', nvkBoolean);
+  V.BooleanValue := True;
+
+  V := AddValue('meta', nvkJSON);
+  V.JSONValue := '{"mode":"fast"}';
+end;
+
+constructor TMathExprNode.Create(ATitle: string; AX, AY: Single);
+begin
+  Create(ATitle, AX, AY, 200, 170);
+end;
+
+procedure TMathExprNode.SetupPins;
+begin
+  ClearPins;
+  // Exec-пины
+  AddInputPin('▶ Exec In', 'exec', pkExec, 35);
+  AddOutputPin('▶ Exec Out', 'exec', pkExec, 35);
+  // Data-пины
+  AddInputPin('A', 'float', pkData, 75);
+  AddInputPin('B', 'float', pkData, 105);
+  AddInputPin('C', 'float', pkData, 135);
+  AddOutputPin('Result', 'float', pkData, 90);
+  // IsRequired demo
+  GetInput(1).IsRequired := True;
+  GetInput(2).IsRequired := True;
+  GetInput(1).DefaultValue := '0.0';
+  GetInput(1).Tooltip := 'First operand';
+end;
+
+{ TMultiplyNode }
+
+constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'multiply_node';
+  HeaderColor := $FF00A0FF;
+end;
+
+constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single);
+begin
+  Create(ATitle, AX, AY, 180, 130);
+end;
+
+procedure TMultiplyNode.SetupPins;
+begin
+  ClearPins;
+  AddInputPin('A', 'float', pkData, 45);
+  AddInputPin('B', 'float', pkData, 75);
+  AddOutputPin('Result', 'float', pkData, 60);
+  GetInput(0).IsRequired := True;
+  GetInput(1).IsRequired := True;
+end;
+
+{ TStringNode }
+
+constructor TStringNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'string_node';
+  HeaderColor := $FF00C080;
+  var V := AddValue('text', nvkString);
+  V.StringValue := 'Hello, Node!';
+end;
+
+constructor TStringNode.Create(ATitle: string; AX, AY: Single);
+begin
+  Create(ATitle, AX, AY, 180, 100);
+end;
+
+procedure TStringNode.SetupPins;
+begin
+  ClearPins;
+  AddOutputPin('Text', 'string', pkData, 45);
+end;
+
+{ TBranchNode }
+
+constructor TBranchNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'branch_node';
+  HeaderColor := $FFC04000;
+end;
+
+constructor TBranchNode.Create(ATitle: string; AX, AY: Single);
+begin
+  Create(ATitle, AX, AY, 180, 140);
+end;
+
+procedure TBranchNode.SetupPins;
+begin
+  ClearPins;
+  AddInputPin('▶ Exec', 'exec', pkExec, 35);
+  AddInputPin('Condition', 'boolean', pkData, 75);
+  AddOutputPin('▶ True', 'exec', pkExec, 55);
+  AddOutputPin('▶ False', 'exec', pkExec, 90);
+  GetInput(1).IsRequired := True;
+end;
+
+{ TPrintNode }
+
+constructor TPrintNode.Create(ATitle: string; AX, AY: Single);
+begin
+  Create(ATitle, AX, AY, 180, 70);
+end;
+
+constructor TPrintNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+begin
+  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  NodeType := 'print_node';
+end;
+
+procedure TPrintNode.SetupPins;
+begin
+  inherited;
+  ClearPins;
+  AddInputPin('Text', 'string', pkData, 45);
 end;
 
 initialization
