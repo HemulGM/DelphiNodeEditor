@@ -11,7 +11,7 @@ uses
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
-  FMX.ComboEdit, WinUI3.Form;
+  FMX.ComboEdit, WinUI3.Form, FMX.SearchBox;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -283,6 +283,7 @@ type
     CheckBoxCustomAccent: TCheckBox;
     MenuItemNodeLibrary: TMenuItem;
     MenuItem16: TMenuItem;
+    SearchBox1: TSearchBox;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);

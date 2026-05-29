@@ -78387,7 +78387,7 @@ object FormMain: TFormMain
             DefaultItemStyles.GroupHeaderStyle = ''
             DefaultItemStyles.GroupFooterStyle = ''
             Viewport.Width = 218.000000000000000000
-            Viewport.Height = 551.000000000000000000
+            Viewport.Height = 515.000000000000000000
             object ListBoxGroupHeader1: TListBoxGroupHeader
               Size.Width = 218.000000000000000000
               Size.Height = 40.000000000000000000
@@ -78518,6 +78518,15 @@ object FormMain: TFormMain
               StyleLookup = 'listboxitemstyle_node'
               TabOrder = 1
               Text = 'ListBoxItem2'
+            end
+            object SearchBox1: TSearchBox
+              Touch.InteractiveGestures = [LongTap, DoubleTap]
+              Align = Top
+              TabOrder = 0
+              Size.Width = 230.000000000000000000
+              Size.Height = 36.000000000000000000
+              Size.PlatformDefault = False
+              TextPrompt = 'Search node ...'
             end
           end
         end
