@@ -56,6 +56,7 @@ type
     Hidden: boolean;
     IsDeprecated: boolean;
     Color: TAlphaColor;
+    IconPath: string;
 
     constructor Create;
     destructor Destroy; override;
@@ -65,18 +66,14 @@ type
 
   TNodeRegistryItem = TNodeDefinition;
 
-  TNodeRegistry = class
-  private
-    FItems: TObjectList<TNodeRegistryItem>;
+  TNodeRegistry = class(TObjectList<TNodeRegistryItem>)
   public
-    constructor Create;
-    destructor Destroy; override;
+    constructor Create; reintroduce;
     procedure RegisterNode(const ANodeType, ACaption: string; AClass: TCustomNodeClass);
-    procedure RegisterNodeEx(const ANodeType, ACaption, ACategory, ADescription, ATags: string; AClass: TCustomNodeClass; AColor: TAlphaColor = TAlphaColors.Null; AHidden: boolean = False; ADeprecated: boolean = False; AVersion: integer = 1);
+    procedure RegisterNodeEx(const ANodeType, ACaption, ACategory, ADescription, ATags, AIconPath: string; AClass: TCustomNodeClass; AColor: TAlphaColor = TAlphaColors.Null; AHidden: boolean = False; ADeprecated: boolean = False; AVersion: integer = 1);
     function CreateNode(const ANodeType: string; AX, AY: single): TCustomNode;
     function FindItem(const ANodeType: string): TNodeRegistryItem;
-    function Count: integer;
-    function Item(Index: integer): TNodeRegistryItem;
+    procedure SortByCategory;
   end;
 
   TNodeGraph = class
@@ -99,8 +96,6 @@ type
 
     procedure RemoveLinksToInput(APin: TNodePin);
     procedure TruncateUndo; inline;
-    procedure BeginUpdate;
-    procedure EndUpdate;
 
   protected
     function PinHasIncomingLink(APin: TNodePin): boolean;
@@ -112,6 +107,9 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+
+    procedure BeginUpdate;
+    procedure EndUpdate;
 
     procedure AddNode(ANode: TCustomNode);
     function DetachNode(ANode: TCustomNode): boolean;
@@ -146,7 +144,7 @@ type
     function CreateRerouteForLink(ALink: TNodeLink; AX, AY: single): TCustomNode;
     function GetCompatibleNodesForPin(APin: TNodePin): TStringList;
 
-    procedure ExecuteCommand(ACommand: TGraphCommand);
+    procedure ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean = False);
     procedure ClearUndoRedo;
     function CaptureJSONText: string;
     procedure ExecuteJSONSnapshotCommand(const ABeforeJSON, AAfterJSON, ADescription: string);
@@ -171,7 +169,7 @@ implementation
 
 uses
   System.Math, FMX.NodeEditor.Node.Defaults, FMX.Types,
-  FMX.NodeEditor.Node.Command;
+  FMX.NodeEditor.Node.Command, System.Generics.Defaults;
 
 procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string; UseAlphaColor: Boolean);
 begin
@@ -216,19 +214,29 @@ begin
   FRedoStack := TObjectList<TGraphCommand>.Create;
 
   FRegistry.RegisterNodeEx('default', 'Default Node', 'Basic',
-    'Generic test node.', 'default,test', TDefaultNode);
+    'Generic test node.', 'default,test',
+    'M5.73 15.885h12.54v-1H5.73zm0-3.385h12.54v-1H5.73zm0-3.384h8.77v-1H5.73zM4.616 19q-.69 0-1.153-.462T3 17.384V6.616q0-.691.463-1.153T4.615 5h14.77q.69 0 1.152.463T21 6.616v10.769q0 .69-.463 1.153T19.385 19zm0-1h14.77q.23 0 .423-.192t.192-.424V6.616q0-.231-.192-.424T19.385 6H4.615q-.23 0-.423.192T4 6.616v10.769q0 .23.192.423t.423.192M4 18V6z',
+    TDefaultNode, $FF1D8EA7);
 
   FRegistry.RegisterNodeEx('float', 'Float Value', 'Values',
-    'Constant float value.', 'float,number,value,const', TFloatNode);
+    'Constant float value.', 'float,number,value,const',
+    'm5.79 21.61l-1.58-1.22l14-18l1.58 1.22zM4 2v2h2v8h2V2zm11 10v2h4v2h-2c-1.1 0-2 .9-2 2v4h6v-2h-4v-2h2c1.11 0 2-.89 2-2v-2a2 2 0 0 0-2-2z',
+    TFloatNode, $FF00C080);
 
   FRegistry.RegisterNodeEx('add', 'Add Float', 'Math',
-    'Adds two float values.', 'add,plus,math,float', TAddNode);
+    'Adds two float values.', 'add,plus,math,float',
+    'M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z',
+    TAddNode, $FF4080FF);
 
   FRegistry.RegisterNodeEx('reroute', 'Reroute', 'Utility',
-    'Reroute connection wire.', 'reroute,wire', TRerouteNode);
+    'Reroute connection wire.', 'reroute,wire',
+    'M5 12c0 3.859 3.14 7 7 7s7-3.141 7-7s-3.141-7-7-7s-7 3.141-7 7m12 0c0 2.757-2.243 5-5 5s-5-2.243-5-5s2.243-5 5-5s5 2.243 5 5',
+    TRerouteNode, $FF646464);
 
   FRegistry.RegisterNodeEx('comment', 'Comment / Frame', 'Utility',
-    'Visual comment frame.', 'comment,frame,group', TCommentNode);
+    'Visual comment frame.', 'comment,frame,group',
+    'M5.73 15.885h12.54v-1H5.73zm0-3.385h12.54v-1H5.73zm0-3.384h8.77v-1H5.73zM4.616 19q-.69 0-1.153-.462T3 17.384V6.616q0-.691.463-1.153T4.615 5h14.77q.69 0 1.152.463T21 6.616v10.769q0 .69-.463 1.153T19.385 19zm0-1h14.77q.23 0 .423-.192t.192-.424V6.616q0-.231-.192-.424T19.385 6H4.615q-.23 0-.423.192T4 6.616v10.769q0 .23.192.423t.423.192M4 18V6z',
+    TCommentNode, $FF646464);
 end;
 
 destructor TNodeGraph.Destroy;
@@ -872,7 +880,7 @@ begin
   FRedoStack.Clear;
 end;
 
-procedure TNodeGraph.ExecuteCommand(ACommand: TGraphCommand);
+procedure TNodeGraph.ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean);
 begin
   if ACommand = nil then
     Exit;
@@ -891,10 +899,15 @@ begin
     FExecutingCommand := False;
   end;
 
-  FUndoStack.Add(ACommand);
-  FRedoStack.Clear;
+  if not Silent then
+  begin
+    FUndoStack.Add(ACommand);
+    FRedoStack.Clear;
 
-  TruncateUndo;
+    TruncateUndo;
+  end
+  else
+    ACommand.Free;
 
   DoGraphChanged;
 end;
@@ -1268,8 +1281,8 @@ function TNodeGraph.GetCompatibleNodesForPin(APin: TNodePin): TStringList;
 begin
   Result := TStringList.Create;
   try
-    for var i := 0 to FRegistry.Count - 1 do
-      Result.Add(FRegistry.Item(i).NodeType);
+    for var Item in FRegistry do
+      Result.Add(Item.NodeType);
   except
     Result.Free;
     raise;
@@ -1320,22 +1333,15 @@ end;
 
 constructor TNodeRegistry.Create;
 begin
-  inherited Create;
-  FItems := TObjectList<TNodeRegistryItem>.Create;
-end;
-
-destructor TNodeRegistry.Destroy;
-begin
-  FItems.Free;
-  inherited Destroy;
+  inherited Create(True);
 end;
 
 procedure TNodeRegistry.RegisterNode(const ANodeType, ACaption: string; AClass: TCustomNodeClass);
 begin
-  RegisterNodeEx(ANodeType, ACaption, '', '', '', AClass);
+  RegisterNodeEx(ANodeType, ACaption, '', '', '', '', AClass);
 end;
 
-procedure TNodeRegistry.RegisterNodeEx(const ANodeType, ACaption, ACategory, ADescription, ATags: string; AClass: TCustomNodeClass; AColor: TAlphaColor; AHidden: boolean; ADeprecated: boolean; AVersion: integer);
+procedure TNodeRegistry.RegisterNodeEx(const ANodeType, ACaption, ACategory, ADescription, ATags, AIconPath: string; AClass: TCustomNodeClass; AColor: TAlphaColor; AHidden: boolean; ADeprecated: boolean; AVersion: integer);
 begin
   if FindItem(ANodeType) <> nil then
     Exit;
@@ -1351,12 +1357,24 @@ begin
   It.IsDeprecated := ADeprecated;
   It.Version := AVersion;
   It.Tags.AddStrings(ATags.Split([',']));
-  FItems.Add(It);
+  It.IconPath := AIconPath;
+  Add(It);
+end;
+
+procedure TNodeRegistry.SortByCategory;
+begin
+  Sort(TComparer<TNodeDefinition>.Construct(
+    function(const Left, Right: TNodeDefinition): Integer
+    begin
+      Result := CompareStr(Left.Category, Right.Category);
+      if Result = 0 then
+        Result := CompareStr(Left.Caption, Right.Caption);
+    end));
 end;
 
 function TNodeRegistry.FindItem(const ANodeType: string): TNodeRegistryItem;
 begin
-  for var Item in FItems do
+  for var Item in Self do
     if Item.NodeType.Equals(ANodeType) then
       Exit(Item);
   Result := nil;
@@ -1370,29 +1388,22 @@ begin
 
   if It <> nil then
   begin
-    Result := It.NodeClass.Create(It.Caption, AX, AY);
+    Result := It.NodeClass.Create;
+    Result.Title := It.Caption;
+    Result.X := AX;
+    Result.Y := AY;
     Result.NodeType := It.NodeType;
     Result.SetupPins;
   end
   else
   begin
-    Result := TDefaultNode.Create(Translate('Unknown') + ': ' + ANodeType, AX, AY);
+    Result := TDefaultNode.Create;
+    Result.Title := Translate('Unknown') + ': ' + ANodeType;
+    Result.X := AX;
+    Result.Y := AY;
     Result.NodeType := ANodeType;
     Result.SetupPins;
   end;
-end;
-
-function TNodeRegistry.Count: integer;
-begin
-  Result := FItems.Count;
-end;
-
-function TNodeRegistry.Item(Index: integer): TNodeRegistryItem;
-begin
-  if (Index >= 0) and (Index < FItems.Count) then
-    Result := FItems[Index]
-  else
-    Result := nil;
 end;
 
 initialization

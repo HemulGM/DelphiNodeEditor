@@ -96,6 +96,16 @@ function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColo
 
 function ColorToAlphaColor(Color: TColor): TAlphaColor;
 
+function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
+
+function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
+
+function RectFIntersects(const R1, R2: TRectF): Boolean;
+
+function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
+
+function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;
+
 var
   CachePathObject: TPathData;
 
@@ -103,6 +113,11 @@ implementation
 
 uses
   System.Math, FMX.Types, System.Math.Vectors;
+
+function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;
+begin
+  Result := TAlphaColorF.Create(TAlphaColorRec(Color).R / 255, TAlphaColorRec(Color).G / 255, TAlphaColorRec(Color).B / 255, Alpha / 255).ToAlphaColor;
+end;
 
 function ColorToAlphaColor(Color: TColor): TAlphaColor;
 begin
@@ -337,6 +352,89 @@ begin
   Closest := A + AB * T;
 
   Result := P.Distance(Closest);
+end;
+
+function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean;
+begin
+  Result := (Pt.X >= R.Left) and (Pt.X <= R.Right) and
+    (Pt.Y >= R.Top) and (Pt.Y <= R.Bottom);
+end;
+
+function RectFIntersects(const R1, R2: TRectF): Boolean;
+begin
+  Result := not ((R1.Right < R2.Left) or (R1.Left > R2.Right) or
+    (R1.Bottom < R2.Top) or (R1.Top > R2.Bottom));
+end;
+
+function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
+var
+  U, TT, UU, UUU, TTT: single;
+begin
+  U := 1 - T;
+  TT := T * T;
+  UU := U * U;
+  UUU := UU * U;
+  TTT := TT * T;
+
+  Result.X := UUU * P0.X +
+    3 * UU * T * P1.X +
+    3 * U * TT * P2.X +
+    TTT * P3.X;
+
+  Result.Y := UUU * P0.Y +
+    3 * UU * T * P1.Y +
+    3 * U * TT * P2.Y +
+    TTT * P3.Y;
+end;
+
+function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
+var
+  N: TRectF;
+  Dx, Dy: Single;
+  T0, T1: Single;
+
+  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean;
+  var
+    Rr: Single;
+  begin
+    if Abs(P) < 1e-6 then
+      Exit(Q >= 0);
+
+    Rr := Q / P;
+    if P < 0 then
+    begin
+      if Rr > T1 then
+        Exit(False);
+      if Rr > T0 then
+        T0 := Rr;
+    end
+    else
+    begin
+      if Rr < T0 then
+        Exit(False);
+      if Rr < T1 then
+        T1 := Rr;
+    end;
+    Result := True;
+  end;
+
+begin
+  N := R;
+  N.NormalizeRect;
+
+  if PtInRectF(P1, N) or PtInRectF(P2, N) then
+    Exit(True);
+
+  Dx := P2.X - P1.X;
+  Dy := P2.Y - P1.Y;
+  T0 := 0.0;
+  T1 := 1.0;
+
+  Result :=
+    ClipTest(-Dx, P1.X - N.Left, T0, T1) and
+    ClipTest(Dx, N.Right - P1.X, T0, T1) and
+    ClipTest(-Dy, P1.Y - N.Top, T0, T1) and
+    ClipTest(Dy, N.Bottom - P1.Y, T0, T1);
 end;
 
 function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;

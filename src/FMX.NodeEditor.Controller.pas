@@ -31,7 +31,7 @@ type
     procedure Redo;
     procedure ClearUndoRedo;
 
-    procedure AddNode(ANode: TCustomNode);
+    procedure AddNode(ANode: TCustomNode; Silent: Boolean = False);
     procedure RemoveNode(ANode: TCustomNode);
     procedure RemoveLink(ALink: TNodeLink);
     procedure Clear;
@@ -88,12 +88,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TNodeEditorController.AddNode(ANode: TCustomNode);
+procedure TNodeEditorController.AddNode(ANode: TCustomNode; Silent: Boolean);
 begin
   if (FGraph = nil) or (ANode = nil) then
     Exit;
 
-  FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode));
+  FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
 end;
 
 procedure TNodeEditorController.RemoveNode(ANode: TCustomNode);
@@ -266,10 +266,8 @@ begin
     Exit;
   end;
 
-  for var i := 0 to FGraph.Registry.Count - 1 do
+  for var It in FGraph.Registry do
   begin
-    var It := FGraph.Registry.Item(i);
-
     if APin.OwnerNode.VisualKind = TNodeVisualKind.nvComment then
       Continue;
 

@@ -10,45 +10,41 @@ uses
   FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
-  FMX.Ani, FMX.ExtCtrls, FMX.TabControl;
+  FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
+  FMX.ComboEdit, WinUI3.Form;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
   TMathExprNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single); override;
-    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 200; AHeight: Integer = 200); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   { TMultiplyNode }
   TMultiplyNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single); override;
-    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 130); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   { TStringNode — нода со строковым значением }
   TStringNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single); override;
-    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 100); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   { TBranchNode — нода с exec-пинами }
   TBranchNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single); override;
-    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 140); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TPrintNode = class(TCustomNode)
   public
-    constructor Create(ATitle: string; AX, AY: Single); override;
-    constructor Create(ATitle: string; AX, AY: Single; AWidth: Integer = 180; AHeight: Integer = 70); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
@@ -57,46 +53,8 @@ type
     procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
   end;
 
-  TFormMain = class(TForm)
+  TFormMain = class(TWinUIForm)
     LayoutRender: TLayout;
-    LayoutHead: TLayout;
-    MenuBar1: TMenuBar;
-    MenuItemFile: TMenuItem;
-    MenuItemEdit: TMenuItem;
-    MenuItemView: TMenuItem;
-    MenuItemGraph: TMenuItem;
-    MenuItemFileNew: TMenuItem;
-    MenuItemFileLoad: TMenuItem;
-    MenuItemFileSave: TMenuItem;
-    MenuItemEditUndo: TMenuItem;
-    MenuItemEditRedo: TMenuItem;
-    MenuItemEditCopy: TMenuItem;
-    MenuItemEditPaste: TMenuItem;
-    MenuItemEditDup: TMenuItem;
-    MenuItemEditDelete: TMenuItem;
-    MenuItem1: TMenuItem;
-    MenuItem2: TMenuItem;
-    MenuItem5: TMenuItem;
-    MenuItemEditToFront: TMenuItem;
-    MenuItemEditToBack: TMenuItem;
-    MenuItem6: TMenuItem;
-    MenuItemViewFitSel: TMenuItem;
-    MenuItemViewFrameAll: TMenuItem;
-    MenuItemViewZoom1x1: TMenuItem;
-    MenuItemEditDeselect: TMenuItem;
-    MenuItem3: TMenuItem;
-    MenuItemAdd: TMenuItem;
-    MenuItemGraphValidate: TMenuItem;
-    MenuItemAddFloat: TMenuItem;
-    MenuItemAddAdd: TMenuItem;
-    MenuItemAddMul: TMenuItem;
-    MenuItemAddMath: TMenuItem;
-    MenuItemAddString: TMenuItem;
-    MenuItemAddBranch: TMenuItem;
-    MenuItemAddReroute: TMenuItem;
-    MenuItemAddComment: TMenuItem;
-    MenuItemAddDefault: TMenuItem;
-    Layout2: TLayout;
     LayoutLeft: TLayout;
     StyleBookWinUI3Light: TStyleBook;
     PanelInspector: TPanel;
@@ -121,9 +79,6 @@ type
     Panel1: TPanel;
     SaveDialogJSON: TSaveDialog;
     OpenDialogJSON: TOpenDialog;
-    MenuItemJSON: TMenuItem;
-    MenuItemJSONLoad: TMenuItem;
-    MenuItemJSONSave: TMenuItem;
     LayoutRight: TLayout;
     Panel2: TPanel;
     VertScrollBoxRight: TVertScrollBox;
@@ -150,14 +105,7 @@ type
     PathLabel4: TPathLabel;
     PathLabel5: TPathLabel;
     PathLabel6: TPathLabel;
-    PopupBox1: TPopupBox;
-    Panel5: TPanel;
-    PathLabel7: TPathLabel;
-    Button3: TButton;
-    Button4: TButton;
     Panel6: TPanel;
-    MenuItem4: TMenuItem;
-    MenuItemFileExit: TMenuItem;
     Layout11: TLayout;
     Layout12: TLayout;
     PathLabel8: TPathLabel;
@@ -196,25 +144,145 @@ type
     CheckBoxShowAxes: TCheckBox;
     CheckBoxShowSnapGuides: TCheckBox;
     CheckBoxLockedAll: TCheckBox;
-    Layout9: TLayout;
+    LayoutNodeData: TLayout;
     Layout20: TLayout;
     PathLabel11: TPathLabel;
     Label7: TLabel;
     Button8: TButton;
     Panel10: TPanel;
-    MemoNodeComment: TMemo;
-    TabControlPins: TTabControl;
-    TabItemValues: TTabItem;
     StringGridNodeValues: TStringGrid;
     StringColumnVName: TStringColumn;
     StringColumnVKind: TStringColumn;
     StringColumnVValue: TStringColumn;
-    TabItemPins: TTabItem;
-    StringGridNodePins: TStringGrid;
-    StringColumnPName: TStringColumn;
-    StringColumnPDir: TStringColumn;
-    StringColumnPType: TStringColumn;
-    StringColumnPKind: TStringColumn;
+    PopupMenuZoom: TPopupMenu;
+    MenuItem7: TMenuItem;
+    MenuItem8: TMenuItem;
+    MenuItem9: TMenuItem;
+    MenuItem10: TMenuItem;
+    MenuItem11: TMenuItem;
+    MenuItem12: TMenuItem;
+    MenuItem13: TMenuItem;
+    MenuItem14: TMenuItem;
+    MemoNodeComment: TMemo;
+    PathLabel12: TPathLabel;
+    PathLabel13: TPathLabel;
+    PathLabel14: TPathLabel;
+    PathLabel15: TPathLabel;
+    PathLabel16: TPathLabel;
+    PathLabel17: TPathLabel;
+    PathLabel18: TPathLabel;
+    PathLabel19: TPathLabel;
+    LayoutNodeLibrary: TLayout;
+    Panel14: TPanel;
+    Layout28: TLayout;
+    Layout23: TLayout;
+    Layout24: TLayout;
+    PathLabel21: TPathLabel;
+    Label17: TLabel;
+    ButtonHideNodeLibrary: TButton;
+    Panel16: TPanel;
+    Layout9: TLayout;
+    Label8: TLabel;
+    Label10: TLabel;
+    PathLabel20: TPathLabel;
+    ListBoxRegistry: TListBox;
+    ListBoxGroupHeader1: TListBoxGroupHeader;
+    ListBoxItem1: TListBoxItem;
+    ListBoxItem4: TListBoxItem;
+    ListBoxItem3: TListBoxItem;
+    ListBoxItem2: TListBoxItem;
+    ListBoxGroupHeader2: TListBoxGroupHeader;
+    ListBoxItem5: TListBoxItem;
+    ListBoxItem6: TListBoxItem;
+    ListBoxItem7: TListBoxItem;
+    ListBoxItem8: TListBoxItem;
+    ListBoxGroupHeader3: TListBoxGroupHeader;
+    ListBoxItem9: TListBoxItem;
+    ListBoxItem10: TListBoxItem;
+    ListBoxItem11: TListBoxItem;
+    ListBoxItem12: TListBoxItem;
+    LayoutHead: TLayout;
+    LayoutCaption: TLayout;
+    ButtonSettings: TButton;
+    ButtonWinMin: TButton;
+    ButtonWinMax: TButton;
+    ButtonWinClose: TButton;
+    LabelTitle: TLabel;
+    Layout42: TLayout;
+    ImageIcon: TImage;
+    MenuBar1: TMenuBar;
+    MenuItemFile: TMenuItem;
+    MenuItemFileNew: TMenuItem;
+    MenuItem1: TMenuItem;
+    MenuItemFileSave: TMenuItem;
+    MenuItemFileLoad: TMenuItem;
+    MenuItem4: TMenuItem;
+    MenuItemFileExit: TMenuItem;
+    MenuItemEdit: TMenuItem;
+    MenuItemEditUndo: TMenuItem;
+    MenuItemEditRedo: TMenuItem;
+    MenuItem2: TMenuItem;
+    MenuItemEditCopy: TMenuItem;
+    MenuItemEditPaste: TMenuItem;
+    MenuItemEditDelete: TMenuItem;
+    MenuItem5: TMenuItem;
+    MenuItemEditDup: TMenuItem;
+    MenuItem6: TMenuItem;
+    MenuItemEditToFront: TMenuItem;
+    MenuItemEditToBack: TMenuItem;
+    MenuItem3: TMenuItem;
+    MenuItemEditDeselect: TMenuItem;
+    MenuItemView: TMenuItem;
+    MenuItemViewFitSel: TMenuItem;
+    MenuItemViewFrameAll: TMenuItem;
+    MenuItemViewZoom1x1: TMenuItem;
+    MenuItemGraph: TMenuItem;
+    MenuItemGraphValidate: TMenuItem;
+    MenuItemAdd: TMenuItem;
+    MenuItemAddFloat: TMenuItem;
+    MenuItemAddAdd: TMenuItem;
+    MenuItemAddMul: TMenuItem;
+    MenuItemAddMath: TMenuItem;
+    MenuItemAddString: TMenuItem;
+    MenuItemAddBranch: TMenuItem;
+    MenuItemAddReroute: TMenuItem;
+    MenuItemAddComment: TMenuItem;
+    MenuItemAddDefault: TMenuItem;
+    MenuItemJSON: TMenuItem;
+    MenuItemJSONLoad: TMenuItem;
+    MenuItemJSONSave: TMenuItem;
+    Layout2: TLayout;
+    Panel5: TPanel;
+    PathLabel7: TPathLabel;
+    ButtonZoomIn2: TButton;
+    ButtonZoomOut2: TButton;
+    ButtonZoom: TButton;
+    PopupZoom: TPopup;
+    Panel11: TPanel;
+    ButtonZoomIn: TButton;
+    ButtonZoomToFit: TButton;
+    ButtonZoomOut: TButton;
+    ButtonZoomTo200: TButton;
+    ButtonZoomTo100: TButton;
+    ButtonZoomTo50: TButton;
+    Panel12: TPanel;
+    Panel13: TPanel;
+    SizeGrip1: TSizeGrip;
+    PopupTheme: TPopup;
+    Panel61: TPanel;
+    PopupBoxStyle: TPopupBox;
+    ComboColorBoxAccentColor: TComboColorBox;
+    ComboColorBoxThemeGradient1: TComboColorBox;
+    ComboColorBoxThemeGradient2: TComboColorBox;
+    Label122: TLabel;
+    Label123: TLabel;
+    Layout10: TLayout;
+    Button309: TButton;
+    Label124: TLabel;
+    CheckBoxCustomTitle: TCheckBox;
+    CheckBoxCustomAccent: TCheckBox;
+    MenuItemNodeLibrary: TMenuItem;
+    MenuItem16: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -253,6 +321,23 @@ type
     procedure Timer1Timer(Sender: TObject);
     procedure CheckBoxSnapToGridChange(Sender: TObject);
     procedure MenuItemFileExitClick(Sender: TObject);
+    procedure ButtonZoomClick(Sender: TObject);
+    procedure ButtonZoomInClick(Sender: TObject);
+    procedure ButtonZoomOutClick(Sender: TObject);
+    procedure ButtonZoomToFitClick(Sender: TObject);
+    procedure ButtonZoomTo50Click(Sender: TObject);
+    procedure ButtonZoomTo100Click(Sender: TObject);
+    procedure ButtonZoomTo200Click(Sender: TObject);
+    procedure ButtonSettingsClick(Sender: TObject);
+    procedure CheckBoxCustomAccentChange(Sender: TObject);
+    procedure CheckBoxCustomTitleChange(Sender: TObject);
+    procedure ComboColorBoxAccentColorChange(Sender: TObject);
+    procedure ComboColorBoxThemeGradient1Change(Sender: TObject);
+    procedure PopupBoxStyleChange(Sender: TObject);
+    procedure Button309Click(Sender: TObject);
+    procedure ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+    procedure ButtonHideNodeLibraryClick(Sender: TObject);
+    procedure MenuItemNodeLibraryClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -280,6 +365,12 @@ type
     procedure OnUpdatedStatus(Sender: TObject);
     procedure OnJsonNodeEditorChanged(Sender: TObject);
     procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
+    procedure UpdateNodeRegistry;
+    procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+  protected
+    OverTheme: integer;
+    OverAccentColor: TAlphaColor;
+    procedure DoOnSettingChange; override;
   public
     { Public declarations }
   end;
@@ -290,7 +381,8 @@ var
 implementation
 
 uses
-  System.Math, System.JSON, FMX.NodeEditor.Node.Command;
+  System.Math, System.JSON, FMX.NodeEditor.Node.Command, System.Messaging,
+  WinUI3.Style;
 
 {$R *.fmx}
 
@@ -298,13 +390,70 @@ uses
 
 procedure TFormMain.FormCreate(Sender: TObject);
 begin
-  StringGridNodePins.AniCalculations.Animation := True;
+  OverAccentColor := SystemAccentColor;
+  BeginUpdate;
+  ComboColorBoxAccentColor.Color := OverAccentColor;
+  EndUpdate;
+  OverTheme := 0;
+  SetSystemWindowControls(ButtonWinClose, ButtonWinMax, ButtonWinMin);
+  CaptionControls := [LayoutCaption, LayoutHead, MenuBar1];
+  OffsetControls := [LayoutHead];
+  TitleControls := [LabelTitle];
+  IconControl := ImageIcon;
+  HideTitleBar := True;
+  //
   StringGridNodeValues.AniCalculations.Animation := True;
+  //
+  ClearAllSections;
 
   BuildEditorArea;
   RegisterCustomNodes;
   InitDemoGraph;
+  UpdateNodeRegistry;
+
   UpdateStatus;
+end;
+
+procedure TFormMain.FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+begin
+  Operation := TDragOperation.None;
+end;
+
+procedure TFormMain.UpdateNodeRegistry;
+begin
+  ListBoxRegistry.BeginUpdate;
+  try
+    ListBoxRegistry.Clear;
+    ListBoxRegistry.HitTest := False;
+    FEditor.Graph.Registry.SortByCategory;
+    var CurCategory := '';
+    for var Item in FEditor.Graph.Registry do
+    begin
+      if CurCategory <> Item.Category then
+      begin
+        var Header := TListBoxGroupHeader.Create(ListBoxRegistry);
+        Header.Text := Item.Category;
+        Header.HitTest := True;
+        Header.OnDragOver := FOnItemOver;
+        ListBoxRegistry.AddObject(Header);
+        CurCategory := Item.Category;
+      end;
+      var ListItem := TListBoxItem.Create(ListBoxRegistry);
+      ListItem.HitTest := True;
+      ListItem.DragMode := TDragMode.dmAutomatic;
+      ListItem.StyleLookup := 'listboxitemstyle_node';
+      ListItem.OnDragOver := FOnItemOver;
+      ListItem.Text := Item.Caption;
+      ListItem.TagString := Item.NodeType;
+      ListItem.StylesData['background.Fill.Color'] := ChangeAlpha(Item.Color, $64);
+      ListItem.StylesData['background.Stroke.Color'] := Item.Color;
+      ListItem.StylesData['icon_bg.Fill.Color'] := Item.Color;
+      ListItem.StylesData['path.Data.Data'] := Item.IconPath;
+      ListBoxRegistry.AddObject(ListItem);
+    end;
+  finally
+    ListBoxRegistry.EndUpdate;
+  end;
 end;
 
 procedure TFormMain.FormResize(Sender: TObject);
@@ -319,6 +468,19 @@ begin
     FDidInitialFrame := True;
     FEditor.FrameAll;
   end;
+end;
+
+procedure TFormMain.Button309Click(Sender: TObject);
+begin
+  Inc(OverTheme);
+  if OverTheme > 2 then
+    OverTheme := 1;
+  DoOnSettingChange;
+end;
+
+procedure TFormMain.ButtonHideNodeLibraryClick(Sender: TObject);
+begin
+  LayoutNodeLibrary.Visible := False;
 end;
 
 procedure TFormMain.ButtonNodeApplyClick(Sender: TObject);
@@ -398,6 +560,56 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.ButtonSettingsClick(Sender: TObject);
+begin
+  PopupTheme.PlacementTarget := ButtonSettings;
+  PopupTheme.Popup;
+end;
+
+procedure TFormMain.ButtonZoomClick(Sender: TObject);
+begin
+  PopupZoom.PlacementTarget := ButtonZoom;
+  PopupZoom.Placement := TPlacement.Bottom;
+  PopupZoom.HorizontalOffset := -PopupZoom.Width + ButtonZoom.Width;
+  PopupZoom.Popup;
+end;
+
+procedure TFormMain.ButtonZoomInClick(Sender: TObject);
+begin
+  FEditor.SetZoom(FEditor.Zoom + 0.25, FEditor.LocalRect.CenterPoint.Round);
+  PopupZoom.IsOpen := False;
+end;
+
+procedure TFormMain.ButtonZoomOutClick(Sender: TObject);
+begin
+  FEditor.SetZoom(FEditor.Zoom - 0.25, FEditor.LocalRect.CenterPoint.Round);
+  PopupZoom.IsOpen := False;
+end;
+
+procedure TFormMain.ButtonZoomTo100Click(Sender: TObject);
+begin
+  FEditor.SetZoom(1, FEditor.LocalRect.CenterPoint.Round);
+  PopupZoom.IsOpen := False;
+end;
+
+procedure TFormMain.ButtonZoomTo200Click(Sender: TObject);
+begin
+  FEditor.SetZoom(2, FEditor.LocalRect.CenterPoint.Round);
+  PopupZoom.IsOpen := False;
+end;
+
+procedure TFormMain.ButtonZoomTo50Click(Sender: TObject);
+begin
+  FEditor.SetZoom(0.5, FEditor.LocalRect.CenterPoint.Round);
+  PopupZoom.IsOpen := False;
+end;
+
+procedure TFormMain.ButtonZoomToFitClick(Sender: TObject);
+begin
+  FEditor.FrameAll;
+  PopupZoom.IsOpen := False;
+end;
+
 procedure TFormMain.FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
 begin
   //
@@ -429,29 +641,48 @@ end;
 procedure TFormMain.RegisterCustomNodes;
 begin
   FEditor.Graph.Registry.RegisterNodeEx(
-    'multiply_node', 'Multiply', 'Math',
-    'Multiplies two float values.', 'multiply,mul,math,float',
-    TMultiplyNode, $FF00A0FF);
+    'multiply_node',
+    'Multiply',
+    'Math',
+    'Multiplies two float values.',
+    'multiply,mul,math,float',
+    'm13.4 12l6.3-6.3c.4-.4.4-1 0-1.4s-1-.4-1.4 0L12 10.6L5.7 4.3c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l6.3 6.3l-6.3 6.3c-.2.2-.3.4-.3.7c0 .6.4 1 1 1c.3 0 .5-.1.7-.3l6.3-6.3l6.3 6.3c.2.2.4.3.7.3s.5-.1.7-.3c.4-.4.4-1 0-1.4z',
+    TMultiplyNode, $FF4080FF);
 
   FEditor.Graph.Registry.RegisterNodeEx(
-    'math_expr', 'Math Expression', 'Math',
+    'math_expr',
+    'Math Expression',
+    'Math',
     'Evaluates a math expression A+B*C with exec pins and multiple value types.',
     'math,expr,expression,exec',
+    'M110 72a6 6 0 0 1-6 6H40a6 6 0 0 1 0-12h64a6 6 0 0 1 6 6m-6 106H78v-26a6 6 0 0 0-12 0v26H40a6 6 0 0 0 0 12h26v26a6 6 0 0 0 12 0v-26h26a6 6 0 0 0 0-12m48-4h64a6 6 0 0 0 0-12h-64a6 6 0 0 0 0 12m64 20h-64a6 6 0 0 0 0 12h64a6 6 0 0 0 0-12m-60.24-93.76a6 6 0 0 0 8.48 0L184 80.49l19.76 19.75a6 6 0 0 0 8.48-8.48L192.49 72l19.75-19.76a6 6 0 0 0-8.48-8.48L184 63.51l-19.76-19.75a6 6 0 0 0-8.48 8.48L175.51 72l-19.75 19.76a6 6 0 0 0 0 8.48',
     TMathExprNode, $FF4080FF);
 
   FEditor.Graph.Registry.RegisterNodeEx(
-    'string_node', 'String Value', 'Values',
-    'Constant string value.', 'string,text,value',
+    'string_node',
+    'String Value',
+    'Values',
+    'Constant string value.',
+    'string,text,value',
+    'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm9.5 6h-1A1.5 1.5 0 0 1 10 9.5A1.5 1.5 0 0 1 11.5 8h1A1.5 1.5 0 0 1 14 9.5h2A3.5 3.5 0 0 0 12.5 6h-1A3.5 3.5 0 0 0 8 9.5a3.5 3.5 0 0 0 3.5 3.5h1a1.5 1.5 0 0 1 1.5 1.5a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5H8a3.5 3.5 0 0 0 3.5 3.5h1a3.5 3.5 0 0 0 3.5-3.5a3.5 3.5 0 0 0-3.5-3.5',
     TStringNode, $FF00C080);
 
   FEditor.Graph.Registry.RegisterNodeEx(
-    'branch_node', 'Branch', 'Flow',
-    'Conditional exec branch (if/else).', 'branch,if,else,exec,flow',
+    'branch_node',
+    'Branch',
+    'Flow',
+    'Conditional exec branch (if/else).',
+    'branch,if,else,exec,flow',
+    'M22 12h-5M2 9h5m-5 6h5M9 5c6 0 8 3.5 8 7s-2 7-8 7H7V5z',
     TBranchNode, $FFC04000);
 
   FEditor.Graph.Registry.RegisterNodeEx(
-    'print_node', 'Print', 'Common',
-    'Print input text', 'common,string,print,text',
+    'print_node',
+    'Print',
+    'Common',
+    'Print input text',
+    'common,string,print,text',
+    'M16 8V5H8v3H6V3h12v5zM4 10h16zm14 2.5q.425 0 .713-.288T19 11.5t-.288-.712T18 10.5t-.712.288T17 11.5t.288.713t.712.287M16 19v-4H8v4zm2 2H6v-4H2v-6q0-1.275.875-2.137T5 8h14q1.275 0 2.138.863T22 11v6h-4zm2-6v-4q0-.425-.288-.712T19 10H5q-.425 0-.712.288T4 11v4h2v-2h12v2z',
     TPrintNode, $FF843482);
 end;
 
@@ -626,6 +857,11 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+begin
+  Operation := TDragOperation.None;
+end;
+
 procedure TFormMain.MenuItemAddAddClick(Sender: TObject);
 begin
   AddNodeAtCenter('add');
@@ -793,6 +1029,11 @@ begin
     FJsonNodeEditor.SaveToFile(SaveDialogJSON.FileName);
 end;
 
+procedure TFormMain.MenuItemNodeLibraryClick(Sender: TObject);
+begin
+  LayoutNodeLibrary.Visible := True;
+end;
+
 procedure TFormMain.MenuItemViewFitSelClick(Sender: TObject);
 begin
   if FEditor.SelectedNodeCount > 0 then
@@ -811,7 +1052,7 @@ end;
 procedure TFormMain.MenuItemViewZoom1x1Click(Sender: TObject);
 begin
   // Сбрасываем zoom к 1:1, центрируем на центр экрана
-  FEditor.FrameAll;
+  FEditor.ResetView;
   UpdateStatus;
 end;
 
@@ -822,6 +1063,18 @@ begin
   // грубое приближение без доступа к ScreenToWorld — достаточно для демки
   Result.X := (Result.X - 0) / FEditor.Zoom;
   Result.Y := (Result.Y - 0) / FEditor.Zoom;
+end;
+
+procedure TFormMain.CheckBoxCustomAccentChange(Sender: TObject);
+begin
+  if FUpdating > 0 then
+    Exit;
+  DoOnSettingChange;
+end;
+
+procedure TFormMain.CheckBoxCustomTitleChange(Sender: TObject);
+begin
+  HideTitleBar := CheckBoxCustomTitle.IsChecked;
 end;
 
 procedure TFormMain.CheckBoxSnapToGridChange(Sender: TObject);
@@ -879,18 +1132,35 @@ begin
     ComboColorBoxNodeHeadColor.Color := TAlphaColors.Null;
     CheckBoxNodeCollapsed.IsChecked := False;
     MemoNodeComment.Text := '';
-    StringGridNodePins.RowCount := 0;
     StringGridNodeValues.RowCount := 0;
+    StringGridNodeValues.Height := StringGridNodeValues.RowCount * StringGridNodeValues.RowHeight + (32 + 8);
+    LayoutNodeData.Height := StringGridNodeValues.Height + 40 + 10;
   finally
     FNodeUpdating := False;
   end;
+end;
+
+procedure TFormMain.ComboColorBoxAccentColorChange(Sender: TObject);
+begin
+  if FUpdating > 0 then
+    Exit;
+  BeginUpdate;
+  CheckBoxCustomAccent.IsChecked := True;
+  EndUpdate;
+  DoOnSettingChange;
+end;
+
+procedure TFormMain.ComboColorBoxThemeGradient1Change(Sender: TObject);
+begin
+  Fill.Kind := TBrushKind.Gradient;
+  Fill.Gradient.Color := ComboColorBoxThemeGradient1.Color;
+  Fill.Gradient.Color1 := ComboColorBoxThemeGradient2.Color;
 end;
 
 procedure TFormMain.RefreshFromSelection;
 var
   N: TCustomNode;
   i: integer;
-  P: TNodePin;
   V: TNodeValue;
   VStr: string;
 begin
@@ -928,33 +1198,6 @@ begin
     // --- Comment ---
     MemoNodeComment.Text := N.CommentText;
 
-    // --- Pins ---
-    StringGridNodePins.RowCount := N.InputCount + N.OutputCount;
-    for i := 0 to N.InputCount - 1 do
-    begin
-      P := N.GetInput(i);
-      if P = nil then
-        Continue;
-      StringGridNodePins.Cells[0, i] := P.EffectiveDisplayName;
-      StringGridNodePins.Cells[1, i] := 'In';
-      StringGridNodePins.Cells[2, i] :=
-        if P.PinType <> nil then P.PinType.TypeId else P.DataType;
-      StringGridNodePins.Cells[3, i] :=
-        if P.Kind = pkExec then 'exec' else 'data';
-    end;
-    for i := 0 to N.OutputCount - 1 do
-    begin
-      P := N.GetOutput(i);
-      if P = nil then
-        Continue;
-      StringGridNodePins.Cells[0, N.InputCount + i] := P.EffectiveDisplayName;
-      StringGridNodePins.Cells[1, N.InputCount + i] := 'Out';
-      StringGridNodePins.Cells[2, N.InputCount + i] :=
-        if P.PinType <> nil then P.PinType.TypeId else P.DataType;
-      StringGridNodePins.Cells[3, N.InputCount + i] :=
-        if P.Kind = pkExec then 'exec' else 'data';
-    end;
-
     // --- Values ---
     if N.ValueCount > 0 then
     begin
@@ -988,6 +1231,8 @@ begin
     else
       StringGridNodeValues.RowCount := 0;
 
+    StringGridNodeValues.Height := StringGridNodeValues.RowCount * StringGridNodeValues.RowHeight + (32 + 8);
+    LayoutNodeData.Height := StringGridNodeValues.Height + 40 + 10;
     PanelInspector.Enabled := True;
     ButtonNodeApply.Enabled := True;
     ButtonNodeRevert.Enabled := True;
@@ -1014,6 +1259,62 @@ begin
   inherited;
 end;
 
+procedure TFormMain.DoOnSettingChange;
+begin
+  if CheckBoxCustomAccent.IsChecked then
+    OverAccentColor := ComboColorBoxAccentColor.Color
+  else
+    OverAccentColor := SystemAccentColor;
+
+  // Override theme color
+  case OverTheme of
+    0:
+      ThemeKind := TSystemThemeKind.Unspecified;
+    1:
+      ThemeKind := TSystemThemeKind.Light;
+    2:
+      ThemeKind := TSystemThemeKind.Dark;
+  end;
+
+  // Set stylebook and color for theme
+  if IsDark then
+  begin
+    // Set accent color for stylebook
+    ChangeStyleBookColor(StyleBookWinUI3, OverAccentColor);
+    StyleBook := StyleBookWinUI3;
+  end
+  else
+  begin
+    // Set accent color for stylebook
+    ChangeStyleBookColor(StyleBookWinUI3Light, OverAccentColor);
+    StyleBook := StyleBookWinUI3Light;
+  end;
+
+  inherited;
+  //Fill.Kind := TBrushKind.None;
+  TMessageManager.DefaultManager.SendMessage(Self, TStyleChangedMessage.Create(StyleBook, Self), True);
+  TMessageManager.DefaultManager.SendMessage(Self, TInternalSettingChangedMessage.Create(StyleBook, Self), True);
+end;
+
+procedure TFormMain.PopupBoxStyleChange(Sender: TObject);
+begin
+  // Set window type
+  case PopupBoxStyle.ItemIndex of
+    0: // mica
+      SystemBackdropType := TWindowBackdropType.Mica;
+    1: // tabbed
+      SystemBackdropType := TWindowBackdropType.Tabbed;
+    2: // acrilyc
+      SystemBackdropType := TWindowBackdropType.Acrylic;
+    3: // none
+      begin
+        SystemBackdropType := TWindowBackdropType.Disable;
+        Fill.Kind := TBrushKind.None;
+      end;
+  end;
+  UpdateSystemBackdropType;
+end;
+
 procedure TFormMain.UpdateStatus;
 var
   SelStr: string;
@@ -1032,6 +1333,7 @@ begin
     'Nodes: ' + IntToStr(FEditor.Graph.Nodes.Count) +
     '  Links: ' + IntToStr(FEditor.Graph.Links.Count);
   LabelStat3.Text := Format('Zoom: %.0f%%', [FEditor.Zoom * 100]);
+  ButtonZoom.Text := Format('%.0f%%', [FEditor.Zoom * 100]);
   LabelStat4.Text :=
     'Snap: ' + (if FEditor.SnapToGrid then 'ON' else 'OFF') +
     '  Grid: ' + IntToStr(FEditor.GridSize);
@@ -1064,13 +1366,14 @@ end;
 
 { TMathExprNode }
 
-constructor TMathExprNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+constructor TMathExprNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
-
+  inherited;
   NodeType := 'math_expr';
   HeaderColor := $FF4080FF;
   BodyColor := $FFF0F8FF;
+  IconPath := 'M110 72a6 6 0 0 1-6 6H40a6 6 0 0 1 0-12h64a6 6 0 0 1 6 6m-6 106H78v-26a6 6 0 0 0-12 0v26H40a6 6 0 0 0 0 12h26v26a6 6 0 0 0 12 0v-26h26a6 6 0 0 0 0-12m48-4h64a6 6 0 0 0 0-12h-64a6 6 0 0 0 0 12m64 20h-64a6 6 0 0 0 0 12h64a6 6 0 0 0 0-12m-60.24-93.76a6 6 0 0 0 8.48 0L184 80.49l19.76 19.75a6 6 0 0 0 8.48-8.48L192.49 72l19.75-19.76a6 6 0 0 0-8.48-8.48L184 63.51l-19.76-19.75a6 6 0 0 0-8.48 8.48L175.51 72l-19.75 19.76a6 6 0 0 0 0 8.48';
+
   // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
   var V := AddValue('expression', nvkString);
   V.StringValue := 'A + B * C';
@@ -1086,11 +1389,8 @@ begin
 
   V := AddValue('meta', nvkJSON);
   V.JSONValue := '{"mode":"fast"}';
-end;
-
-constructor TMathExprNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 200, 170);
+  Width := 200;
+  Height := 170;
 end;
 
 procedure TMathExprNode.SetupPins;
@@ -1113,16 +1413,14 @@ end;
 
 { TMultiplyNode }
 
-constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+constructor TMultiplyNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'multiply_node';
-  HeaderColor := $FF00A0FF;
-end;
-
-constructor TMultiplyNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 130);
+  HeaderColor := $FF4080FF;
+  IconPath := 'm14 9l3 5.063M4 9l6 6m-6 0l6-6m10 0l-4.8 9';
+  Width := 180;
+  Height := 130;
 end;
 
 procedure TMultiplyNode.SetupPins;
@@ -1137,18 +1435,16 @@ end;
 
 { TStringNode }
 
-constructor TStringNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+constructor TStringNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'string_node';
   HeaderColor := $FF00C080;
+  IconPath := 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm9.5 6h-1A1.5 1.5 0 0 1 10 9.5A1.5 1.5 0 0 1 11.5 8h1A1.5 1.5 0 0 1 14 9.5h2A3.5 3.5 0 0 0 12.5 6h-1A3.5 3.5 0 0 0 8 9.5a3.5 3.5 0 0 0 3.5 3.5h1a1.5 1.5 0 0 1 1.5 1.5a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5H8a3.5 3.5 0 0 0 3.5 3.5h1a3.5 3.5 0 0 0 3.5-3.5a3.5 3.5 0 0 0-3.5-3.5';
   var V := AddValue('text', nvkString);
   V.StringValue := 'Hello, Node!';
-end;
-
-constructor TStringNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 100);
+  Width := 180;
+  Height := 70;
 end;
 
 procedure TStringNode.SetupPins;
@@ -1159,16 +1455,14 @@ end;
 
 { TBranchNode }
 
-constructor TBranchNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
+constructor TBranchNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'branch_node';
   HeaderColor := $FFC04000;
-end;
-
-constructor TBranchNode.Create(ATitle: string; AX, AY: Single);
-begin
-  Create(ATitle, AX, AY, 180, 140);
+  IconPath := 'M22 12h-5M2 9h5m-5 6h5M9 5c6 0 8 3.5 8 7s-2 7-8 7H7V5z';
+  Width := 180;
+  Height := 140;
 end;
 
 procedure TBranchNode.SetupPins;
@@ -1183,15 +1477,13 @@ end;
 
 { TPrintNode }
 
-constructor TPrintNode.Create(ATitle: string; AX, AY: Single);
+constructor TPrintNode.Create;
 begin
-  Create(ATitle, AX, AY, 180, 70);
-end;
-
-constructor TPrintNode.Create(ATitle: string; AX, AY: Single; AWidth, AHeight: Integer);
-begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'print_node';
+  IconPath := 'M16 8V5H8v3H6V3h12v5zM4 10h16zm14 2.5q.425 0 .713-.288T19 11.5t-.288-.712T18 10.5t-.712.288T17 11.5t.288.713t.712.287M16 19v-4H8v4zm2 2H6v-4H2v-6q0-1.275.875-2.137T5 8h14q1.275 0 2.138.863T22 11v6h-4zm2-6v-4q0-.425-.288-.712T19 10H5q-.425 0-.712.288T4 11v4h2v-2h12v2z';
+  Width := 180;
+  Height := 70;
 end;
 
 procedure TPrintNode.SetupPins;

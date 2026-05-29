@@ -23,7 +23,7 @@ type
   public
     JsonName: string;
 
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 220; AHeight: integer = 120); override;
+    constructor Create; override;
 
     procedure SetupPins; override;
 
@@ -39,37 +39,37 @@ type
 
   TJsonObjectNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 240; AHeight: integer = 120); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TJsonArrayNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 240; AHeight: integer = 120); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TJsonStringNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 220; AHeight: integer = 95); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TJsonNumberNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 220; AHeight: integer = 95); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TJsonBooleanNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 220; AHeight: integer = 95); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
   TJsonNullNode = class(TJsonNode)
   public
-    constructor Create(ATitle: string; AX, AY: single; AWidth: integer = 200; AHeight: integer = 80); override;
+    constructor Create; override;
     procedure SetupPins; override;
   end;
 
@@ -112,7 +112,7 @@ type
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils, System.Math;
 
 function JsonKindToStr(AKind: TJSONNodeKind): string;
 begin
@@ -173,14 +173,16 @@ end;
 
 { TJsonNode }
 
-constructor TJsonNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.base';
   JsonName := '';
   FJsonKind := jnkNull;
   HeaderColor := $FFD8D8D8;
   BodyColor := $FFFFFFFF;
+  Width := 220;
+  Height := 120;
 end;
 
 procedure TJsonNode.SetupPins;
@@ -192,7 +194,7 @@ function TJsonNode.AddJsonInput: TNodePin;
 begin
   Result := AddInputPin('In', 'json', pkData);
   Result.DisplayName := 'In';
-  Result.PinType.Color := $FFFFAA44;
+  //Result.PinType.Color := $FFFFAA44;
 end;
 
 function TJsonNode.GetMainOutput: TNodePin;
@@ -202,14 +204,14 @@ begin
   else
     Result := AddOutputPin('Value', 'json', pkData);
 
-  Result.PinType.Color := $FFFFAA44;
+  //Result.PinType.Color := $FFFFAA44;
 end;
 
 function TJsonNode.AddJsonChildOutput(const AName: string): TNodePin;
 begin
   Result := AddOutputPin(AName, 'json', pkData);
   Result.DisplayName := AName;
-  Result.PinType.Color := $FFFFAA44;
+  //Result.PinType.Color := $FFFFAA44;
 end;
 
 procedure TJsonNode.SaveToJSON(AObj: TJSONObject);
@@ -228,46 +230,52 @@ end;
 
 { TJsonObjectNode }
 
-constructor TJsonObjectNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonObjectNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.object';
   FJsonKind := jnkObject;
-  HeaderColor := $FFFFD28A;
+  HeaderColor := $FF8C5700;
+  Width := 240;
+  Height := 120;
 end;
 
 procedure TJsonObjectNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Object', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('Object', 'json', pkData);
 end;
 
 { TJsonArrayNode }
 
-constructor TJsonArrayNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonArrayNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.array';
   FJsonKind := jnkArray;
-  HeaderColor := $FFB8D7FF;
+  HeaderColor := $FF830D0D;
+  Width := 240;
+  Height := 120;
 end;
 
 procedure TJsonArrayNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Array', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('Array', 'json', pkData);
 end;
 
 { TJsonStringNode }
 
-constructor TJsonStringNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonStringNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.string';
   FJsonKind := jnkString;
-  HeaderColor := $FFB8FFB8;
+  HeaderColor := $FF0046AE;
+  Width := 220;
+  Height := 95;
 end;
 
 procedure TJsonStringNode.SetupPins;
@@ -276,7 +284,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('String', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('String', 'json', pkData);
 
   V := AddValue('value', nvkString);
   V.StringValue := '';
@@ -284,12 +292,14 @@ end;
 
 { TJsonNumberNode }
 
-constructor TJsonNumberNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonNumberNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.number';
   FJsonKind := jnkNumber;
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF9D0068;
+  Width := 220;
+  Height := 95;
 end;
 
 procedure TJsonNumberNode.SetupPins;
@@ -298,7 +308,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Number', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('Number', 'json', pkData);
 
   V := AddValue('value', nvkFloat);
   V.FloatValue := 0;
@@ -306,12 +316,14 @@ end;
 
 { TJsonBooleanNode }
 
-constructor TJsonBooleanNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonBooleanNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.boolean';
   FJsonKind := jnkBoolean;
-  HeaderColor := $FFFFFFB8;
+  HeaderColor := $FFA63C00;
+  Width := 220;
+  Height := 95;
 end;
 
 procedure TJsonBooleanNode.SetupPins;
@@ -320,7 +332,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Boolean', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('Boolean', 'json', pkData);
 
   V := AddValue('value', nvkBoolean);
   V.BooleanValue := False;
@@ -328,19 +340,21 @@ end;
 
 { TJsonNullNode }
 
-constructor TJsonNullNode.Create(ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
+constructor TJsonNullNode.Create;
 begin
-  inherited Create(ATitle, AX, AY, AWidth, AHeight);
+  inherited;
   NodeType := 'json.null';
   FJsonKind := jnkNull;
-  HeaderColor := $FFCCCCCC;
+  HeaderColor := $FF4F4F4F;
+  Width := 200;
+  Height := 80;
 end;
 
 procedure TJsonNullNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Null', 'json', pkData).PinType.Color := $FFFFAA44;
+  AddOutputPin('Null', 'json', pkData);
 end;
 
 { TJsonNodeEditor }
@@ -358,8 +372,9 @@ begin
     'JSON',
     'JSON object node.',
     'json,object,dictionary,map',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonObjectNode,
-    $FFFFD28A
+    $FF8C5700
   );
 
   FNodeEditor.Graph.Registry.RegisterNodeEx(
@@ -368,8 +383,9 @@ begin
     'JSON',
     'JSON array node.',
     'json,array,list',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonArrayNode,
-    $FFB8D7FF
+    $FF830D0D
   );
 
   FNodeEditor.Graph.Registry.RegisterNodeEx(
@@ -378,8 +394,9 @@ begin
     'JSON',
     'JSON string value.',
     'json,string,text',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonStringNode,
-    $FFB8FFB8
+    $FF0046AE
   );
 
   FNodeEditor.Graph.Registry.RegisterNodeEx(
@@ -388,8 +405,9 @@ begin
     'JSON',
     'JSON number value.',
     'json,number,float,int',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonNumberNode,
-    $FFD0A0FF
+    $FF9D0068
   );
 
   FNodeEditor.Graph.Registry.RegisterNodeEx(
@@ -398,8 +416,9 @@ begin
     'JSON',
     'JSON boolean value.',
     'json,bool,boolean,true,false',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonBooleanNode,
-    $FFFFFFB8
+    $FFA63C00
   );
 
   FNodeEditor.Graph.Registry.RegisterNodeEx(
@@ -408,8 +427,9 @@ begin
     'JSON',
     'JSON null value.',
     'json,null',
+    'M5 3h2v2H5v5a2 2 0 0 1-2 2a2 2 0 0 1 2 2v5h2v2H5c-1.07-.27-2-.9-2-2v-4a2 2 0 0 0-2-2H0v-2h1a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2m14 0a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1v2h-1a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2v-2h2v-5a2 2 0 0 1 2-2a2 2 0 0 1-2-2V5h-2V3zm-7 12a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m-4 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1m8 0a1 1 0 0 1 1 1a1 1 0 0 1-1 1a1 1 0 0 1-1-1a1 1 0 0 1 1-1',
     TJsonNullNode,
-    $FFCCCCCC
+    $FF4F4F4F
   );
 end;
 
@@ -455,28 +475,31 @@ begin
   if AName <> '' then
     TitleText := AName
   else if ADepth = 0 then
-    TitleText := 'root'
+    TitleText := 'ROOT'
   else
-    TitleText := '[' + IntToStr(AIndex) + ']';
+    TitleText := '[' + AIndex.ToString + ']';
 
   Result := TJsonNode(FNodeEditor.Graph.Registry.CreateNode(NodeType, AX, AY));
   Result.JsonName := AName;
 
   case Result.JsonKind of
     jnkObject:
-      Result.Title := TitleText + ' { }';
+      Result.Title := TitleText + ': Object';
     jnkArray:
-      Result.Title := TitleText + ' [ ]';
+    begin
+      Result.Title := TitleText + ': Array';
+      Result.Collapsed := True;
+    end;
     jnkString:
       begin
-        Result.Title := TitleText + ' : string';
+        Result.Title := TitleText + ': String';
         V := Result.FindValue('value');
         if V <> nil then
           V.StringValue := TJSONString(AData).Value;
       end;
     jnkNumber:
       begin
-        Result.Title := TitleText + ' : number';
+        Result.Title := TitleText + ': Number';
         V := Result.FindValue('value');
         if V <> nil then
         try
@@ -487,16 +510,16 @@ begin
       end;
     jnkBoolean:
       begin
-        Result.Title := TitleText + ' : boolean';
+        Result.Title := TitleText + ': Boolean';
         V := Result.FindValue('value');
         if V <> nil then
           V.BooleanValue := TJSONBool(AData).AsBoolean;
       end;
     jnkNull:
-      Result.Title := TitleText + ' : null';
+      Result.Title := TitleText + ': Null';
   end;
 
-  FNodeEditor.AddNode(Result);
+  FNodeEditor.Controller.AddNode(Result, True);
 end;
 
 procedure TJsonNodeEditor.BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
@@ -523,7 +546,7 @@ begin
       FieldName := Obj.Pairs[I].JsonString.Value;
       ChildData := Obj.Pairs[I].JsonValue;
 
-      X := 80 + ADepth * 280;
+      X := 80 + ADepth * 350;
       Y := 60 + ARow * 140;
       Inc(ARow);
 
@@ -543,17 +566,17 @@ begin
 
     for I := 0 to Arr.Count - 1 do
     begin
-      FieldName := IntToStr(I);
+      FieldName := 'Item ' + I.ToString;
       ChildData := Arr.Items[I];
 
-      X := 80 + ADepth * 280;
+      X := 80 + ADepth * 350;
       Y := 60 + ARow * 140;
       Inc(ARow);
 
       ChildNode := CreateNodeFromJSONData(FieldName, ChildData, X, Y, ADepth + 1, I);
 
       ParentOut := AParent.AddJsonChildOutput(FieldName);
-      ParentOut.DisplayName := '[' + IntToStr(I) + ']';
+      ParentOut.DisplayName := '[Item ' + I.ToString + ']';
 
       ChildIn := ChildNode.GetInput(0);
 
@@ -562,6 +585,7 @@ begin
       BuildGraphFromJSONData(ChildNode, ChildData, ADepth + 1, ARow);
     end;
   end;
+  AParent.Height := AParent.HeaderHeight + Max(AParent.InputCount, AParent.OutputCount) * 40;
 end;
 
 procedure TJsonNodeEditor.LoadJSONText(const AText: string);
@@ -580,9 +604,13 @@ begin
     Row := 0;
 
     RootNode := CreateNodeFromJSONData('root', Data, 40, 60, 0, 0);
-    BuildGraphFromJSONData(RootNode, Data, 1, Row);
-
-    FNodeEditor.FrameAll;
+    FNodeEditor.Graph.BeginUpdate;
+    try
+      BuildGraphFromJSONData(RootNode, Data, 1, Row);
+    finally
+      FNodeEditor.Graph.EndUpdate;
+    end;
+    FNodeEditor.ResetView;
     DoChanged;
   finally
     Data.Free;

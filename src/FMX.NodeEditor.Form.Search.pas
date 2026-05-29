@@ -53,11 +53,8 @@ begin
   try
     ListBoxItems.Items.Clear;
 
-    for var i := 0 to FRegistry.Count - 1 do
-    begin
-      var It := FRegistry.Item(i);
-      ListBoxItems.Items.AddObject(It.Caption + ' [' + It.NodeType + ']', It);
-    end;
+    for var Item in FRegistry do
+      ListBoxItems.Items.AddObject(Item.Caption + ' [' + Item.NodeType + ']', Item);
 
     if ListBoxItems.Items.Count > 0 then
       ListBoxItems.ItemIndex := 0;

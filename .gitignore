@@ -13,3 +13,4 @@ fmx/Linux64/*
 *.dsk
 /fmx/Android64/*
 *.delphilsp.json
+*.rsm
