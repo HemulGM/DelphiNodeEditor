@@ -284,6 +284,11 @@ type
     MenuItemNodeLibrary: TMenuItem;
     MenuItem16: TMenuItem;
     SearchBox1: TSearchBox;
+    Layout1: TLayout;
+    Layout21: TLayout;
+    PathLabel22: TPathLabel;
+    Label12: TLabel;
+    Label15: TLabel;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
