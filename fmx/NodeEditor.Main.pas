@@ -73,10 +73,7 @@ type
     LabelStat3: TLabel;
     LabelStat2: TLabel;
     LabelStat5: TLabel;
-    Layout14: TLayout;
-    TrackBarZoom: TTrackBar;
     LayoutClient: TLayout;
-    Panel1: TPanel;
     SaveDialogJSON: TSaveDialog;
     OpenDialogJSON: TOpenDialog;
     LayoutRight: TLayout;
@@ -105,7 +102,7 @@ type
     PathLabel4: TPathLabel;
     PathLabel5: TPathLabel;
     PathLabel6: TPathLabel;
-    Panel6: TPanel;
+    PanelEditor: TPanel;
     Layout11: TLayout;
     Layout12: TLayout;
     PathLabel8: TPathLabel;
@@ -289,6 +286,18 @@ type
     PathLabel22: TPathLabel;
     Label12: TLabel;
     Label15: TLabel;
+    LayoutMobileMenu: TLayout;
+    RadioButtonMenuProjects: TRadioButton;
+    RadioButtonMenuSettings: TRadioButton;
+    RadioButtonMenuRun: TRadioButton;
+    RadioButtonMenuGraph: TRadioButton;
+    CornerButtonMenuAdd: TCornerButton;
+    PathLabel23: TPathLabel;
+    PanelMobileOverlay: TPanel;
+    LayoutMobileOverlay: TLayout;
+    LayoutZoomMobile: TLayout;
+    Button3: TButton;
+    Button4: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -321,10 +330,8 @@ type
     procedure ButtonNodeApplyClick(Sender: TObject);
     procedure StringGridNodeValuesSelectCell(Sender: TObject; const ACol, ARow: Integer; var CanSelect: Boolean);
     procedure ButtonNodeRevertClick(Sender: TObject);
-    procedure TrackBarZoomChange(Sender: TObject);
     procedure MenuItemJSONLoadClick(Sender: TObject);
     procedure MenuItemJSONSaveClick(Sender: TObject);
-    procedure Timer1Timer(Sender: TObject);
     procedure CheckBoxSnapToGridChange(Sender: TObject);
     procedure MenuItemFileExitClick(Sender: TObject);
     procedure ButtonZoomClick(Sender: TObject);
@@ -344,6 +351,9 @@ type
     procedure ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
     procedure ButtonHideNodeLibraryClick(Sender: TObject);
     procedure MenuItemNodeLibraryClick(Sender: TObject);
+    procedure LayoutMobileMenuResize(Sender: TObject);
+    procedure CornerButtonMenuAddClick(Sender: TObject);
+    procedure RadioButtonMenuSettingsChange(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -373,6 +383,7 @@ type
     procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
     procedure UpdateNodeRegistry;
     procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+    procedure MobileMode;
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
@@ -417,7 +428,44 @@ begin
   InitDemoGraph;
   UpdateNodeRegistry;
 
+  LayoutMobileMenu.Visible := False;
+  LayoutZoomMobile.Visible := False;
+  PanelMobileOverlay.Visible := False;
+  //
+  {$IF DEFINED(ANDROID) OR DEFINED(IOS)}
+  MobileMode;
+  {$ENDIF}
+  //
+
   UpdateStatus;
+end;
+
+procedure TFormMain.MobileMode;
+begin
+  HideTitleBar := False;
+  PanelEditor.StyleLookup := 'Panelstyle_background';
+  LayoutZoomMobile.Visible := True;
+  LayoutLeft.Visible := False;
+  LayoutRight.Visible := False;
+  LayoutNodeLibrary.Visible := False;
+  LayoutHead.Visible := False;
+  Constraints.MinHeight := 0;
+  Constraints.MinWidth := 400;
+  StatusBar.Visible := False;
+  LayoutMobileMenu.Visible := True;
+  RadioButtonMenuProjects.StylesData['path.Data.Data'] := 'M20 6h-8l-1.41-1.41C10.21 4.21 9.7 4 9.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2m-3.06 10.41L15 15.28l-1.94 1.13a.502.502 0 0 1-.74-.55l.51-2.2l-1.69-1.46c-.33-.29-.16-.84.28-.88l2.23-.19l.88-2.06c.17-.4.75-.4.92 ' +
+    '0l.88 2.06l2.23.19a.5.5 0 0 1 .28.88l-1.69 1.46l.51 2.2a.49.49 0 0 1-.72.55';
+  RadioButtonMenuGraph.StylesData['path.Data.Data'] := 'M2.998 5.246a2.25 2.25 0 0 1 2.25-2.25h2.507a2.25 2.25 0 0 1 2.25 2.25v2.507a2.25 2.25 0 0 1-2.25 2.25H7.25v3.707q.07.051.134.116l2.79 2.79q.065.065.117.135h3.714v-.5a2.25 2.25 0 0 1 2.25-2.25h2.494a2.25 ' +
+    '2.25 0 0 1 2.25 2.25v2.504a2.25 2.25 0 0 1-2.25 2.25h-2.494a2.25 2.25 0 0 1-2.25-2.25v-.504H10.29a1 1 0 0 1-.115.133l-2.791 2.792a1.25 1.25 0 0 1-1.768 0l-2.792-2.791a1.25 1.25 0 0 1 0-1.768l2.792-2.792a1 ' +
+    '1 0 0 1 .134-.116v-3.706h-.502a2.25 2.25 0 0 1-2.25-2.25z';
+
+  RadioButtonMenuRun.StylesData['path.Data.Data'] := 'M12.225 4.462C9.89 3.142 7 4.827 7 7.508V24.5c0 2.682 2.892 4.368 5.226 3.045l14.997-8.498c2.367-1.341 2.366-4.751 0-6.091z';
+  RadioButtonMenuSettings.StylesData['path.Data.Data'] := 'M1.911 7.383a8.5 8.5 0 0 1 1.78-3.08a.5.5 0 0 1 .54-.135l1.918.686a1 1 0 0 0 1.32-.762l.366-2.006a.5.5 0 0 1 .388-.4a8.5 8.5 0 0 1 3.554 0a.5.5 0 0 1 .388.4l.366 2.006a1 1 0 0 0 1.32.762l1.919-.686a.5.5 ' +
+    '0 0 1 .54.136a8.5 8.5 0 0 1 1.78 3.079a.5.5 0 0 1-.153.535l-1.555 1.32a1 1 0 0 0 0 1.524l1.555 1.32a.5.5 0 0 1 .152.535a8.5 8.5 0 0 1-1.78 3.08a.5.5 0 0 1-.54.135l-1.918-.686a1 1 0 0 0-1.32.762l-.366 2.007a.5.5 ' +
+    '0 0 1-.388.399a8.5 8.5 0 0 1-3.554 0a.5.5 0 0 1-.388-.4l-.366-2.006a1 1 0 0 0-1.32-.762l-1.918.686a.5.5 0 0 1-.54-.136a8.5 8.5 0 0 1-1.78-3.079a.5.5 0 0 1 .152-.535l1.555-1.32a1 1 0 0 0 0-1.524l-1.555-1.32a.5.5 ' +
+    '0 0 1-.152-.535m1.06-.006l1.294 1.098a2 2 0 0 1 0 3.05l-1.293 1.098c.292.782.713 1.51 1.244 2.152l1.596-.57q.155-.055.315-.085a2 2 0 0 1 2.326 1.609l.304 1.669a7.6 7.6 0 0 0 2.486 0l.304-1.67a1.998 1.998 ' +
+    '0 0 1 2.641-1.524l1.596.571a7.5 7.5 0 0 0 1.245-2.152l-1.294-1.098a1.998 1.998 0 0 1 0-3.05l1.294-1.098a7.5 7.5 0 0 0-1.245-2.152l-1.596.57a2 2 0 0 1-2.64-1.524l-.305-1.669a7.6 7.6 0 0 0-2.486 0l-.304 ' +
+    '1.669a2 2 0 0 1-2.64 1.525l-1.597-.571a7.5 7.5 0 0 0-1.244 2.152M7.502 10a2.5 2.5 0 1 1 5 0a2.5 2.5 0 0 1-5 0m1 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 0 0-3 0';
 end;
 
 procedure TFormMain.FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
@@ -487,6 +535,7 @@ end;
 procedure TFormMain.ButtonHideNodeLibraryClick(Sender: TObject);
 begin
   LayoutNodeLibrary.Visible := False;
+  PanelMobileOverlay.Visible := False;
 end;
 
 procedure TFormMain.ButtonNodeApplyClick(Sender: TObject);
@@ -711,20 +760,6 @@ begin
   CanSelect := True;
 end;
 
-procedure TFormMain.Timer1Timer(Sender: TObject);
-begin
-  //
-end;
-
-procedure TFormMain.TrackBarZoomChange(Sender: TObject);
-begin
-  if FNodeUpdating then
-    Exit;
-  FNodeUpdating := True;
-  FEditor.SetZoom((TrackBarZoom.Value) / 100, FEditor.LocalRect.CenterPoint.Round);
-  FNodeUpdating := False;
-end;
-
 procedure TFormMain.InitDemoGraph;
 var
   NFloat1, NFloat2, NFloat3: TCustomNode;
@@ -861,6 +896,14 @@ begin
   // ── Select Math node — демонстрируем все его values в инспекторе
   FEditor.SelectNode(NMath, False);
   RefreshFromSelection;
+end;
+
+procedure TFormMain.LayoutMobileMenuResize(Sender: TObject);
+begin
+  for var Control in LayoutMobileMenu.Controls do
+    Control.Width := Trunc(LayoutMobileMenu.Width / 5);
+  CornerButtonMenuAdd.XRadius := Min(CornerButtonMenuAdd.Width / 2, CornerButtonMenuAdd.Height / 2);
+  CornerButtonMenuAdd.YRadius := CornerButtonMenuAdd.XRadius;
 end;
 
 procedure TFormMain.ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
@@ -1163,6 +1206,40 @@ begin
   Fill.Gradient.Color1 := ComboColorBoxThemeGradient2.Color;
 end;
 
+procedure TFormMain.CornerButtonMenuAddClick(Sender: TObject);
+begin
+  for var Control in LayoutMobileOverlay.Controls do
+    Control.Visible := False;
+  LayoutNodeLibrary.Parent := LayoutMobileOverlay;
+  LayoutNodeLibrary.Align := TAlignLayout.Client;
+  LayoutNodeLibrary.Visible := True;
+  LayoutNodeLibrary.Margins.Left := 0;
+  PanelMobileOverlay.Visible := True;
+  PanelMobileOverlay.BringToFront;
+end;
+
+procedure TFormMain.RadioButtonMenuSettingsChange(Sender: TObject);
+begin
+  var Layout: TControl := nil;
+  if RadioButtonMenuSettings.IsChecked then
+    Layout := LayoutRight
+  else if RadioButtonMenuGraph.IsChecked then
+    Layout := LayoutLeft;
+  if Layout <> nil then
+  begin
+    for var Control in LayoutMobileOverlay.Controls do
+      Control.Visible := False;
+    Layout.Parent := LayoutMobileOverlay;
+    Layout.Align := TAlignLayout.Client;
+    Layout.Visible := True;
+    Layout.Margins.Left := 0;
+    PanelMobileOverlay.Visible := True;
+    PanelMobileOverlay.BringToFront;
+  end
+  else
+    PanelMobileOverlay.Visible := False;
+end;
+
 procedure TFormMain.RefreshFromSelection;
 var
   N: TCustomNode;
@@ -1343,13 +1420,6 @@ begin
   LabelStat4.Text :=
     'Snap: ' + (if FEditor.SnapToGrid then 'ON' else 'OFF') +
     '  Grid: ' + IntToStr(FEditor.GridSize);
-
-  if not FNodeUpdating then
-  begin
-    FNodeUpdating := True;
-    TrackBarZoom.Value := FEditor.Zoom * 100;
-    FNodeUpdating := False;
-  end;
 end;
 
 { TTrackBar }

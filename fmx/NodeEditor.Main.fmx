@@ -19,7 +19,7 @@ object FormMain: TFormMain
     Align = Left
     Position.Y = 48.000000000000000000
     Size.Width = 300.000000000000000000
-    Size.Height = 699.000000000000000000
+    Size.Height = 649.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 0
     object PanelInspector: TPanel
@@ -28,7 +28,7 @@ object FormMain: TFormMain
       Margins.Top = 10.000000000000000000
       Margins.Right = 10.000000000000000000
       Size.Width = 280.000000000000000000
-      Size.Height = 689.000000000000000000
+      Size.Height = 639.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 0
       object VertScrollBox1: TVertScrollBox
@@ -38,12 +38,12 @@ object FormMain: TFormMain
         Padding.Right = 25.000000000000000000
         Padding.Bottom = 25.000000000000000000
         Size.Width = 280.000000000000000000
-        Size.Height = 637.000000000000000000
+        Size.Height = 587.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
         ScrollAnimation = True
         Viewport.Width = 280.000000000000000000
-        Viewport.Height = 637.000000000000000000
+        Viewport.Height = 587.000000000000000000
         object Layout11: TLayout
           Align = Top
           Margins.Bottom = 20.000000000000000000
@@ -570,7 +570,7 @@ object FormMain: TFormMain
         Margins.Right = 10.000000000000000000
         Margins.Bottom = 10.000000000000000000
         Position.X = 10.000000000000000000
-        Position.Y = 647.000000000000000000
+        Position.Y = 597.000000000000000000
         Size.Width = 260.000000000000000000
         Size.Height = 32.000000000000000000
         Size.PlatformDefault = False
@@ -78146,52 +78146,18 @@ object FormMain: TFormMain
   object LayoutClient: TLayout
     Align = Client
     Size.Width = 629.000000000000000000
-    Size.Height = 699.000000000000000000
+    Size.Height = 649.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 6
-    object Panel6: TPanel
+    object PanelEditor: TPanel
       Align = Client
       Margins.Top = 11.000000000000000000
       Margins.Bottom = 1.000000000000000000
       Size.Width = 339.000000000000000000
-      Size.Height = 687.000000000000000000
+      Size.Height = 637.000000000000000000
       Size.PlatformDefault = False
       StyleLookup = 'panelstyle_appbackground'
       TabOrder = 0
-      object Layout14: TLayout
-        Align = RightCenter
-        Margins.Right = 10.000000000000000000
-        Position.X = 522.000000000000000000
-        Position.Y = 195.000000000000000000
-        Size.Width = 40.000000000000000000
-        Size.Height = 276.000000000000000000
-        Size.PlatformDefault = False
-        Visible = False
-        TabOrder = 1
-        object Panel1: TPanel
-          Align = Client
-          Size.Width = 40.000000000000000000
-          Size.Height = 276.000000000000000000
-          Size.PlatformDefault = False
-          StyleLookup = 'panelstyle_dialog'
-          TabOrder = 1
-        end
-        object TrackBarZoom: TTrackBar
-          Align = Center
-          CanParentFocus = True
-          Frequency = 1.000000000000000000
-          Max = 600.000000000000000000
-          Min = 12.000000000000000000
-          Orientation = Vertical
-          RotationAngle = 180.000000000000000000
-          Size.Width = 32.000000000000000000
-          Size.Height = 220.000000000000000000
-          Size.PlatformDefault = False
-          TabOrder = 0
-          Value = 12.000000000000000000
-          OnChange = TrackBarZoomChange
-        end
-      end
       object LayoutRender: TLayout
         Align = Contents
         ClipChildren = True
@@ -78200,9 +78166,41 @@ object FormMain: TFormMain
         Margins.Right = 1.000000000000000000
         Margins.Bottom = 1.000000000000000000
         Size.Width = 337.000000000000000000
-        Size.Height = 685.000000000000000000
+        Size.Height = 635.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
+      end
+      object LayoutZoomMobile: TLayout
+        Align = BottomRight
+        Margins.Right = 20.000000000000000000
+        Margins.Bottom = 20.000000000000000000
+        Position.X = 219.000000000000000000
+        Position.Y = 567.000000000000000000
+        Size.Width = 100.000000000000000000
+        Size.Height = 50.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 2
+        object Button3: TButton
+          Align = Right
+          Size.Width = 50.000000000000000000
+          Size.Height = 50.000000000000000000
+          Size.PlatformDefault = False
+          StyleLookup = 'stepperbuttonleft'
+          TabOrder = 1
+          Text = 'Button3'
+          OnClick = ButtonZoomOutClick
+        end
+        object Button4: TButton
+          Align = Right
+          Position.X = 50.000000000000000000
+          Size.Width = 50.000000000000000000
+          Size.Height = 50.000000000000000000
+          Size.PlatformDefault = False
+          StyleLookup = 'stepperbuttonright'
+          TabOrder = 2
+          Text = 'ButtonZoomIn2'
+          OnClick = ButtonZoomInClick
+        end
       end
     end
     object LayoutNodeLibrary: TLayout
@@ -78210,7 +78208,7 @@ object FormMain: TFormMain
       Margins.Left = -10.000000000000000000
       Position.X = -10.000000000000000000
       Size.Width = 300.000000000000000000
-      Size.Height = 699.000000000000000000
+      Size.Height = 649.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 1
       object Panel14: TPanel
@@ -78223,7 +78221,7 @@ object FormMain: TFormMain
         Margins.Top = 10.000000000000000000
         Margins.Right = 10.000000000000000000
         Size.Width = 280.000000000000000000
-        Size.Height = 689.000000000000000000
+        Size.Height = 639.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
         object Layout28: TLayout
@@ -78235,7 +78233,7 @@ object FormMain: TFormMain
           Margins.Top = 10.000000000000000000
           Margins.Bottom = 5.000000000000000000
           Position.X = 25.000000000000000000
-          Position.Y = 615.000000000000000000
+          Position.Y = 565.000000000000000000
           Size.Width = 230.000000000000000000
           Size.Height = 64.000000000000000000
           Size.PlatformDefault = False
@@ -78301,7 +78299,7 @@ object FormMain: TFormMain
         object Layout23: TLayout
           Align = Client
           Size.Width = 230.000000000000000000
-          Size.Height = 600.000000000000000000
+          Size.Height = 550.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           object Layout24: TLayout
@@ -78386,7 +78384,7 @@ object FormMain: TFormMain
           object ListBoxRegistry: TListBox
             Align = Client
             Size.Width = 230.000000000000000000
-            Size.Height = 551.000000000000000000
+            Size.Height = 501.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 2
             OnDragOver = ListBoxRegistryDragOver
@@ -78397,7 +78395,7 @@ object FormMain: TFormMain
             DefaultItemStyles.GroupHeaderStyle = ''
             DefaultItemStyles.GroupFooterStyle = ''
             Viewport.Width = 218.000000000000000000
-            Viewport.Height = 515.000000000000000000
+            Viewport.Height = 465.000000000000000000
             object ListBoxGroupHeader1: TListBoxGroupHeader
               Size.Width = 218.000000000000000000
               Size.Height = 40.000000000000000000
@@ -78548,7 +78546,7 @@ object FormMain: TFormMain
     Position.X = 929.000000000000000000
     Position.Y = 48.000000000000000000
     Size.Width = 300.000000000000000000
-    Size.Height = 699.000000000000000000
+    Size.Height = 649.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 7
     object Panel2: TPanel
@@ -78557,7 +78555,7 @@ object FormMain: TFormMain
       Margins.Top = 10.000000000000000000
       Margins.Right = 10.000000000000000000
       Size.Width = 280.000000000000000000
-      Size.Height = 689.000000000000000000
+      Size.Height = 639.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 0
       object VertScrollBoxRight: TVertScrollBox
@@ -78567,12 +78565,12 @@ object FormMain: TFormMain
         Padding.Right = 25.000000000000000000
         Padding.Bottom = 25.000000000000000000
         Size.Width = 280.000000000000000000
-        Size.Height = 689.000000000000000000
+        Size.Height = 639.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 0
         ScrollAnimation = True
         Viewport.Width = 280.000000000000000000
-        Viewport.Height = 689.000000000000000000
+        Viewport.Height = 639.000000000000000000
         object LayoutNavigator: TLayout
           Align = Top
           Margins.Bottom = 20.000000000000000000
@@ -81508,6 +81506,122 @@ object FormMain: TFormMain
       TabOrder = 303
       Text = 'Custom Accent'
       OnChange = CheckBoxCustomAccentChange
+    end
+  end
+  object LayoutMobileMenu: TLayout
+    Align = Bottom
+    Position.Y = 697.000000000000000000
+    Size.Width = 1229.000000000000000000
+    Size.Height = 50.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 442
+    OnResize = LayoutMobileMenuResize
+    OnResized = LayoutMobileMenuResize
+    object RadioButtonMenuProjects: TRadioButton
+      Align = Left
+      Size.Width = 81.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'radiobuttonstyle_subtle_menu'
+      TabOrder = 3
+      Text = 'Projects'
+      TextSettings.HorzAlign = Center
+      TextSettings.Trimming = Character
+      OnChange = RadioButtonMenuSettingsChange
+    end
+    object RadioButtonMenuSettings: TRadioButton
+      Align = Right
+      Position.X = 1148.000000000000000000
+      Size.Width = 81.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'radiobuttonstyle_subtle_menu'
+      TabOrder = 2
+      Text = 'Settings'
+      TextSettings.HorzAlign = Center
+      TextSettings.Trimming = Character
+      OnChange = RadioButtonMenuSettingsChange
+    end
+    object RadioButtonMenuRun: TRadioButton
+      Align = Right
+      Position.X = 1067.000000000000000000
+      Size.Width = 81.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'radiobuttonstyle_subtle_menu'
+      TabOrder = 1
+      Text = 'Run'
+      TextSettings.HorzAlign = Center
+      TextSettings.Trimming = Character
+      OnChange = RadioButtonMenuSettingsChange
+    end
+    object RadioButtonMenuGraph: TRadioButton
+      Align = Left
+      Position.X = 81.000000000000000000
+      Size.Width = 81.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'radiobuttonstyle_subtle_menu'
+      TabOrder = 0
+      Text = 'Graph'
+      TextSettings.HorzAlign = Center
+      TextSettings.Trimming = Character
+      OnChange = RadioButtonMenuSettingsChange
+    end
+    object CornerButtonMenuAdd: TCornerButton
+      Align = Center
+      Margins.Left = 5.000000000000000000
+      Margins.Top = 5.000000000000000000
+      Margins.Right = 5.000000000000000000
+      Margins.Bottom = 5.000000000000000000
+      Sides = [Top, Left, Bottom, Right]
+      Size.Width = 40.000000000000000000
+      Size.Height = 40.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'cornerbuttonstyle_accent'
+      TabOrder = 4
+      XRadius = 20.000000000000000000
+      YRadius = 20.000000000000000000
+      OnClick = CornerButtonMenuAddClick
+      object PathLabel23: TPathLabel
+        Align = Center
+        Data.Path = {
+          21000000000000000000C0400000E03F020000003D41CD400000E03F02000000
+          0000D840867D0540020000000000D84000002040010000000000D8400000A840
+          01000000000018410000A840020000009EA01E410000A8400200000000002441
+          C3BEB24002000000000024410000C04002000000000024413D41CD4002000000
+          9EA01E410000D84002000000000018410000D840010000000000D8400000D840
+          010000000000D84000001841020000000000D8409EA01E41020000003D41CD40
+          00002441020000000000C0400000244102000000C3BEB2400000244102000000
+          0000A8409EA01E41020000000000A84000001841010000000000A8400000D840
+          01000000000020400000D84002000000867D05400000D840020000000000E03F
+          3D41CD40020000000000E03F0000C040020000000000E03FC3BEB24002000000
+          877D05400000A84002000000010020400000A840010000000000A8400000A840
+          010000000000A84000002040020000000000A840867D054002000000C3BEB240
+          0000E03F020000000000C0400000E03F}
+        Locked = True
+        Size.Width = 20.000000000000000000
+        Size.Height = 20.000000000000000000
+        Size.PlatformDefault = False
+        WrapMode = Fit
+      end
+    end
+  end
+  object PanelMobileOverlay: TPanel
+    Align = Client
+    Margins.Top = 40.000000000000000000
+    Size.Width = 629.000000000000000000
+    Size.Height = 649.000000000000000000
+    Size.PlatformDefault = False
+    StyleLookup = 'panelstyle_appbackground'
+    Visible = False
+    TabOrder = 443
+    object LayoutMobileOverlay: TLayout
+      Align = Client
+      Size.Width = 629.000000000000000000
+      Size.Height = 649.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
     end
   end
   object PopupMenuZoom: TPopupMenu
