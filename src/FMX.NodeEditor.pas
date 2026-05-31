@@ -156,7 +156,6 @@ type
 
     // Interaction Events
     FOnUpdatedStatus: TNotifyEvent;
-    FOnPinSelectionChanged: TNotifyEvent;
     FOnPinClick: TNodePinEvent;
     FOnLinkClick: TNodeLinkEvent;
     FOnBeforeConnectPins: TEditorConnectPinsEvent;
@@ -170,11 +169,9 @@ type
     FLinkGradient: Boolean;
 
     // Internal Logic
-    procedure ClearPinSelection;
     procedure SelectPinInternal(APin: TNodePin; AAppend: Boolean);
     procedure TogglePinSelection(APin: TNodePin);
     procedure ConnectSelectedPins;
-    procedure DoPinSelectionChanged(Sender: TObject);
     function GetPrimarySelectedNode: TCustomNode;
     function GetPrimarySelectedLink: TNodeLink;
 
@@ -248,7 +245,6 @@ type
     procedure SelectAllLinks;
     procedure SelectAllNodes;
   protected
-    function SelectedPinCount: integer;
     function GetSelectedPin(Index: integer): TNodePin;
     function CanConnectSelectedPins: boolean;
 
@@ -387,7 +383,6 @@ type
     property OnDrawLink: TNodeEditorDrawLinkEvent read FOnDrawLink write FOnDrawLink;
     property OnDrawGrid: TNodeEditorDrawGridEvent read FOnDrawGrid write FOnDrawGrid;
     property OnDrawSnapGuides: TNodeEditorDrawSnapGuidesEvent read FOnDrawSnapGuides write FOnDrawSnapGuides;
-    property OnPinSelectionChanged: TNotifyEvent read FOnPinSelectionChanged write FOnPinSelectionChanged;
     property OnPinClick: TNodePinEvent read FOnPinClick write FOnPinClick;
     property OnLinkClick: TNodeLinkEvent read FOnLinkClick write FOnLinkClick;
     property OnBeforeConnectPins: TEditorConnectPinsEvent read FOnBeforeConnectPins write FOnBeforeConnectPins;
@@ -447,7 +442,6 @@ begin
 
   FController := TNodeEditorController.Create(FGraph);
   FController.Selection.OnChanged := ControllerSelectionChanged;
-  FController.PinSelection.OnChanged := DoPinSelectionChanged;
 
   FDragCommandNodes := TList<TCustomNode>.Create;
   FPaintNodesSorted := TList<TCustomNode>.Create;
@@ -991,25 +985,14 @@ begin
   Repaint;
 end;
 
-procedure TNodeEditor.ClearPinSelection;
-begin
-  FController.PinSelection.Clear;
-end;
-
 procedure TNodeEditor.SelectPinInternal(APin: TNodePin; AAppend: boolean);
 begin
-  FController.PinSelection.SelectPin(APin, AAppend);
+  FController.Selection.SelectPin(APin, AAppend);
 end;
 
 procedure TNodeEditor.TogglePinSelection(APin: TNodePin);
 begin
-  FController.PinSelection.TogglePin(APin);
-end;
-
-procedure TNodeEditor.DoPinSelectionChanged(Sender: TObject);
-begin
-  if Assigned(FOnPinSelectionChanged) then
-    FOnPinSelectionChanged(Self);
+  FController.Selection.TogglePin(APin);
 end;
 
 function TNodeEditor.GetPrimarySelectedNode: TCustomNode;
@@ -1020,24 +1003,19 @@ begin
     Result := nil;
 end;
 
-function TNodeEditor.SelectedPinCount: integer;
-begin
-  Result := FController.PinSelection.Count;
-end;
-
 function TNodeEditor.GetSelectedPin(Index: integer): TNodePin;
 begin
-  Result := FController.PinSelection.GetPin(Index);
+  Result := FController.Selection.GetPin(Index);
 end;
 
 function TNodeEditor.CanConnectSelectedPins: Boolean;
 begin
   Result := False;
-  if FController.PinSelection.Count <> 2 then
+  if FController.Selection.PinCount <> 2 then
     Exit;
 
-  var P1 := FController.PinSelection.GetPin(0);
-  var P2 := FController.PinSelection.GetPin(1);
+  var P1 := FController.Selection.GetPin(0);
+  var P2 := FController.Selection.GetPin(1);
 
   if (P1 = nil) or (P2 = nil) then
     Exit;
@@ -1053,11 +1031,11 @@ end;
 
 procedure TNodeEditor.ConnectSelectedPins;
 begin
-  if (FGraph = nil) or (FController.PinSelection.Count <> 2) then
+  if (FGraph = nil) or (FController.Selection.PinCount <> 2) then
     Exit;
 
-  var P1 := FController.PinSelection.GetPin(0);
-  var P2 := FController.PinSelection.GetPin(1);
+  var P1 := FController.Selection.GetPin(0);
+  var P2 := FController.Selection.GetPin(1);
 
   var Allow := True;
   if Assigned(FOnBeforeConnectPins) then
@@ -1103,14 +1081,12 @@ begin
   if Assigned(FOnAfterConnectPins) then
     FOnAfterConnectPins(Self, FromPin, ToPin);
 
-  ClearPinSelection;
+  FController.Selection.ClearPins;
   Repaint;
 end;
 
 procedure TNodeEditor.ClearSelectionInternal;
 begin
-  ClearPinSelection;
-
   if ((FController.Selection.NodeCount > 0) or (FController.Selection.LinkCount > 0)) then
     FController.Selection.Clear;
 end;
@@ -1143,7 +1119,7 @@ begin
     Exit;
 
   if not AAppend then
-    ClearPinSelection
+    FController.Selection.ClearPins(False)
   else if FController.Selection.LinkCount > 0 then
     FController.Selection.Links.Clear;
 
@@ -1158,7 +1134,6 @@ begin
   if not AKeepNodes then
   begin
     FController.Selection.Clear;
-    ClearPinSelection;
   end;
   FController.Selection.SelectLink(ALink, True);
 end;
@@ -1173,7 +1148,7 @@ begin
   else
     FController.Selection.SelectNode(ANode, True);
 
-  ClearPinSelection;
+  FController.Selection.ClearPins(False);
   NotifySelectionChanged;
   Repaint;
 end;
@@ -1195,8 +1170,8 @@ begin
     FController.Selection.RemoveLinkFromSelection(ALink)
   else
   begin
+    FController.Selection.ClearPins(False);
     FController.Selection.AddLinkToSelection(ALink);
-    ClearPinSelection;
   end;
 end;
 
@@ -2266,7 +2241,6 @@ begin
   FController.Selection.OnChanged := nil;
   try
     FController.Selection.Clear;
-    ClearPinSelection;
   finally
     FController.Selection.OnChanged := OldHandler;
   end;
@@ -2631,14 +2605,12 @@ begin
 
           if not CanPinAcceptMoreConnections(Pin) then
           begin
-            ClearPinSelection;
-            //SelectPinInternal(Pin, False);
-            NotifySelectionChanged;
+            FController.Selection.ClearPins;
             Repaint;
             Exit;
           end;
 
-          ClearPinSelection;
+          FController.Selection.ClearPins;
           FTempFromPin := Pin;
           FTempMousePos := Point(X, Y);
           FTempStartMousePos := Point(X, Y);
@@ -2865,7 +2837,6 @@ begin
       SyncControllerSelectionToView;
       ClearSelectionInternal;
       FController.Selection.SelectNode(Reroute, False);
-      ClearPinSelection;
       NotifySelectionChanged;
       Exit;
     end;
@@ -3115,6 +3086,7 @@ begin
       begin
         // Shift + box: only nodes
         FController.Selection.BeginUpdate;
+        FController.Selection.ClearPins;
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
           N := FGraph.Nodes[i];
@@ -3123,13 +3095,13 @@ begin
           if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
             FController.Selection.SelectNode(N, True);
         end;
-        ClearPinSelection;
         FController.Selection.EndUpdate;
       end
       else if ssCtrl in Shift then
       begin
         // Ctrl + box: only links
         FController.Selection.BeginUpdate;
+        FController.Selection.ClearPins;
         for i := 0 to FGraph.Links.Count - 1 do
         begin
           var L := FGraph.Links[i];
@@ -3138,12 +3110,12 @@ begin
           if L.IsInsideWorldRect(R) then
             FController.Selection.AddLinkToSelection(L);
         end;
-        ClearPinSelection;
         FController.Selection.EndUpdate;
       end
       else
       begin
         FController.Selection.BeginUpdate;
+        FController.Selection.ClearPins;
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
           N := FGraph.Nodes[i];
@@ -3152,8 +3124,6 @@ begin
           if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
             FController.Selection.SelectNode(N, True);
         end;
-        ClearPinSelection;
-        FController.Selection.EndUpdate;
 
         for i := 0 to FGraph.Links.Count - 1 do
         begin
@@ -3163,7 +3133,7 @@ begin
           if L.IsInsideWorldRect(R) then
             FController.Selection.AddLinkToSelection(L);
         end;
-        ClearPinSelection;
+        FController.Selection.EndUpdate;
       end;
       FBoxSelecting := False;
       NotifySelectionChanged;
@@ -3375,6 +3345,7 @@ begin
   ClearSelectionInternal;
 
   FController.Selection.BeginUpdate;
+  FController.Selection.ClearPins;
   for var i := 0 to FGraph.Nodes.Count - 1 do
     FController.Selection.SelectNode(FGraph.Nodes[i], True);
 
@@ -3382,7 +3353,6 @@ begin
     FController.Selection.AddLinkToSelection(FGraph.Links[i]);
   FController.Selection.EndUpdate;
 
-  ClearPinSelection;
   NotifySelectionChanged;
 end;
 
@@ -3391,11 +3361,11 @@ begin
   ClearSelectionInternal;
 
   FController.Selection.BeginUpdate;
+  FController.Selection.ClearPins;
   for var i := 0 to FGraph.Nodes.Count - 1 do
     FController.Selection.SelectNode(FGraph.Nodes[i], True);
   FController.Selection.EndUpdate;
 
-  ClearPinSelection;
   NotifySelectionChanged;
 end;
 
@@ -3403,11 +3373,11 @@ procedure TNodeEditor.SelectAllLinks;
 begin
   ClearSelectionInternal;
   FController.Selection.BeginUpdate;
+  FController.Selection.ClearPins;
   for var i := 0 to FGraph.Links.Count - 1 do
     FController.Selection.AddLinkToSelection(FGraph.Links[i]);
   FController.Selection.EndUpdate;
 
-  ClearPinSelection;
   NotifySelectionChanged;
 end;
 

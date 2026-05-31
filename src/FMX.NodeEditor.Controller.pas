@@ -14,7 +14,6 @@ type
   private
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
-    FPinSelection: TPinSelectionModel;
     function NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
     procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF; ASelection: TNodeSelectionModel);
   public
@@ -55,7 +54,6 @@ type
 
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
-    property PinSelection: TPinSelectionModel read FPinSelection;
   end;
 
 implementation
@@ -71,13 +69,11 @@ begin
   inherited Create;
   FGraph := AGraph;
   FSelection := TNodeSelectionModel.Create;
-  FPinSelection := TPinSelectionModel.Create;
 end;
 
 destructor TNodeEditorController.Destroy;
 begin
   FSelection.Free;
-  FPinSelection.Free;
   inherited Destroy;
 end;
 
