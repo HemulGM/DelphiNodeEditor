@@ -872,7 +872,7 @@ begin
       TRectF.Create(
         Center.X + (PinRadius + 6) * Zoom,
         Center.Y - TextSize.Height div 2,
-        Center.X + (PinRadius + 6) * Zoom + TextSize.Width,
+        Center.X + Width * Zoom / 2,
         Center.Y + TextSize.Height div 2),
       P.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
   end;

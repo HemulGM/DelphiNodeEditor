@@ -8,12 +8,6 @@ uses
   FMX.NodeEditor.Types, FMX.NodeEditor.Selection;
 
 type
-  TNodeClipboardService = class
-  public
-    function NodesToJSONText(ANodes: TObjectList<TCustomNode>; AGraph: TNodeGraph): string;
-    procedure PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; const Position: TPointF; ASelection: TNodeSelectionModel);
-  end;
-
   TNodeEditorController = class
     FDragStartWorldPos: TPointF;
     FShowDragCoordinates: boolean;
@@ -21,7 +15,8 @@ type
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
     FPinSelection: TPinSelectionModel;
-    FClipboard: TNodeClipboardService;
+    function NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
+    procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF; ASelection: TNodeSelectionModel);
   public
     constructor Create(AGraph: TNodeGraph);
     destructor Destroy; override;
@@ -61,7 +56,6 @@ type
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
     property PinSelection: TPinSelectionModel read FPinSelection;
-    property ClipboardService: TNodeClipboardService read FClipboard;
   end;
 
 implementation
@@ -78,12 +72,10 @@ begin
   FGraph := AGraph;
   FSelection := TNodeSelectionModel.Create;
   FPinSelection := TPinSelectionModel.Create;
-  FClipboard := TNodeClipboardService.Create;
 end;
 
 destructor TNodeEditorController.Destroy;
 begin
-  FClipboard.Free;
   FSelection.Free;
   FPinSelection.Free;
   inherited Destroy;
@@ -429,7 +421,7 @@ begin
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
   begin
-    Clipboard.SetText(FClipboard.NodesToJSONText(FSelection.Nodes, FGraph));
+    Clipboard.SetText(NodesToJSONText(FSelection.Nodes));
   end;
 end;
 
@@ -440,7 +432,7 @@ begin
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
   begin
-    Clipboard.SetText(FClipboard.NodesToJSONText(FSelection.Nodes, FGraph));
+    Clipboard.SetText(NodesToJSONText(FSelection.Nodes));
     DeleteSelection;
   end;
 end;
@@ -453,11 +445,12 @@ begin
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
   begin
-    if Trim(Clipboard.GetText) = '' then
+    var ClipboardText := Clipboard.GetText;
+    if ClipboardText.Trim.IsEmpty then
       Exit;
 
     var BeforeJSON := FGraph.CaptureJSONText;
-    FClipboard.PasteNodesFromJSONText(Clipboard.GetText, FGraph, Position, FSelection);
+    PasteNodesFromJSONText(ClipboardText, Position, FSelection);
     var AfterJSON := FGraph.CaptureJSONText;
 
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Paste nodes'));
@@ -469,20 +462,18 @@ begin
   if (FGraph = nil) or (FSelection.NodeCount = 0) then
     Exit;
 
-  var NodeCopy := FClipboard.NodesToJSONText(FSelection.Nodes, FGraph);
+  var NodeCopy := NodesToJSONText(FSelection.Nodes);
   if NodeCopy.Trim.IsEmpty then
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
-  FClipboard.PasteNodesFromJSONText(NodeCopy, FGraph, Position, FSelection);
+  PasteNodesFromJSONText(NodeCopy, Position, FSelection);
   var AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
 end;
 
-{ TNodeClipboardService }
-
-function TNodeClipboardService.NodesToJSONText(ANodes: TObjectList<TCustomNode>; AGraph: TNodeGraph): string;
+function TNodeEditorController.NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
 var
   Root: TJSONObject;
   NodesArr, LinksArr: TJSONArray;
@@ -509,9 +500,9 @@ begin
     Root.AddPair('nodes', NodesArr);
 
     LinksArr := TJSONArray.Create;
-    for i := 0 to AGraph.Links.Count - 1 do
+    for i := 0 to FGraph.Links.Count - 1 do
     begin
-      L := AGraph.Links[i];
+      L := FGraph.Links[i];
       if (L.FromPin = nil) or (L.ToPin = nil) then
         Continue;
       if (ANodes.IndexOf(L.FromPin.OwnerNode) >= 0) and
@@ -531,7 +522,7 @@ begin
   end;
 end;
 
-procedure TNodeClipboardService.PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; const Position: TPointF; ASelection: TNodeSelectionModel);
+procedure TNodeEditorController.PasteNodesFromJSONText(const AJSON: string; const Position: TPointF; ASelection: TNodeSelectionModel);
 var
   Data: TJSONObject;
   Root: TJSONObject;
@@ -591,7 +582,7 @@ begin
         NodeType := NodeObj.GetValue('type', 'default');
         OldNodeId := NodeObj.GetValue('id', '');
 
-        N := AGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
+        N := FGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
         N.LoadFromJSON(NodeObj, True);
         NewNodeId := NewId;
         N.Id := NewNodeId;
@@ -616,7 +607,7 @@ begin
         end;
 
         N.ZOrder := 0;
-        AGraph.AddNode(N);
+        FGraph.AddNode(N);
 
         if ASelection <> nil then
           ASelection.SelectNode(N, True);
@@ -630,11 +621,11 @@ begin
           LinkObj := LinksArr.Items[i] as TJSONObject;
           NewFromId := OldToNewPinIds.Values[LinkObj.GetValue('fromPinId', '')];
           NewToId := OldToNewPinIds.Values[LinkObj.GetValue('toPinId', '')];
-          FromPin := AGraph.FindPinById(NewFromId);
-          ToPin := AGraph.FindPinById(NewToId);
+          FromPin := FGraph.FindPinById(NewFromId);
+          ToPin := FGraph.FindPinById(NewToId);
           if (FromPin <> nil) and (ToPin <> nil) and
-            AGraph.CanConnect(FromPin, ToPin) then
-            AGraph.AddLink(TNodeLink.Create(FromPin, ToPin));
+            FGraph.CanConnect(FromPin, ToPin) then
+            FGraph.AddLink(TNodeLink.Create(FromPin, ToPin));
         end;
       end;
     finally

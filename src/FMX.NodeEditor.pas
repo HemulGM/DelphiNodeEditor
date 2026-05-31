@@ -144,7 +144,6 @@ type
     FLinkHoverColor: TAlphaColor;
     FLinkThickness: integer;
     FLinkSelectedThickness: integer;
-    FHoveredPinCompatible: Boolean;
     FPinCompatibleColor: TAlphaColor;
     FPinIncompatibleColor: TAlphaColor;
 
@@ -246,6 +245,8 @@ type
     procedure OnContextSelectAll(Sender: TObject);
     procedure SetLinkVisualType(const Value: TLinkVisualType);
     procedure SetLinkGradient(const Value: Boolean);
+    procedure SelectAllLinks;
+    procedure SelectAllNodes;
   protected
     function SelectedPinCount: integer;
     function GetSelectedPin(Index: integer): TNodePin;
@@ -502,7 +503,6 @@ begin
   FLinkThickness := 4;
   FLinkSelectedThickness := 5;
 
-  FHoveredPinCompatible := False;
   FPinCompatibleColor := TAlphaColors.Aqua;
   FPinIncompatibleColor := TAlphaColors.Red;
 
@@ -2058,7 +2058,7 @@ end;
 
 procedure TNodeEditor.PasteFromClipboard;
 begin
-  FController.PasteFromClipboard(SnapWorldPoint(FContextWorldPos));
+  FController.PasteFromClipboard(SnapWorldPoint(ScreenToWorld(FLastMousePos)));
   SyncControllerSelectionToView;
 end;
 
@@ -2241,22 +2241,22 @@ end;
 
 procedure TNodeEditor.ShowNodeSearchPopup(AScreenX, AScreenY: Integer; const WorldPosition: TPointF);
 begin
-  var F := TFormNodeEditorSearch.CreateSearch(Self, FGraph.Registry);
+  var Form := TFormNodeEditorSearch.CreateSearch(Self, FGraph.Registry);
   try
-    F.Left := EnsureRange(AScreenX - F.Width div 2, 0, Round(Screen.Width) - F.Width);
-    F.Top := EnsureRange(AScreenY - F.Height div 2, 0, Round(Screen.Height) - F.Height);
+    Form.Left := EnsureRange(AScreenX - Form.Width div 2, 0, Round(Screen.Width) - Form.Width);
+    Form.Top := EnsureRange(AScreenY - Form.Height div 2, 0, Round(Screen.Height) - Form.Height);
 
-    if F.ShowModal = mrOk then
+    if Form.ShowModal = mrOk then
     begin
-      if F.SelectedNodeType <> '' then
+      if Form.SelectedNodeType <> '' then
       begin
-        var N := FGraph.Registry.CreateNode(F.SelectedNodeType, SnapWorldPoint(WorldPosition));
+        var N := FGraph.Registry.CreateNode(Form.SelectedNodeType, SnapWorldPoint(WorldPosition));
         AddNode(N);
         SelectNodeInternal(N, False);
       end;
     end;
   finally
-    F.Free;
+    Form.Free;
   end;
 end;
 
@@ -2312,12 +2312,12 @@ begin
     FGraph.Nodes[i].Hovered := False;
     FGraph.Nodes[i].Highlighted := False;
     FGraph.Nodes[i].HoveredPinId := '';
+    FGraph.Nodes[i].HoveredPinCompatible := TPinCompatible.Undefined;
   end;
 
   FHoveredNode := nil;
   FHoveredPin := nil;
   FHoveredLink := nil;
-  FHoveredPinCompatible := False;
 end;
 
 procedure TNodeEditor.UpdateHoverStates(SX, SY: Integer; HitLinks: Boolean);
@@ -2325,14 +2325,7 @@ var
   N: TCustomNode;
   P: TNodePin;
   L: TNodeLink;
-  OldHoveredNode: TCustomNode;
-  OldHoveredPin: TNodePin;
-  OldHoveredLink: TNodeLink;
-  NeedRepaint: boolean;
 begin
-  OldHoveredNode := FHoveredNode;
-  OldHoveredPin := FHoveredPin;
-  OldHoveredLink := FHoveredLink;
 
   if FHoveredNode <> nil then
   begin
@@ -2357,7 +2350,7 @@ begin
     var TestPin := if FReconnectingLink then FReconnectFixedPin else FTempFromPin;
     if TestPin <> nil then
     begin
-      if FTempFromPin <> P then
+      if TestPin <> P then
         if ((CanPinAcceptMoreConnections(TestPin) or FReconnectingLink) and
           CanPinAcceptMoreConnections(P)) and
           FGraph.CanConnect(TestPin, P) then
@@ -2368,9 +2361,6 @@ begin
     end
     else
       N.Hovered := True;
-
-    //if not N.Highlighted then
-    //  N.HoveredPinId := '';
   end
   else
   begin
@@ -2378,9 +2368,7 @@ begin
     if N <> nil then
     begin
       if (N.VisualKind = TNodeVisualKind.Comment) and HitLinks and GetLinkUnderMouse(SX, SY, L) then
-      begin
-        FHoveredLink := L;
-      end
+        FHoveredLink := L
       else
       begin
         FHoveredNode := N;
@@ -2388,18 +2376,8 @@ begin
       end;
     end
     else if HitLinks and GetLinkUnderMouse(SX, SY, L) then
-    begin
       FHoveredLink := L;
-    end;
   end;
-
-  NeedRepaint :=
-    (OldHoveredNode <> FHoveredNode) or
-    (OldHoveredPin <> FHoveredPin) or
-    (OldHoveredLink <> FHoveredLink);
-
-  if NeedRepaint then
-    Repaint;
 end;
 
 procedure TNodeEditor.FitToSelection;
@@ -2929,7 +2907,7 @@ begin
           begin
             if CanPinAcceptMoreConnections(TargetPin) and
               //CanPinAcceptMoreConnections(FReconnectFixedPin) and
-              FGraph.CanConnect(TargetPin, FReconnectFixedPin) then
+            FGraph.CanConnect(TargetPin, FReconnectFixedPin) then
             begin
               AllowConnect := True;
               if Assigned(FOnBeforeConnectPins) then
@@ -3395,10 +3373,36 @@ end;
 procedure TNodeEditor.SelectAll;
 begin
   ClearSelectionInternal;
+
   FController.Selection.BeginUpdate;
   for var i := 0 to FGraph.Nodes.Count - 1 do
     FController.Selection.SelectNode(FGraph.Nodes[i], True);
 
+  for var i := 0 to FGraph.Links.Count - 1 do
+    FController.Selection.AddLinkToSelection(FGraph.Links[i]);
+  FController.Selection.EndUpdate;
+
+  ClearPinSelection;
+  NotifySelectionChanged;
+end;
+
+procedure TNodeEditor.SelectAllNodes;
+begin
+  ClearSelectionInternal;
+
+  FController.Selection.BeginUpdate;
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+    FController.Selection.SelectNode(FGraph.Nodes[i], True);
+  FController.Selection.EndUpdate;
+
+  ClearPinSelection;
+  NotifySelectionChanged;
+end;
+
+procedure TNodeEditor.SelectAllLinks;
+begin
+  ClearSelectionInternal;
+  FController.Selection.BeginUpdate;
   for var i := 0 to FGraph.Links.Count - 1 do
     FController.Selection.AddLinkToSelection(FGraph.Links[i]);
   FController.Selection.EndUpdate;
@@ -3446,7 +3450,6 @@ begin
     vkV:
       if Shift = [ssCtrl] then
       begin
-        FContextWorldPos := ScreenToWorld(FLastMousePos);
         PasteFromClipboard;
       end;
     vkD:
@@ -3475,24 +3478,12 @@ begin
       else if Shift = [ssCtrl, ssShift] then
       begin
         // Ctrl + Shift + A -> only nodes
-        ClearSelectionInternal;
-        FController.Selection.BeginUpdate;
-        for var i := 0 to FGraph.Nodes.Count - 1 do
-          FController.Selection.SelectNode(FGraph.Nodes[i], True);
-        FController.Selection.EndUpdate;
-        ClearPinSelection;
-        NotifySelectionChanged;
+        SelectAllNodes;
       end
       else if Shift = [ssShift] then
       begin
         // Shift + A -> only links
-        ClearSelectionInternal;
-        FController.Selection.BeginUpdate;
-        for var i := 0 to FGraph.Links.Count - 1 do
-          FController.Selection.AddLinkToSelection(FGraph.Links[i]);
-        FController.Selection.EndUpdate;
-        ClearPinSelection;
-        NotifySelectionChanged;
+        SelectAllLinks;
       end;
     vkEscape:
       begin

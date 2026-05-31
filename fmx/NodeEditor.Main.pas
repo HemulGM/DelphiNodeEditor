@@ -11,7 +11,7 @@ uses
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
-  FMX.ComboEdit, WinUI3.Form, FMX.SearchBox;
+  FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -828,7 +828,7 @@ begin
   FEditor.AddNode(NBranch);
 
   // ── Reroute ────────────────────────────────────────────────────
-  NReroute := FEditor.Graph.Registry.CreateNode('reroute', PointF(430, 370));
+  NReroute := FEditor.Graph.Registry.CreateNode('reroute', PointF(240, 470));
   FEditor.AddNode(NReroute);
 
   // ── Default node ───────────────────────────────────────────────
@@ -919,7 +919,7 @@ end;
 procedure TFormMain.MenuItemEditCopyClick(Sender: TObject);
 begin
   FEditor.CopySelectionToClipboard;
-  LabelStat5.Text := 'Copied ' + IntToStr(FEditor.SelectedNodeCount) + ' node(s)';
+  LabelStat5.Text := Format('Copied %d node(s)', [FEditor.SelectedNodeCount]);
 end;
 
 procedure TFormMain.MenuItemEditDeleteClick(Sender: TObject);

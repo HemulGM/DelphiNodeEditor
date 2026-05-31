@@ -78155,18 +78155,6 @@ object FormMain: TFormMain
       Size.PlatformDefault = False
       StyleLookup = 'panelstyle_appbackground'
       TabOrder = 0
-      object LayoutRender: TLayout
-        Align = Contents
-        ClipChildren = True
-        Margins.Left = 1.000000000000000000
-        Margins.Top = 1.000000000000000000
-        Margins.Right = 1.000000000000000000
-        Margins.Bottom = 1.000000000000000000
-        Size.Width = 337.000000000000000000
-        Size.Height = 685.000000000000000000
-        Size.PlatformDefault = False
-        TabOrder = 0
-      end
       object LayoutZoomMobile: TLayout
         Align = BottomRight
         Margins.Right = 20.000000000000000000
@@ -78198,6 +78186,18 @@ object FormMain: TFormMain
           Text = 'ButtonZoomIn2'
           OnClick = ButtonZoomInClick
         end
+      end
+      object LayoutRender: TLayout
+        Align = Contents
+        ClipChildren = True
+        Margins.Left = 1.000000000000000000
+        Margins.Top = 1.000000000000000000
+        Margins.Right = 1.000000000000000000
+        Margins.Bottom = 1.000000000000000000
+        Size.Width = 337.000000000000000000
+        Size.Height = 685.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
       end
     end
     object LayoutNodeLibrary: TLayout
