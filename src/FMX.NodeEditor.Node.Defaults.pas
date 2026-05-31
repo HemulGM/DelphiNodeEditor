@@ -40,10 +40,10 @@ end;
 procedure TFloatNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('Value', 'float', pkData, 45);
+  AddOutputPin('Value', 'float', TPinKind.Data, 45);
 
   if FindValue('value') = nil then
-    AddValue('value', nvkFloat).FloatValue := 0.0;
+    AddValue('value', TNodeValueKind.Float).FloatValue := 0.0;
 end;
 
 { TAddNode }
@@ -62,9 +62,9 @@ procedure TAddNode.SetupPins;
 begin
   ClearPins;
 
-  AddInputPin('A', 'float', pkData, 45).IsRequired := True;
-  AddInputPin('B', 'float', pkData, 75).IsRequired := True;
-  AddOutputPin('Result', 'float', pkData, 60);
+  AddInputPin('A', 'float', TPinKind.Data, 45).IsRequired := True;
+  AddInputPin('B', 'float', TPinKind.Data, 75).IsRequired := True;
+  AddOutputPin('Result', 'float', TPinKind.Data, 60);
 end;
 
 end.

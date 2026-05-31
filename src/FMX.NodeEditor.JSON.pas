@@ -3,8 +3,8 @@ unit FMX.NodeEditor.JSON;
 interface
 
 uses
-  System.Classes, System.SysUtils, FMX.Controls, FMX.Dialogs, System.JSON,
-  FMX.NodeEditor, FMX.NodeEditor.Node, System.Generics.Collections,
+  System.Classes, System.SysUtils, System.Types, FMX.Controls, FMX.Dialogs,
+  System.JSON, FMX.NodeEditor, FMX.NodeEditor.Node, System.Generics.Collections,
   FMX.NodeEditor.Types;
 
 type
@@ -83,7 +83,7 @@ type
     procedure RegisterJsonNodes;
 
     function JsonKindToNodeType(AData: TJSONValue): string;
-    function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; AX, AY: single; ADepth, AIndex: integer): TJsonNode;
+    function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer): TJsonNode;
 
     procedure BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
 
@@ -192,7 +192,7 @@ end;
 
 function TJsonNode.AddJsonInput: TNodePin;
 begin
-  Result := AddInputPin('In', 'json', pkData);
+  Result := AddInputPin('In', 'json', TPinKind.Data);
   Result.DisplayName := 'In';
   //Result.PinType.Color := $FFFFAA44;
 end;
@@ -202,14 +202,14 @@ begin
   if OutputCount > 0 then
     Result := GetOutput(0)
   else
-    Result := AddOutputPin('Value', 'json', pkData);
+    Result := AddOutputPin('Value', 'json', TPinKind.Data);
 
   //Result.PinType.Color := $FFFFAA44;
 end;
 
 function TJsonNode.AddJsonChildOutput(const AName: string): TNodePin;
 begin
-  Result := AddOutputPin(AName, 'json', pkData);
+  Result := AddOutputPin(AName, 'json', TPinKind.Data);
   Result.DisplayName := AName;
   //Result.PinType.Color := $FFFFAA44;
 end;
@@ -244,7 +244,7 @@ procedure TJsonObjectNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Object', 'json', pkData);
+  AddOutputPin('Object', 'json', TPinKind.Data);
 end;
 
 { TJsonArrayNode }
@@ -263,7 +263,7 @@ procedure TJsonArrayNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Array', 'json', pkData);
+  AddOutputPin('Array', 'json', TPinKind.Data);
 end;
 
 { TJsonStringNode }
@@ -284,9 +284,9 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('String', 'json', pkData);
+  AddOutputPin('String', 'json', TPinKind.Data);
 
-  V := AddValue('value', nvkString);
+  V := AddValue('value', TNodeValueKind.string);
   V.StringValue := '';
 end;
 
@@ -308,9 +308,9 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Number', 'json', pkData);
+  AddOutputPin('Number', 'json', TPinKind.Data);
 
-  V := AddValue('value', nvkFloat);
+  V := AddValue('value', TNodeValueKind.Float);
   V.FloatValue := 0;
 end;
 
@@ -332,9 +332,9 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Boolean', 'json', pkData);
+  AddOutputPin('Boolean', 'json', TPinKind.Data);
 
-  V := AddValue('value', nvkBoolean);
+  V := AddValue('value', TNodeValueKind.Boolean);
   V.BooleanValue := False;
 end;
 
@@ -354,7 +354,7 @@ procedure TJsonNullNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Null', 'json', pkData);
+  AddOutputPin('Null', 'json', TPinKind.Data);
 end;
 
 { TJsonNodeEditor }
@@ -464,7 +464,7 @@ begin
   end;
 end;
 
-function TJsonNodeEditor.CreateNodeFromJSONData(const AName: string; AData: TJSONValue; AX, AY: single; ADepth, AIndex: integer): TJsonNode;
+function TJsonNodeEditor.CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer): TJsonNode;
 var
   NodeType: string;
   V: TNodeValue;
@@ -479,17 +479,17 @@ begin
   else
     TitleText := '[' + AIndex.ToString + ']';
 
-  Result := TJsonNode(FNodeEditor.Graph.Registry.CreateNode(NodeType, AX, AY));
+  Result := TJsonNode(FNodeEditor.Graph.Registry.CreateNode(NodeType, Position));
   Result.JsonName := AName;
 
   case Result.JsonKind of
     jnkObject:
       Result.Title := TitleText + ': Object';
     jnkArray:
-    begin
-      Result.Title := TitleText + ': Array';
-      Result.Collapsed := True;
-    end;
+      begin
+        Result.Title := TitleText + ': Array';
+        Result.Collapsed := True;
+      end;
     jnkString:
       begin
         Result.Title := TitleText + ': String';
@@ -550,7 +550,7 @@ begin
       Y := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, X, Y, ADepth + 1, I);
+      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I);
 
       ParentOut := AParent.AddJsonChildOutput(FieldName);
       ChildIn := ChildNode.GetInput(0);
@@ -573,7 +573,7 @@ begin
       Y := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, X, Y, ADepth + 1, I);
+      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I);
 
       ParentOut := AParent.AddJsonChildOutput(FieldName);
       ParentOut.DisplayName := '[Item ' + I.ToString + ']';
@@ -603,7 +603,7 @@ begin
   try
     Row := 0;
 
-    RootNode := CreateNodeFromJSONData('root', Data, 40, 60, 0, 0);
+    RootNode := CreateNodeFromJSONData('root', Data, PointF(40, 60), 0, 0);
     FNodeEditor.Graph.BeginUpdate;
     try
       BuildGraphFromJSONData(RootNode, Data, 1, Row);

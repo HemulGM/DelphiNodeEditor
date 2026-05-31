@@ -11,7 +11,7 @@ type
   TNodeClipboardService = class
   public
     function NodesToJSONText(ANodes: TObjectList<TCustomNode>; AGraph: TNodeGraph): string;
-    procedure PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; AX, AY: single; ASelection: TNodeSelectionModel);
+    procedure PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; const Position: TPointF; ASelection: TNodeSelectionModel);
   end;
 
   TNodeEditorController = class
@@ -37,9 +37,10 @@ type
     procedure Clear;
 
     procedure DeleteSelection;
+    procedure CutSelectionToClipboard;
     procedure CopySelectionToClipboard;
-    procedure PasteFromClipboard(AX, AY: Single);
-    procedure DuplicateSelection(AX, AY: Single);
+    procedure PasteFromClipboard(const Position: TPointF);
+    procedure DuplicateSelection(const Position: TPointF);
 
     function SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
     procedure LoadFromJSONText(const JSON: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
@@ -48,14 +49,14 @@ type
 
     function ValidateGraphToStrings(AStrings: TStrings): Boolean;
 
-    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
-    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
+    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemovePinFromNode(APin: TNodePin): Boolean;
 
-    function CreateCompatibleNodeForPin(APin: TNodePin; AX, AY: Single): TCustomNode;
+    function CreateCompatibleNodeForPin(APin: TNodePin; const Position: TPointF): TCustomNode;
 
-    function InsertRerouteOnLink(ALink: TNodeLink; AX, AY: Single): TCustomNode;
-    function AddCommentNode(AX, AY: Single): TCustomNode;
+    function InsertRerouteOnLink(ALink: TNodeLink; const Position: TPointF): TCustomNode;
+    function AddCommentNode(const Position: TPointF): TCustomNode;
 
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
@@ -155,26 +156,41 @@ begin
   if (FGraph = nil) or (JSON.Trim.IsEmpty) then
     Exit;
 
-  var Data := TJSONValue.ParseJSONValue(JSON) as TJSONObject;
   try
-    var UseAlphaColor := Data.GetValue<Boolean>('alpha', False);
-    AZoom := Data.GetValue<Double>('zoom', 1.0);
-    AOffsetX := Data.GetValue<Double>('offsetX', 0.0);
-    AOffsetY := Data.GetValue<Double>('offsetY', 0.0);
+    var Data := TJSONValue.ParseJSONValue(JSON);
+    try
+      if Data is not TJSONObject then
+        raise Exception.Create(Translate('Unknown version'));
 
-    var GraphObj := Data.GetValue<TJSONObject>('graph', nil);
-    if GraphObj <> nil then
-    begin
-      var BeforeJSON := FGraph.CaptureJSONText;
-      FGraph.LoadGraphFromJSON(GraphObj, UseAlphaColor);
-      var AfterJSON := FGraph.CaptureJSONText;
+      var Version: Integer := 0;
+      if not Data.TryGetValue<Integer>('version', Version) then
+        raise Exception.Create(Translate('Unknown version'));
 
-      FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Load graph'));
+      var GraphObj := Data.GetValue<TJSONObject>('graph', nil);
+      if GraphObj = nil then
+        raise Exception.Create(Translate('Graph data is missing'));
+
+      if GraphObj <> nil then
+      begin
+        var UseAlphaColor := Data.GetValue<Boolean>('alpha', False);
+
+        var BeforeJSON := FGraph.CaptureJSONText;
+        FGraph.LoadGraphFromJSON(GraphObj, UseAlphaColor);
+        var AfterJSON := FGraph.CaptureJSONText;
+
+        AZoom := Data.GetValue<Double>('zoom', 1.0);
+        AOffsetX := Data.GetValue<Double>('offsetX', 0.0);
+        AOffsetY := Data.GetValue<Double>('offsetY', 0.0);
+
+        FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Load graph'));
+      end;
+
+      FSelection.Clear;
+    finally
+      Data.Free;
     end;
-
-    FSelection.Clear;
-  finally
-    Data.Free;
+  except
+    raise Exception.Create(Translate('Couldn''t load graph'));
   end;
 end;
 
@@ -247,7 +263,7 @@ begin
   Result := FGraph.RemoveDynamicPin(APin);
 end;
 
-function TNodeEditorController.CreateCompatibleNodeForPin(APin: TNodePin; AX, AY: single): TCustomNode;
+function TNodeEditorController.CreateCompatibleNodeForPin(APin: TNodePin; const Position: TPointF): TCustomNode;
 begin
   Result := nil;
 
@@ -255,31 +271,31 @@ begin
     Exit;
 
   var NeedDir: TPinDirection;
-  if APin.Direction = pdOutput then
-    NeedDir := pdInput
+  if APin.Direction = TPinDirection.Output then
+    NeedDir := TPinDirection.Input
   else
-    NeedDir := pdOutput;
+    NeedDir := TPinDirection.Output;
 
-  if APin.OwnerNode.VisualKind = TNodeVisualKind.nvReroute then
+  if APin.OwnerNode.VisualKind = TNodeVisualKind.Reroute then
   begin
-    Result := FGraph.Registry.CreateNode(APin.OwnerNode.NodeType, AX, AY);
+    Result := FGraph.Registry.CreateNode(APin.OwnerNode.NodeType, Position);
     Exit;
   end;
 
   for var It in FGraph.Registry do
   begin
-    if APin.OwnerNode.VisualKind = TNodeVisualKind.nvComment then
+    if APin.OwnerNode.VisualKind = TNodeVisualKind.Comment then
       Continue;
 
-    var TestNode := FGraph.Registry.CreateNode(It.NodeType, AX, AY);
+    var TestNode := FGraph.Registry.CreateNode(It.NodeType, Position);
     try
-      if NeedDir = pdInput then
+      if NeedDir = TPinDirection.Input then
       begin
         for var j := 0 to TestNode.InputCount - 1 do
         begin
           var TestPin := TestNode.GetInput(j);
           if FGraph.CanConnect(APin, TestPin) then
-            Exit(FGraph.Registry.CreateNode(It.NodeType, AX, AY));
+            Exit(FGraph.Registry.CreateNode(It.NodeType, Position));
         end;
       end
       else
@@ -288,7 +304,7 @@ begin
         begin
           var TestPin := TestNode.GetOutput(j);
           if FGraph.CanConnect(TestPin, APin) then
-            Exit(FGraph.Registry.CreateNode(It.NodeType, AX, AY));
+            Exit(FGraph.Registry.CreateNode(It.NodeType, Position));
         end;
       end;
     finally
@@ -297,7 +313,7 @@ begin
   end;
 end;
 
-function TNodeEditorController.InsertRerouteOnLink(ALink: TNodeLink; AX, AY: single): TCustomNode;
+function TNodeEditorController.InsertRerouteOnLink(ALink: TNodeLink; const Position: TPointF): TCustomNode;
 begin
   Result := nil;
 
@@ -305,7 +321,7 @@ begin
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
-  Result := FGraph.CreateRerouteForLink(ALink, AX, AY);
+  Result := FGraph.CreateRerouteForLink(ALink, Position);
   var AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, 'Insert reroute');
@@ -315,14 +331,14 @@ begin
     FSelection.SelectNode(Result, False);
 end;
 
-function TNodeEditorController.AddCommentNode(AX, AY: single): TCustomNode;
+function TNodeEditorController.AddCommentNode(const Position: TPointF): TCustomNode;
 begin
   Result := nil;
 
   if FGraph = nil then
     Exit;
 
-  Result := FGraph.Registry.CreateNode('comment', AX, AY);
+  Result := FGraph.Registry.CreateNode('comment', Position);
   if Result <> nil then
   begin
     AddNode(Result);
@@ -417,7 +433,19 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.PasteFromClipboard(AX, AY: single);
+procedure TNodeEditorController.CutSelectionToClipboard;
+begin
+  if (FGraph = nil) or (FSelection.NodeCount = 0) then
+    Exit;
+  var Clipboard: IFMXExtendedClipboardService;
+  if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
+  begin
+    Clipboard.SetText(FClipboard.NodesToJSONText(FSelection.Nodes, FGraph));
+    DeleteSelection;
+  end;
+end;
+
+procedure TNodeEditorController.PasteFromClipboard(const Position: TPointF);
 begin
   if FGraph = nil then
     Exit;
@@ -429,14 +457,14 @@ begin
       Exit;
 
     var BeforeJSON := FGraph.CaptureJSONText;
-    FClipboard.PasteNodesFromJSONText(Clipboard.GetText, FGraph, AX, AY, FSelection);
+    FClipboard.PasteNodesFromJSONText(Clipboard.GetText, FGraph, Position, FSelection);
     var AfterJSON := FGraph.CaptureJSONText;
 
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Paste nodes'));
   end;
 end;
 
-procedure TNodeEditorController.DuplicateSelection(AX, AY: single);
+procedure TNodeEditorController.DuplicateSelection(const Position: TPointF);
 begin
   if (FGraph = nil) or (FSelection.NodeCount = 0) then
     Exit;
@@ -446,7 +474,7 @@ begin
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
-  FClipboard.PasteNodesFromJSONText(NodeCopy, FGraph, AX, AY, FSelection);
+  FClipboard.PasteNodesFromJSONText(NodeCopy, FGraph, Position, FSelection);
   var AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
@@ -503,7 +531,7 @@ begin
   end;
 end;
 
-procedure TNodeClipboardService.PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; AX, AY: single; ASelection: TNodeSelectionModel);
+procedure TNodeClipboardService.PasteNodesFromJSONText(const AJSON: string; AGraph: TNodeGraph; const Position: TPointF; ASelection: TNodeSelectionModel);
 var
   Data: TJSONObject;
   Root: TJSONObject;
@@ -563,12 +591,12 @@ begin
         NodeType := NodeObj.GetValue('type', 'default');
         OldNodeId := NodeObj.GetValue('id', '');
 
-        N := AGraph.Registry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0));
+        N := AGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
         N.LoadFromJSON(NodeObj, True);
         NewNodeId := NewId;
         N.Id := NewNodeId;
-        N.X := AX + (N.X - MinX);
-        N.Y := AY + (N.Y - MinY);
+        N.X := Position.X + (N.X - MinX);
+        N.Y := Position.Y + (N.Y - MinY);
 
         OldToNewNodeIds.Values[OldNodeId] := NewNodeId;
 
@@ -587,7 +615,9 @@ begin
           P.Id := NewPinId;
         end;
 
+        N.ZOrder := 0;
         AGraph.AddNode(N);
+
         if ASelection <> nil then
           ASelection.SelectNode(N, True);
       end;

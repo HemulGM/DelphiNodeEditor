@@ -6,6 +6,7 @@ uses
   {$IF DEFINED(ANDROID) or DEFINED(IOS)}
   FMX.Skia,
   {$ENDIF}
+  FMX.Skia,
   FMX.Types,
   NodeEditor.Main in 'NodeEditor.Main.pas' {FormMain},
   FMX.NodeEditor in '..\src\FMX.NodeEditor.pas',
@@ -39,22 +40,66 @@ uses
   DelphiWindowStyle.Core.Win in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.Core.Win.pas',
   FMX.Platform.Win in '..\DelphiWinUI3\Fixes\D13\FMX.Platform.Win.pas',
   FMX.Windows.Dispatch in '..\DelphiWinUI3\FMXWindowsDispatch\FMX.Windows.Dispatch.pas',
-  {$ENDIF}
+  {$ENDIF }
   DelphiWindowStyle.FMX in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.FMX.pas',
   DelphiWindowStyle.Types in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.Types.pas',
   FMX.Windows.Hints in '..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas';
 
 {$R *.res}
 
+type
+  TCanvasType = (GDI, DirectX11, DirectX9, Direct2D, SkiaOpenGL, SkiaVulkan);
+
+var
+  CanvasType: TCanvasType = TCanvasType.Direct2D;
+
 begin
   {$IF DEFINED(ANDROID) or DEFINED(IOS)}
   GlobalUseSkia := True;
   {$ENDIF}
-  //GlobalUseDX := False;
-  //GlobalUseGPUCanvas := False;
-  //GlobalUseDirect2D := False;
-  //GlobalUseDXSoftware := False;
+
+  case CanvasType of
+    TCanvasType.GDI:
+      begin
+        GlobalUseGDIPlusClearType := True;
+
+        GlobalUseDirect2D := False;
+        GlobalUseGPUCanvas := False;
+        GlobalUseDX := True;
+      end;
+    TCanvasType.DirectX11:
+      begin
+        GlobalUseDirect2D := False;
+        GlobalUseGPUCanvas := True;
+        GlobalUseDX := True;
+      end;
+    TCanvasType.DirectX9:
+      begin
+        GlobalUseDirect2D := False;
+        GlobalUseGPUCanvas := True;
+        GlobalUseDX := False;
+      end;
+    TCanvasType.Direct2D:
+      begin
+        GlobalUseDirect2D := True;
+        GlobalUseGPUCanvas := False;
+        GlobalUseDX := True;
+      end;
+    TCanvasType.SkiaOpenGL:
+      begin
+        GlobalUseSkia := True;
+        GlobalUseVulkan := False;
+        GlobalUseSkiaRasterWhenAvailable := False;
+      end;
+    TCanvasType.SkiaVulkan:
+      begin
+        GlobalUseSkia := True;
+        GlobalUseVulkan := True;
+        GlobalUseSkiaRasterWhenAvailable := False;
+      end;
+  end;
   Application.Initialize;
   Application.CreateForm(TFormMain, FormMain);
   Application.Run;
 end.
+

@@ -1,40 +1,114 @@
 object FormNodeEditorSearch: TFormNodeEditorSearch
   Left = 0
   Top = 0
-  ActiveControl = SearchBoxFilter
-  Caption = 'Add Node'
-  ClientHeight = 400
-  ClientWidth = 300
+  BorderIcons = [biSystemMenu]
+  Caption = 'Node Library'
+  ClientHeight = 500
+  ClientWidth = 350
+  Padding.Left = 10.000000000000000000
+  Padding.Top = 10.000000000000000000
+  Padding.Right = 10.000000000000000000
+  Padding.Bottom = 10.000000000000000000
+  Constraints.MinHeight = 250.000000000000000000
+  Constraints.MinWidth = 250.000000000000000000
   FormFactor.Width = 320
   FormFactor.Height = 480
   FormFactor.Devices = [Desktop]
+  OnShow = FormShow
   DesignerMasterStyle = 0
   object ListBoxItems: TListBox
     Align = Client
-    Margins.Left = 10.000000000000000000
-    Margins.Top = 10.000000000000000000
-    Margins.Right = 10.000000000000000000
-    Margins.Bottom = 10.000000000000000000
-    Size.Width = 280.000000000000000000
-    Size.Height = 380.000000000000000000
+    Size.Width = 330.000000000000000000
+    Size.Height = 416.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 0
     OnDblClick = ListBoxItemsDblClick
     ScrollAnimation = True
     DisableFocusEffect = True
-    ItemHeight = 32.000000000000000000
-    DefaultItemStyles.ItemStyle = ''
+    ItemHeight = 50.000000000000000000
+    DefaultItemStyles.ItemStyle = 'listboxitembottomdetail'
     DefaultItemStyles.GroupHeaderStyle = ''
     DefaultItemStyles.GroupFooterStyle = ''
-    Viewport.Width = 276.000000000000000000
-    Viewport.Height = 344.000000000000000000
+    Viewport.Width = 326.000000000000000000
+    Viewport.Height = 380.000000000000000000
     object SearchBoxFilter: TSearchBox
       Touch.InteractiveGestures = [LongTap, DoubleTap]
       Align = Top
       TabOrder = 0
-      Size.Width = 276.000000000000000000
+      Size.Width = 326.000000000000000000
       Size.Height = 32.000000000000000000
       Size.PlatformDefault = False
+      TextPrompt = 'Search node ...'
+    end
+  end
+  object Layout28: TLayout
+    Align = Bottom
+    Padding.Left = 10.000000000000000000
+    Padding.Top = 15.000000000000000000
+    Padding.Right = 10.000000000000000000
+    Padding.Bottom = 15.000000000000000000
+    Position.X = 10.000000000000000000
+    Position.Y = 426.000000000000000000
+    Size.Width = 330.000000000000000000
+    Size.Height = 64.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object Layout9: TLayout
+      Align = MostLeft
+      Margins.Right = 10.000000000000000000
+      Position.X = 10.000000000000000000
+      Position.Y = 15.000000000000000000
+      Size.Width = 16.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      object PathLabel20: TPathLabel
+        Align = Center
+        Data.Path = {
+          36000000000000000000B0400000D040020000000000B040D729C74002000000
+          D829B7400000C040020000000000C0400000C0400200000028D6C8400000C040
+          020000000000D040D729C740020000000000D0400000D040010000000000D040
+          00000041020000000000D040146B04410200000029D6C8400000084102000000
+          0000C0400000084102000000D729B74000000841020000000000B040146B0441
+          020000000000B04000000041030000000000B0400000D040000000000000C040
+          0000704002000000C3BEB24000007040020000000000A840C3BE824002000000
+          0000A84000009040020000000000A8403D419D4002000000C3BEB2400000A840
+          020000000000C0400000A840020000003D41CD400000A840020000000000D840
+          3D419D40020000000000D84000009040020000000000D840C3BE824002000000
+          3D41CD4000007040020000000000C04000007040000000000000803F0000C040
+          020000000400803FD1444F4002000000D8444F40F8FF7F3F020000000200C040
+          0000803F02000000CA2E0C41F8FF7F3F0200000000003041D1444F4002000000
+          00003041FEFFBF400200000000003041CA2E0C4102000000CB2E0C4100003041
+          020000000000C0400000304102000000D5444F4000003041020000000000803F
+          CA2E0C41020000000000803FFFFFBF40000000000000C040FCFFFF3F02000000
+          779D7240000000400200000000000040779D724002000000010000400000C040
+          0200000000000040A258034102000000759D72400000204102000000FFFFBF40
+          0000204102000000A2580341000020410200000000002041A258034102000000
+          FFFF1F410000C0400200000000002041789D724002000000A258034102000040
+          020000000000C04001000040}
+        Size.Width = 16.000000000000000000
+        Size.Height = 16.000000000000000000
+        Size.PlatformDefault = False
+      end
+    end
+    object Label8: TLabel
+      Align = Top
+      Position.X = 36.000000000000000000
+      Position.Y = 15.000000000000000000
+      Size.Width = 284.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Double click to add to the scene'
+      TabOrder = 2
+    end
+    object Label10: TLabel
+      Align = Client
+      Opacity = 0.500000000000000000
+      Size.Width = 284.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Right click for more options'
+      TabOrder = 1
     end
   end
   object ActionList: TActionList

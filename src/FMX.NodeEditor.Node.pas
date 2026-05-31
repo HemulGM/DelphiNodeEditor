@@ -4,7 +4,8 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.UITypes, System.Types, System.JSON,
-  System.Generics.Collections, FMX.Graphics, FMX.NodeEditor.Types;
+  System.Math, System.Generics.Collections, FMX.Types, FMX.Graphics,
+  FMX.NodeEditor.Types, FMX.TextLayout;
 
 type
   TCustomNode = class;
@@ -39,19 +40,21 @@ type
     BooleanValue: boolean;
     JSONValue: string;
 
-    constructor Create(const AName: string = ''; AKind: TNodeValueKind = nvkNull);
+    constructor Create(const AName: string = ''; AKind: TNodeValueKind = TNodeValueKind.Null);
 
     procedure SaveToJSON(AObj: TJSONObject);
     procedure LoadFromJSON(AObj: TJSONObject);
   end;
 
   TNodePin = class
+  private
   public
     Id: string;
     Name: string;
     DisplayName: string;
     Kind: TPinKind;
     Direction: TPinDirection;
+    Selected: Boolean;
 
     // Legacy
     DataType: string;
@@ -73,20 +76,25 @@ type
     constructor Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
     destructor Destroy; override;
 
-    function EffectiveDisplayName: string;
-    procedure SetTypeId(const ATypeId: string);
+    function EffectiveDisplayName: string; inline;
+    function GetPinWorldPosition: TPointF; inline;
+    procedure SetTypeId(const ATypeId: string); inline;
+    procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Integer); virtual;
   end;
 
-  TLinkVisualType = (lvBezier, lvRect, lvDirect);
-
   TNodeLink = class
+    class var
+      VisualType: TLinkVisualType;
+      UseGradient: Boolean;
   private
-    procedure GetBezierWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF);
+    procedure GetBezierWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF); inline;
+    procedure GetDirectWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF); inline;
+    procedure GetRectWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF); inline;
   public
     Id: string;
     FromPin: TNodePin;
     ToPin: TNodePin;
-    VisualType: TLinkVisualType;
+    OnScreen: Boolean;
     constructor Create(AFrom, ATo: TNodePin);
     function HitTest(AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; virtual;
     function IsInsideWorldRect(const R: TRectF): Boolean; virtual;
@@ -102,6 +110,8 @@ type
       BottomPad = 10;
       PinRadius = 8;
       ResizeEdgeSize = 6;
+      RectCornerRadius = 10;
+      DrawShadow = True;
   private
     FInputs: TObjectList<TNodePin>;
     FOutputs: TObjectList<TNodePin>;
@@ -110,6 +120,7 @@ type
     FHeight: Integer;
     FIconPath: string;
     FIconPathData: TPathData;
+    FTextLayout: TTextLayout;
   protected
     procedure SetHeight(const Value: Integer); virtual;
     procedure SetWidth(const Value: Integer); virtual;
@@ -125,19 +136,21 @@ type
     MinWidth, MinHeight: Integer;
     HeaderColor: TAlphaColor;
     BodyColor: TAlphaColor;
-    Selected: boolean;
+    Selected: Boolean;
+    OnScreen: Boolean;
 
     VisualKind: TNodeVisualKind;
     CommentText: string;
-    Hovered: boolean;
+    Hovered: Boolean;
     HoveredPinId: string;
+    HoveredPinCompatible: TPinCompatible;
     // On pin hover
-    Highlighted: boolean;
+    Highlighted: Boolean;
     FixedSize: Boolean;
 
-    Collapsed: boolean;
+    Collapsed: Boolean;
     ZOrder: integer;
-    Connected: boolean;
+    Connected: Boolean;
 
     constructor Create; overload; virtual;
     constructor Create(const ATitle: string; AX, AY: Single; AWidth, AHeight: integer); overload; virtual;
@@ -146,10 +159,10 @@ type
     procedure SetupPins; virtual;
 
     procedure ClearPins;
-    function AddInputPin(const AName, ADataType: string; AKind: TPinKind = pkData; ALocalY: integer = -1): TNodePin;
-    function AddOutputPin(const AName, ADataType: string; AKind: TPinKind = pkData; ALocalY: integer = -1): TNodePin;
-    function RemovePin(APin: TNodePin): boolean;
-    procedure ReindexPins;
+    function AddInputPin(const AName, ADataType: string; AKind: TPinKind = TPinKind.Data; ALocalY: integer = -1): TNodePin;
+    function AddOutputPin(const AName, ADataType: string; AKind: TPinKind = TPinKind.Data; ALocalY: integer = -1): TNodePin;
+    function RemovePin(APin: TNodePin): Boolean; inline;
+    procedure ReindexPins; inline;
     procedure AutoLayoutPins;
 
     function InputCount: integer;
@@ -157,14 +170,16 @@ type
     function GetInput(Index: integer): TNodePin;
     function GetOutput(Index: integer): TNodePin;
     function FindPinById(const AId: string): TNodePin;
-    function OutputsIsBusy: Boolean;
-    function InputsIsBusy: Boolean;
+    function OutputsIsBusy: Boolean; inline;
+    function InputsIsBusy: Boolean; inline;
 
-    function GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
-    function GetPinWorldPosition(APin: TNodePin): TPointF;
+    function GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint; inline;
+    function GetPinWorldPosition(APin: TNodePin): TPointF; inline;
 
     function HitTest(WX, WY: Single): Boolean; virtual;
-    function GetScreenBounds(Zoom: Double; OffsetX, OffsetY: Double): TRect;
+    function ResizeHandleHitTest(WX, WY: Single; Zoom: Double; OffsetX, OffsetY: Double): Boolean; virtual;
+    function GetScreenBounds(Zoom: Double; OffsetX, OffsetY: Double): TRectF; inline;
+    function GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRectF; inline;
 
     procedure ClearValues;
     function AddValue(const AName: string; AKind: TNodeValueKind): TNodeValue;
@@ -179,14 +194,19 @@ type
     procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean); virtual;
   protected
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
+    function TextHeight(Canvas: TCanvas; const AText: string): Single;
+    function TextWidth(Canvas: TCanvas; const AText: string): Single;
   private
     procedure DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single = 1.0);
-    function GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRect;
     procedure SetIconPath(const Value: string);
     procedure UpdateIconPath;
+    procedure CreateTextLayout(Canvas: TCanvas);
+    procedure FillText(Canvas: TCanvas; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign: TTextAlign; const AVTextAlign: TTextAlign = TTextAlign.Center);
+    procedure DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
+    procedure MeasureText(Canvas: TCanvas; var ARect: TRectF; const AText: string; const WordWrap: Boolean; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
   public
     procedure ApplyPropertiesFromJSON(AObj: TJSONObject); virtual;
-    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); virtual;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); virtual;
     property IconPath: string read FIconPath write SetIconPath;
   end;
 
@@ -202,7 +222,7 @@ type
     constructor Create; override;
     procedure SetupPins; override;
   public
-    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
 
   TCommentNode = class(TCustomNode)
@@ -210,17 +230,16 @@ type
     constructor Create; override;
     procedure SetupPins; override;
   public
-    procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
 
 implementation
 
-uses
-  System.Math, FMX.Types;
-
 constructor TCustomNode.Create;
 begin
   inherited;
+
+  FTextLayout := nil;
 
   FIconPathData := TPathData.Create;
   FInputs := TObjectList<TNodePin>.Create;
@@ -237,7 +256,7 @@ begin
 
   Selected := False;
 
-  VisualKind := nvNormal;
+  VisualKind := TNodeVisualKind.Normal;
   CommentText := '';
   Hovered := False;
   Highlighted := False;
@@ -265,6 +284,7 @@ begin
   FInputs.Free;
   FOutputs.Free;
   FIconPathData.Free;
+  FTextLayout.Free;
   inherited Destroy;
 end;
 
@@ -275,7 +295,7 @@ end;
 
 function TCustomNode.GetHeight: Integer;
 begin
-  if Collapsed and (VisualKind <> TNodeVisualKind.nvReroute) then
+  if Collapsed and (VisualKind <> TNodeVisualKind.Reroute) then
     Result := HeaderHeight
   else
     Result := FHeight;
@@ -290,7 +310,7 @@ procedure TCustomNode.SetHeight(const Value: Integer);
 begin
   if Collapsed or FixedSize then
     Exit;
-  if VisualKind <> TNodeVisualKind.nvReroute then
+  if VisualKind <> TNodeVisualKind.Reroute then
     FHeight := Max(60, Max(Max(InputCount, OutputCount) * 30 + HeaderHeight + BottomPad, Value))
   else
     FHeight := Value;
@@ -317,7 +337,7 @@ procedure TCustomNode.SetWidth(const Value: Integer);
 begin
   if FixedSize then
     Exit;
-  if VisualKind <> TNodeVisualKind.nvReroute then
+  if VisualKind <> TNodeVisualKind.Reroute then
     FWidth := Max(100, Value)
   else
     FWidth := Value;
@@ -335,7 +355,7 @@ begin
   if ALocalY < 0 then
     ALocalY := (HeaderHeight + 16) + FInputs.Count * 26;
 
-  Result := TNodePin.Create(AName, pdInput, AKind, ALocalY);
+  Result := TNodePin.Create(AName, TPinDirection.Input, AKind, ALocalY);
   Result.OwnerNode := Self;
   Result.SetTypeId(ADataType);
   Result.AllowMultipleConnections := False;
@@ -351,7 +371,7 @@ begin
   if ALocalY < 0 then
     ALocalY := (HeaderHeight + 16) + FOutputs.Count * 26;
 
-  Result := TNodePin.Create(AName, pdOutput, AKind, ALocalY);
+  Result := TNodePin.Create(AName, TPinDirection.Output, AKind, ALocalY);
   Result.OwnerNode := Self;
   Result.SetTypeId(ADataType);
   Result.AllowMultipleConnections := True;
@@ -372,7 +392,7 @@ begin
   if APin.OwnerNode <> Self then
     Exit;
 
-  if APin.Direction = pdInput then
+  if APin.Direction = TPinDirection.Input then
   begin
     if FInputs.Remove(APin) >= 0 then
       Result := True;
@@ -390,6 +410,11 @@ begin
   end;
 end;
 
+function TCustomNode.ResizeHandleHitTest(WX, WY: Single; Zoom: Double; OffsetX, OffsetY: Double): Boolean;
+begin
+  Result := GetResizeHandleRect(Zoom, OffsetX, OffsetY).Contains(TPointF.Create(WX, WY));
+end;
+
 procedure TCustomNode.ReindexPins;
 begin
   for var i := 0 to FInputs.Count - 1 do
@@ -401,7 +426,7 @@ end;
 
 procedure TCustomNode.AutoLayoutPins;
 begin
-  if VisualKind = nvReroute then
+  if VisualKind = TNodeVisualKind.Reroute then
   begin
     for var i := 0 to FInputs.Count - 1 do
       FInputs[i].LocalY := Height div 2;
@@ -412,7 +437,7 @@ begin
     Exit;
   end;
 
-  if VisualKind = nvComment then
+  if VisualKind = TNodeVisualKind.Comment then
     Exit;
 
   var MaxCount := Max(FInputs.Count, FOutputs.Count);
@@ -491,7 +516,7 @@ end;
 
 function TCustomNode.GetPinLocalPosition(APin: TNodePin): TPoint;
 begin
-  if APin.Direction = pdInput then
+  if APin.Direction = TPinDirection.Input then
   begin
     if Collapsed then
       Result := TPoint.Create(0, HeaderHeight div 2)
@@ -533,7 +558,7 @@ var
   RX2, RY2: single;
   L, T, R, B: single;
 begin
-  if VisualKind = nvReroute then
+  if VisualKind = TNodeVisualKind.Reroute then
   begin
     CX := X + Width * 0.5;
     CY := Y + Height * 0.5;
@@ -562,12 +587,12 @@ begin
     Result := (WX >= X) and (WY >= Y) and (WX <= X + Width) and (WY <= Y + Height);
 end;
 
-function TCustomNode.GetScreenBounds(Zoom: Double; OffsetX, OffsetY: Double): TRect;
+function TCustomNode.GetScreenBounds(Zoom: Double; OffsetX, OffsetY: Double): TRectF;
 begin
-  Result.Left := Round(X * Zoom + OffsetX);
-  Result.Top := Round(Y * Zoom + OffsetY);
-  Result.Right := Result.Left + Round(Width * Zoom);
-  Result.Bottom := Result.Top + Round(Height * Zoom);
+  Result.Left := X * Zoom + OffsetX;
+  Result.Top := Y * Zoom + OffsetY;
+  Result.Right := Result.Left + Width * Zoom;
+  Result.Bottom := Result.Top + Height * Zoom;
 end;
 
 procedure TCustomNode.ClearValues;
@@ -614,11 +639,78 @@ begin
     Result := nil;
 end;
 
-procedure TCustomNode.Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double);
-begin
-  var ScaledHeaderHeight := HeaderHeight * Zoom;
+procedure TCustomNode.FillText(Canvas: TCanvas; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
+begin        //Exit;
+  FTextLayout.BeginUpdate;
+  FTextLayout.TopLeft := ARect.TopLeft;
+  FTextLayout.MaxSize := PointF(ARect.Width, ARect.Height);
+  FTextLayout.Text := AText;
+  FTextLayout.WordWrap := WordWrap;
+  FTextLayout.Opacity := AOpacity;
+  FTextLayout.HorizontalAlign := ATextAlign;
+  FTextLayout.VerticalAlign := AVTextAlign;
+  FTextLayout.Font := Canvas.Font;
+  FTextLayout.Color := Canvas.Fill.Color;
+  FTextLayout.RightToLeft := TFillTextFlag.RightToLeft in Flags;
+  FTextLayout.EndUpdate;
+  FTextLayout.RenderLayout(Canvas);
+end;
 
-  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+function TCustomNode.TextWidth(Canvas: TCanvas; const AText: string): Single;
+var
+  R: TRectF;
+begin
+  R := RectF(0, 0, 10000, 20);
+  MeasureText(Canvas, R, AText, False, [], TTextAlign.Leading, TTextAlign.Center);
+  Result := R.Right;
+end;
+
+function TCustomNode.TextHeight(Canvas: TCanvas; const AText: string): Single;
+var
+  R: TRectF;
+begin
+  R := RectF(0, 0, 10000, 10000);
+  MeasureText(Canvas, R, AText, False, [], TTextAlign.Leading, TTextAlign.Leading);
+  Result := R.Bottom;
+end;
+
+procedure TCustomNode.MeasureText(Canvas: TCanvas; var ARect: TRectF; const AText: string; const WordWrap: Boolean; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
+begin
+  if AText.IsEmpty then
+  begin
+    ARect.Right := ARect.Left;
+    ARect.Bottom := ARect.Top;
+    Exit;
+  end;
+
+  FTextLayout.BeginUpdate;
+  try
+    FTextLayout.TopLeft := ARect.TopLeft;
+    FTextLayout.MaxSize := PointF(ARect.Width, ARect.Height);
+    FTextLayout.Text := AText;
+    FTextLayout.WordWrap := WordWrap;
+    FTextLayout.HorizontalAlign := ATextAlign;
+    FTextLayout.VerticalAlign := AVTextAlign;
+    FTextLayout.Font := Canvas.Font;
+    FTextLayout.Color := Canvas.Fill.Color;
+    FTextLayout.RightToLeft := TFillTextFlag.RightToLeft in Flags;
+  finally
+    FTextLayout.EndUpdate;
+  end;
+  ARect := FTextLayout.TextRect;
+end;
+
+procedure TCustomNode.CreateTextLayout(Canvas: TCanvas);
+begin
+  FTextLayout := TTextLayoutManager.TextLayoutByCanvas(Canvas.ClassType).Create(Canvas);
+end;
+
+procedure TCustomNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double);
+begin
+  if FTextLayout = nil then
+    CreateTextLayout(Canvas);
+
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
 
   var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
   var NodeHeadText := NodeHead;
@@ -628,10 +720,11 @@ begin
   var NodeBodyText := NodeBody;
   NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
 
-  var CornerRadius := 10 * Zoom;
+  var CornerRadius := RectCornerRadius * Zoom;
 
   // Shadow
-  DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
+  if DrawShadow then
+    DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
 
   // Fill Body
   Canvas.Fill.Kind := TBrushKind.Solid;
@@ -704,24 +797,27 @@ begin
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Font.Size := 10 * Zoom;
-  Canvas.FillText(NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+
+  if (not Collapsed) and (VisualKind = TNodeVisualKind.Normal) then
+    DrawNodePins(Canvas, Zoom, OffsetX, OffsetY, 1);
 
   // Size grip
-  if Selected and (VisualKind <> TNodeVisualKind.nvReroute) and (not Collapsed) and (not FixedSize) then
+  if Selected and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
     DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
 end;
 
-function TCustomNode.GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRect;
+function TCustomNode.GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRectF;
 begin
-  Result := Rect(0, 0, 0, 0);
-  if VisualKind = TNodeVisualKind.nvReroute then
+  Result := TRectF.Empty;
+  if VisualKind = TNodeVisualKind.Reroute then
     Exit;
   if FixedSize then
     Exit;
 
   var R := GetScreenBounds(Zoom, OffsetX, OffsetY);
   var S := Round(ResizeEdgeSize * Zoom);
-  Result := Rect(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
+  Result := TRectF.Create(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
 end;
 
 procedure TCustomNode.DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
@@ -736,6 +832,7 @@ begin
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Cap := TStrokeCap.Round;
   Canvas.Stroke.Thickness := Max(1.5, GripSize * 0.08);
+  Canvas.Stroke.Color := TAlphaColorF.Create(1, 1, 1, 0.85 * AOpacity).ToAlphaColor;
 
   for var i := 0 to 2 do
   begin
@@ -746,8 +843,61 @@ begin
     var Y2 := R.Top + Margin + i * Step;
 
     // Bright line
-    Canvas.Stroke.Color := TAlphaColorF.Create(1, 1, 1, 0.85 * AOpacity).ToAlphaColor;
     Canvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), 1);
+  end;
+end;
+
+procedure TCustomNode.DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
+begin
+  var PinRadiusScaled := Round(PinRadius * Zoom);
+  Canvas.Font.Size := 10 * Zoom;
+
+  for var P in FInputs do
+  begin
+    if (P = nil) or P.Hidden then
+      Continue;
+
+    var PX := Round(X * Zoom + OffsetX);
+    var PY := Round((Y + P.LocalY) * Zoom + OffsetY);
+    var Center := Point(PX, PY);
+
+    P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
+
+    // Text
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := TAlphaColors.White;
+
+    var TextSize := TSize.Create(Round((Width / 2 - 5) * Zoom), Round(20 * Zoom));
+    FillText(Canvas,
+      TRectF.Create(
+        Center.X + (PinRadius + 6) * Zoom,
+        Center.Y - TextSize.Height div 2,
+        Center.X + (PinRadius + 6) * Zoom + TextSize.Width,
+        Center.Y + TextSize.Height div 2),
+      P.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+  end;
+
+  for var P in FOutputs do
+  begin
+    if (P = nil) or P.Hidden then
+      Continue;
+
+    var PX := Round((X + Width) * Zoom + OffsetX);
+    var PY := Round((Y + P.LocalY) * Zoom + OffsetY);
+    var Center := Point(PX, PY);
+
+    P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
+
+    // Text
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := TAlphaColors.White;
+    var TextSize := TSize.Create(Round((Width / 2 - 5) * Zoom), Round(20 * Zoom));
+    FillText(Canvas, TRectF.Create(
+        Center.X - TextSize.Width - (PinRadius + 6) * Zoom,
+        Center.Y - TextSize.Height div 2,
+        Center.X - (PinRadius + 6) * Zoom,
+        Center.Y + TextSize.Height div 2),
+      P.Name, False, 1, [], TTextAlign.Trailing, TTextAlign.Leading);
   end;
 end;
 
@@ -883,7 +1033,7 @@ begin
   Collapsed := AObj.GetValue('collapsed', False);
   CommentText := AObj.GetValue('commentText', CommentText);
 
-  VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(nvNormal)));
+  VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(TNodeVisualKind.Normal)));
   ZOrder := AObj.GetValue<Integer>('zOrder', 0);
 
   // Pins
@@ -914,12 +1064,12 @@ begin
       P.Tooltip := PinObj.GetValue('tooltip', '');
       P.Hidden := PinObj.GetValue('hidden', False);
       P.Advanced := PinObj.GetValue('advanced', False);
-      P.AllowMultipleConnections := PinObj.GetValue('allowMultipleConnections', Dir = pdOutput);
+      P.AllowMultipleConnections := PinObj.GetValue('allowMultipleConnections', Dir = TPinDirection.Output);
       P.SortIndex := PinObj.GetValue<Integer>('sortIndex', 0);
 
       P.OwnerNode := Self;
 
-      if Dir = pdInput then
+      if Dir = TPinDirection.Input then
         FInputs.Add(P)
       else
         FOutputs.Add(P);
@@ -969,15 +1119,15 @@ begin
         Continue;
 
       case V.Kind of
-        nvkFloat:
+        TNodeValueKind.Float:
           V.FloatValue := VObj.GetValue('value', V.FloatValue);
-        nvkInteger:
+        TNodeValueKind.Integer:
           V.IntegerValue := VObj.GetValue('value', V.IntegerValue);
-        nvkString:
+        TNodeValueKind.string:
           V.StringValue := VObj.GetValue('value', V.StringValue);
-        nvkBoolean:
+        TNodeValueKind.Boolean:
           V.BooleanValue := VObj.GetValue('value', V.BooleanValue);
-        nvkJSON:
+        TNodeValueKind.JSON:
           V.JSONValue := VObj.GetValue('value', V.JSONValue);
       end;
     end;
@@ -1000,12 +1150,12 @@ begin
   Flags := [];
 
   if SameText(TypeId, 'any') then
-    Include(Flags, ptfAny);
+    Include(Flags, TNodePinTypeFlag.Any);
 end;
 
 function TNodePinType.IsAny: boolean;
 begin
-  Result := SameText(TypeId, 'any') or (ptfAny in Flags) or (ptfWildcard in Flags);
+  Result := SameText(TypeId, 'any') or (TNodePinTypeFlag.Any in Flags) or (TNodePinTypeFlag.Wildcard in Flags);
 end;
 
 function TNodePinType.IsCompatibleWith(AOther: TNodePinType): boolean;
@@ -1027,10 +1177,10 @@ begin
   if SameText(TypeId, 'float') and SameText(AOther.TypeId, 'integer') then
     Exit(True);
 
-  if (ptfNullable in Flags) and SameText(TypeId, AOther.TypeId) then
+  if (TNodePinTypeFlag.Nullable in Flags) and SameText(TypeId, AOther.TypeId) then
     Exit(True);
 
-  if (ptfNullable in AOther.Flags) and SameText(TypeId, AOther.TypeId) then
+  if (TNodePinTypeFlag.Nullable in AOther.Flags) and SameText(TypeId, AOther.TypeId) then
     Exit(True);
 end;
 
@@ -1095,15 +1245,15 @@ begin
   AObj.AddPair('kind', NodeValueKindToStr(Kind));
 
   case Kind of
-    nvkFloat:
+    TNodeValueKind.Float:
       AObj.AddPair('value', FloatValue);
-    nvkInteger:
+    TNodeValueKind.Integer:
       AObj.AddPair('value', IntegerValue);
-    nvkString:
+    TNodeValueKind.string:
       AObj.AddPair('value', StringValue);
-    nvkBoolean:
+    TNodeValueKind.Boolean:
       AObj.AddPair('value', BooleanValue);
-    nvkJSON:
+    TNodeValueKind.JSON:
       AObj.AddPair('value', JSONValue);
   else
     AObj.AddPair('value', '');
@@ -1119,15 +1269,15 @@ begin
   Kind := StrToNodeValueKind(AObj.GetValue('kind', 'null'));
 
   case Kind of
-    nvkFloat:
+    TNodeValueKind.Float:
       FloatValue := AObj.GetValue('value', FloatValue);
-    nvkInteger:
+    TNodeValueKind.Integer:
       IntegerValue := AObj.GetValue('value', IntegerValue);
-    nvkString:
+    TNodeValueKind.string:
       StringValue := AObj.GetValue('value', StringValue);
-    nvkBoolean:
+    TNodeValueKind.Boolean:
       BooleanValue := AObj.GetValue('value', BooleanValue);
-    nvkJSON:
+    TNodeValueKind.JSON:
       JSONValue := AObj.GetValue('value', JSONValue);
   end;
 end;
@@ -1156,7 +1306,7 @@ begin
   Tooltip := '';
   Hidden := False;
   Advanced := False;
-  AllowMultipleConnections := ADir = pdOutput;
+  AllowMultipleConnections := ADir = TPinDirection.Output;
   SortIndex := 0;
 end;
 
@@ -1172,6 +1322,97 @@ begin
     Result := DisplayName
   else
     Result := Name;
+end;
+
+procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Integer);
+begin
+  Canvas.Stroke.Kind := TBrushKind.Solid;
+  Canvas.Stroke.Color := TAlphaColors.Black;
+  Canvas.Stroke.Thickness := 1 * Zoom;
+
+  if Kind = TPinKind.Exec then
+    Canvas.Fill.Color := TAlphaColors.White
+  else if PinType <> nil then
+    Canvas.Fill.Color := PinType.Color
+  else
+    Canvas.Fill.Color := TAlphaColors.Green;
+
+  if Id = OwnerNode.HoveredPinId then
+    case OwnerNode.HoveredPinCompatible of
+      TPinCompatible.Undefined:
+        ;
+      TPinCompatible.True:
+        Canvas.Fill.Color := $FF00C251;
+      TPinCompatible.False:
+        Canvas.Fill.Color := $FFCF5600;
+    end;
+  if Connected then
+  begin
+    //
+  end;
+
+  var SRadius: Single := Radius;
+  if (Id = OwnerNode.HoveredPinId) or Selected then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := $FFFFD740;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+                {
+    if Id = OwnerNode.HoveredPinId then
+      case OwnerNode.HoveredPinCompatible of
+        TPinCompatible.Undefined:
+          ;
+        TPinCompatible.True:
+          Canvas.Stroke.Color := $FF00C251;
+        TPinCompatible.False:
+          Canvas.Stroke.Color := $FFCF5600;
+      end;}
+  end
+  else
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := OwnerNode.HeaderColor;
+    Canvas.Stroke.Thickness := 2 * Zoom;
+    SRadius := SRadius * 0.8;
+  end;
+
+  // Highlight frame
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  var RE := TRectF.Create(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
+  Canvas.DrawEllipse(RE, 1);
+
+  // Body
+  RE.Inflate(-SRadius * 0.4, -SRadius * 0.4);
+  Canvas.FillEllipse(RE, 1);
+
+  if Id = OwnerNode.HoveredPinId then
+    case OwnerNode.HoveredPinCompatible of
+      TPinCompatible.Undefined:
+        ;
+      TPinCompatible.True:
+        begin
+          RE.Inflate(-SRadius * 0.3, -SRadius * 0.3);
+          Canvas.Fill.Color := TAlphaColors.White;
+          CachePathObject.Data := 'M9.765 3.205a.75.75 0 0 1 .03 1.06l-4.25 4.5a.75.75 0 0 1-1.075.015L2.22 6.53a.75.75 0 0 1 1.06-1.06l1.705 1.704l3.72-3.939a.75.75 0 0 1 1.06-.03';
+          CachePathObject.FitToRect(RE);
+          Canvas.FillPath(CachePathObject, 1);
+        end;
+      TPinCompatible.False:
+        begin
+          RE.Inflate(-SRadius * 0.3, -SRadius * 0.3);
+          Canvas.Fill.Color := TAlphaColors.White;
+          CachePathObject.Data := 'm1.897 2.054l.073-.084a.75.75 0 0 1 .976-.073l.084.073L6 4.939l2.97-2.97a.75.75 0 1 1 1.06 1.061L7.061 6l2.97 2.97a.75.75 0 0 1 .072.976l-.073.084a.75.75 0 0 1-.976.073l-.084-.073L6 7.061l-2.97 2.97A.75.75 0 1 1 1.97 8.97L4.939 6l-2.97-2.97a.75.75 0 0 1-.072-.976l.073-.084z';
+          CachePathObject.FitToRect(RE);
+          Canvas.FillPath(CachePathObject, 1);
+        end;
+    end;
+end;
+
+function TNodePin.GetPinWorldPosition: TPointF;
+begin
+  if OwnerNode = nil then
+    Exit(PointF(0, 0));
+  Result := OwnerNode.GetPinWorldPosition(Self);
 end;
 
 procedure TNodePin.SetTypeId(const ATypeId: string);
@@ -1190,7 +1431,7 @@ begin
     PinType.Flags := [];
 
     if SameText(PinType.TypeId, 'any') then
-      Include(PinType.Flags, ptfAny);
+      Include(PinType.Flags, TNodePinTypeFlag.Any);
   end;
 end;
 
@@ -1204,12 +1445,40 @@ begin
   ToPin := ATo;
 end;
 
+procedure TNodeLink.GetDirectWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF);
+begin
+  P0 := FromPin.OwnerNode.GetPinWorldPosition(FromPin);
+  P3 := ToPin.OwnerNode.GetPinWorldPosition(ToPin);
+
+  var D := 15;
+  P1 := P0;
+  P1.X := P1.X + D;
+
+  P2 := P3;
+  P2.X := P2.X - D;
+end;
+
+procedure TNodeLink.GetRectWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF);
+begin
+  P0 := FromPin.OwnerNode.GetPinWorldPosition(FromPin);
+  P3 := ToPin.OwnerNode.GetPinWorldPosition(ToPin);
+
+  var D := (P3.X - P0.X) / 2;
+  P1 := P0;
+  P1.X := P1.X + D;
+
+  P2 := P3;
+  P2.X := P2.X - D;
+end;
+
 procedure TNodeLink.GetBezierWorldPoints(Zoom: Double; out P0, P1, P2, P3: TPointF);
 begin
   P0 := FromPin.OwnerNode.GetPinWorldPosition(FromPin);
   P3 := ToPin.OwnerNode.GetPinWorldPosition(ToPin);
 
   // Divide by FZoom to keep the visual curve consistent
+  //var D := Hypot(P3.X - P0.X, P3.Y - P0.Y);
+  //var D := 50;
   var D := EnsureRange(Hypot(P3.X - P0.X, P3.Y - P0.Y) * 0.35, 30 / Zoom, 150 / Zoom);
 
   P1 := P0;
@@ -1234,8 +1503,14 @@ end;
 function TNodeLink.BoundsRect: TRectF;
 begin
   var P0, P1, P2, P3: TPointF;
-  GetBezierWorldPoints(1, P0, P1, P2, P3);
-
+  case VisualType of
+    TLinkVisualType.Bezier:
+      GetBezierWorldPoints(1, P0, P1, P2, P3);
+    TLinkVisualType.Rect:
+      GetRectWorldPoints(1, P0, P1, P2, P3);
+    TLinkVisualType.Direct:
+      GetDirectWorldPoints(1, P0, P1, P2, P3);
+  end;
   Result := TRectF.Create(
     Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
     Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
@@ -1247,8 +1522,14 @@ end;
 function TNodeLink.BoundsRect(Zoom, OffsetX, OffsetY: Double): TRectF;
 begin
   var W0, W1, W2, W3: TPointF;
-  GetBezierWorldPoints(Zoom, W0, W1, W2, W3);
-
+  case VisualType of
+    TLinkVisualType.Bezier:
+      GetBezierWorldPoints(Zoom, W0, W1, W2, W3);
+    TLinkVisualType.Rect:
+      GetRectWorldPoints(Zoom, W0, W1, W2, W3);
+    TLinkVisualType.Direct:
+      GetDirectWorldPoints(Zoom, W0, W1, W2, W3);
+  end;
   var P0 := WorldToScreen(W0.X, W0.Y, Zoom, OffsetX, OffsetY);
   var P1 := WorldToScreen(W1.X, W1.Y, Zoom, OffsetX, OffsetY);
   var P2 := WorldToScreen(W2.X, W2.Y, Zoom, OffsetX, OffsetY);
@@ -1292,59 +1573,157 @@ begin
 
   if (FromPin.OwnerNode = nil) or (ToPin.OwnerNode = nil) then
     Exit;
+  case VisualType of
+    TLinkVisualType.Bezier:
+      begin
+        GetBezierWorldPoints(1, P0, P1, P2, P3);
 
-  GetBezierWorldPoints(1, P0, P1, P2, P3);
+        BR := TRectF.Create(
+          Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
+          Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
+          Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
+          Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)));
 
-  BR := TRectF.Create(
-    Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
-    Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
-    Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
-    Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)));
+        if not BR.IntersectsWith(R) then
+          Exit(False);
 
-  if not RectFIntersects(BR, R) then
-    Exit(False);
+        if R.Contains(P0) or R.Contains(P3) then
+          Exit(True);
 
-  if R.Contains(P0) or R.Contains(P3) then
-    Exit(True);
+        Prev := P0;
+        for k := 1 to 20 do
+        begin
+          Cur := CubicBezierPointF(P0, P1, P2, P3, k / 20);
 
-  Prev := P0;
-  for k := 1 to 20 do
-  begin
-    Cur := CubicBezierPointF(P0, P1, P2, P3, k / 20);
+          if R.Contains(Cur) then
+            Exit(True);
 
-    if R.Contains(Cur) then
-      Exit(True);
+          if LineIntersectsRectF(Prev, Cur, R) then
+            Exit(True);
 
-    if LineIntersectsRectF(Prev, Cur, R) then
-      Exit(True);
+          Prev := Cur;
+        end;
+      end;
+    TLinkVisualType.Rect:
+      begin
+        GetRectWorldPoints(1, P0, P1, P2, P3);
 
-    Prev := Cur;
+        BR := TRectF.Create(
+          Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
+          Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
+          Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
+          Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)));
+
+        if not BR.IntersectsWith(R) then
+          Exit(False);
+
+        if R.Contains(P0) or R.Contains(P3) then
+          Exit(True);
+        if R.Contains(P1) or R.Contains(P2) then
+          Exit(True);
+        if LineIntersectsRectF(P0, P1, R) then
+          Exit(True);
+        if LineIntersectsRectF(P1, P2, R) then
+          Exit(True);
+        if LineIntersectsRectF(P2, P3, R) then
+          Exit(True);
+      end;
+    TLinkVisualType.Direct:
+      begin
+        GetDirectWorldPoints(1, P0, P1, P2, P3);
+
+        BR := TRectF.Create(
+          Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
+          Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
+          Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
+          Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)));
+
+        if not BR.IntersectsWith(R) then
+          Exit(False);
+
+        if R.Contains(P0) or R.Contains(P3) then
+          Exit(True);
+        if R.Contains(P1) or R.Contains(P2) then
+          Exit(True);
+        if LineIntersectsRectF(P0, P1, R) then
+          Exit(True);
+        if LineIntersectsRectF(P1, P2, R) then
+          Exit(True);
+        if LineIntersectsRectF(P2, P3, R) then
+          Exit(True);
+      end;
   end;
 end;
 
 function TNodeLink.HitTest(AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean;
 begin
-  var P0, P1, P2, P3: TPointF;
-  GetBezierWorldPoints(Zoom, P0, P1, P2, P3);
+  Result := False;
+  case VisualType of
+    TLinkVisualType.Bezier:
+      begin
+        var P0, P1, P2, P3: TPointF;
+        GetBezierWorldPoints(Zoom, P0, P1, P2, P3);
 
-  var M := ScreenToWorld(AX, AY, Zoom, OffsetX, OffsetY);
-  var TolWorld := Max(4 / Zoom, 8 / Zoom);
-  var MinX := Min(Min(P0.X, P1.X), Min(P2.X, P3.X)) - TolWorld;
-  var MaxX := Max(Max(P0.X, P1.X), Max(P2.X, P3.X)) + TolWorld;
-  var MinY := Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)) - TolWorld;
-  var MaxY := Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)) + TolWorld;
+        var M := ScreenToWorld(AX, AY, Zoom, OffsetX, OffsetY);
+        var TolWorld := Max(4 / Zoom, 8 / Zoom);
+        var MinX := Min(Min(P0.X, P1.X), Min(P2.X, P3.X)) - TolWorld;
+        var MaxX := Max(Max(P0.X, P1.X), Max(P2.X, P3.X)) + TolWorld;
+        var MinY := Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)) - TolWorld;
+        var MaxY := Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)) + TolWorld;
 
-  if (M.X < MinX) or (M.X > MaxX) or (M.Y < MinY) or (M.Y > MaxY) then
-    Exit(False);
+        if (M.X < MinX) or (M.X > MaxX) or (M.Y < MinY) or (M.Y > MaxY) then
+          Exit(False);
 
-  Result := PointNearPath(M, P0, P1, P2, P3, TolWorld);
+        Result := PointNearPath(M, P0, P1, P2, P3, TolWorld);
+      end;
+    TLinkVisualType.Rect:
+      begin
+        var P0, P1, P2, P3: TPointF;
+        GetRectWorldPoints(Zoom, P0, P1, P2, P3);
+
+        var M := ScreenToWorld(AX, AY, Zoom, OffsetX, OffsetY);
+        var TolWorld := Max(4 / Zoom, 8 / Zoom);
+        var MinX := Min(Min(P0.X, P1.X), Min(P2.X, P3.X)) - TolWorld;
+        var MaxX := Max(Max(P0.X, P1.X), Max(P2.X, P3.X)) + TolWorld;
+        var MinY := Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)) - TolWorld;
+        var MaxY := Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)) + TolWorld;
+
+        if (M.X < MinX) or (M.X > MaxX) or (M.Y < MinY) or (M.Y > MaxY) then
+          Exit(False);
+
+        Result := PointNearPathDirect(M, P0, P1, P2, P3, TolWorld);
+      end;
+    TLinkVisualType.Direct:
+      begin
+        var P0, P1, P2, P3: TPointF;
+        GetDirectWorldPoints(Zoom, P0, P1, P2, P3);
+
+        var M := ScreenToWorld(AX, AY, Zoom, OffsetX, OffsetY);
+        var TolWorld := Max(4 / Zoom, 8 / Zoom);
+        var MinX := Min(Min(P0.X, P1.X), Min(P2.X, P3.X)) - TolWorld;
+        var MaxX := Max(Max(P0.X, P1.X), Max(P2.X, P3.X)) + TolWorld;
+        var MinY := Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)) - TolWorld;
+        var MaxY := Max(Max(P0.Y, P1.Y), Max(P2.Y, P3.Y)) + TolWorld;
+
+        if (M.X < MinX) or (M.X > MaxX) or (M.Y < MinY) or (M.Y > MaxY) then
+          Exit(False);
+
+        Result := PointNearPathDirect(M, P0, P1, P2, P3, TolWorld);
+      end;
+  end;
 end;
 
 procedure TNodeLink.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; Selected, Hovered: Boolean; Opacity: Single);
 begin
   var W0, W1, W2, W3: TPointF;
-  GetBezierWorldPoints(Zoom, W0, W1, W2, W3);
-
+  case VisualType of
+    TLinkVisualType.Bezier:
+      GetBezierWorldPoints(Zoom, W0, W1, W2, W3);
+    TLinkVisualType.Rect:
+      GetRectWorldPoints(Zoom, W0, W1, W2, W3);
+    TLinkVisualType.Direct:
+      GetDirectWorldPoints(Zoom, W0, W1, W2, W3);
+  end;
   var P0 := WorldToScreen(W0.X, W0.Y, Zoom, OffsetX, OffsetY);
   var P3 := WorldToScreen(W3.X, W3.Y, Zoom, OffsetX, OffsetY);
   var P1 := WorldToScreen(W1.X, W1.Y, Zoom, OffsetX, OffsetY);
@@ -1359,29 +1738,51 @@ begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := $AAC97200;
     Canvas.Stroke.Thickness := 12 * Zoom;
-    DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
+    case VisualType of
+      TLinkVisualType.Bezier:
+        DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
+      TLinkVisualType.Rect:
+        DrawDirectLine(Canvas, P0, P1, P2, P3, LinkOpacity);
+      TLinkVisualType.Direct:
+        DrawDirectLine(Canvas, P0, P1, P2, P3, LinkOpacity);
+    end;
   end;
 
   // Draw gradient bezier
   // Gradient colors
-  Canvas.Stroke.Kind := TBrushKind.Gradient;
-  Canvas.Stroke.Gradient.Points.Clear;
-  TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 0;
-  TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 1;
-  Canvas.Stroke.Gradient.Color := FromPin.OwnerNode.HeaderColor;
-  Canvas.Stroke.Gradient.Color1 := ToPin.OwnerNode.HeaderColor;
-  // Gradient angle
-  var S0 := FromPin.OwnerNode.GetPinScreenPosition(FromPin, Zoom, OffsetX, OffsetY);
-  var S1 := ToPin.OwnerNode.GetPinScreenPosition(ToPin, Zoom, OffsetX, OffsetY);
-  var Start: TPointF;
-  var Stop: TPointF;
-  GetGradientPoints(S0, S1, Start, Stop);
-  Canvas.Stroke.Gradient.StartPosition.Point := Start;
-  Canvas.Stroke.Gradient.StopPosition.Point := Stop;
+  if UseGradient then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Gradient;
+    Canvas.Stroke.Gradient.Points.Clear;
+    TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 0;
+    TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 1;
+    Canvas.Stroke.Gradient.Color := FromPin.OwnerNode.HeaderColor;
+    Canvas.Stroke.Gradient.Color1 := ToPin.OwnerNode.HeaderColor;
+    // Gradient angle
+    var S0 := FromPin.OwnerNode.GetPinScreenPosition(FromPin, Zoom, OffsetX, OffsetY);
+    var S1 := ToPin.OwnerNode.GetPinScreenPosition(ToPin, Zoom, OffsetX, OffsetY);
+    var Start: TPointF;
+    var Stop: TPointF;
+    GetGradientPoints(S0, S1, Start, Stop);
+    Canvas.Stroke.Gradient.StartPosition.Point := Start;
+    Canvas.Stroke.Gradient.StopPosition.Point := Stop;
+  end
+  else
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := ToPin.OwnerNode.HeaderColor;
+  end;
   // Line width
   Canvas.Stroke.Thickness := 3 * Zoom;
   // Draw bezier
-  DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
+  case VisualType of
+    TLinkVisualType.Bezier:
+      DrawCubicBezier(Canvas, P0, P1, P2, P3, LinkOpacity);
+    TLinkVisualType.Rect:
+      DrawDirectLine(Canvas, P0, P1, P2, P3, LinkOpacity);
+    TLinkVisualType.Direct:
+      DrawDirectLine(Canvas, P0, P1, P2, P3, LinkOpacity);
+  end;
   Canvas.Stroke.Kind := TBrushKind.Solid;
 end;
 
@@ -1400,8 +1801,8 @@ end;
 procedure TDefaultNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('In', 'float', pkData, 45);
-  AddOutputPin('Out', 'float', pkData, 45);
+  AddInputPin('In', 'float', TPinKind.Data, 45);
+  AddOutputPin('Out', 'float', TPinKind.Data, 45);
 end;
 
 { TRerouteNode }
@@ -1414,9 +1815,11 @@ begin
   Result := TRect.Create(0, 0, Width, Height).CenterPoint;
 end;
 
-procedure TRerouteNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+procedure TRerouteNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
 begin
-  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  if FTextLayout = nil then
+    CreateTextLayout(Canvas);
+
   var Radius := PinRadius * Zoom;
   var Center := NodeBounds.CenterPoint;
 
@@ -1472,7 +1875,7 @@ begin
   FWidth := 20;
   FHeight := 20;
   NodeType := 'reroute';
-  VisualKind := nvReroute;
+  VisualKind := TNodeVisualKind.Reroute;
   Title := '';
   HeaderColor := $FF737373;
   BodyColor := $FF737373;
@@ -1481,8 +1884,8 @@ end;
 procedure TRerouteNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('', 'any', pkData, Height div 2);
-  AddInputPin('', 'any', pkData, Height div 2);
+  AddOutputPin('', 'any', TPinKind.Data, Height div 2);
+  AddInputPin('', 'any', TPinKind.Data, Height div 2);
 
   if InputCount > 0 then
     GetInput(0).AllowMultipleConnections := False;
@@ -1497,7 +1900,7 @@ constructor TCommentNode.Create;
 begin
   inherited;
   NodeType := 'comment';
-  VisualKind := nvComment;
+  VisualKind := TNodeVisualKind.Comment;
   HeaderColor := $FF646464;
   BodyColor := $FFFFFFCC;
   CommentText := '';
@@ -1506,11 +1909,12 @@ begin
   Height := 200;
 end;
 
-procedure TCommentNode.Paint(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double);
+procedure TCommentNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
 begin
-  var ScaledHeaderHeight := HeaderHeight * Zoom;
+  if FTextLayout = nil then
+    CreateTextLayout(Canvas);
 
-  var NodeBounds: TRectF := GetScreenBounds(Zoom, OffsetX, OffsetY);
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
 
   var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
   var NodeHeadText := NodeHead;
@@ -1520,7 +1924,7 @@ begin
   var NodeBodyText := NodeBody;
   NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
 
-  var CornerRadius := 10 * Zoom;
+  var CornerRadius := RectCornerRadius * Zoom;
 
   // Fill
   Canvas.Fill.Kind := TBrushKind.Solid;
@@ -1556,6 +1960,7 @@ begin
     Canvas.Stroke.Color := HeaderColor;
     Canvas.Stroke.Thickness := 1 * Zoom;
   end;
+
   Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
               {
   // Head icon
@@ -1585,16 +1990,16 @@ begin
 
   // Text Head
   Canvas.Fill.Color := TAlphaColors.White;
-  Canvas.Font.Size := (10 * Zoom);
+  Canvas.Font.Size := 10 * Zoom;
   Canvas.Fill.Kind := TBrushKind.Solid;
-  Canvas.FillText(NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
 
   // Text Body
   if (CommentText <> '') and (not Collapsed) then
-    Canvas.FillText(NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+    FillText(Canvas, NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 
   // Size grip
-  if Selected and (VisualKind <> TNodeVisualKind.nvReroute) and (not Collapsed) and (not FixedSize) then
+  if Selected and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
     DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
 end;
 

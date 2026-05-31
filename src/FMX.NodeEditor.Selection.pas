@@ -12,13 +12,15 @@ type
     FNodes: TObjectList<TCustomNode>;
     FSelectedLinks: TObjectList<TNodeLink>;
     FOnChanged: TNotifyEvent;
-    procedure NotifyChanged;
+    FUpdateCount: Integer;
+    procedure NotifyChanged; inline;
   public
     constructor Create;
     destructor Destroy; override;
 
     procedure Clear;
-    procedure AddNodeToSelection(ANode: TCustomNode);
+    procedure BeginUpdate;
+    procedure EndUpdate;
     procedure SelectNode(ANode: TCustomNode; AAppend: boolean);
     procedure SelectLink(ALink: TNodeLink; AAppend: boolean = False);
     procedure ToggleLink(ALink: TNodeLink);
@@ -50,7 +52,7 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    procedure Clear;
+    procedure Clear(Notify: Boolean = True);
     procedure SelectPin(APin: TNodePin; AAppend: boolean);
     procedure TogglePin(APin: TNodePin);
     function Count: integer;
@@ -79,16 +81,26 @@ begin
   inherited Destroy;
 end;
 
+procedure TNodeSelectionModel.EndUpdate;
+begin
+  Dec(FUpdateCount);
+  if FUpdateCount = 0 then
+    NotifyChanged;
+end;
+
 procedure TNodeSelectionModel.NotifyChanged;
 begin
+  if FUpdateCount > 0 then
+    Exit;
   if Assigned(FOnChanged) then
     FOnChanged(Self);
 end;
 
 procedure TNodeSelectionModel.Clear;
-begin   
+begin
   FNodes.Clear;
   FSelectedLinks.Clear;
+
   NotifyChanged;
 end;
 
@@ -104,21 +116,17 @@ begin
   end;
 
   if FNodes.IndexOf(ANode) < 0 then
-    FNodes.Add(ANode);
-
-  NotifyChanged;
-end;
-
-procedure TNodeSelectionModel.AddNodeToSelection(ANode: TCustomNode);
-begin
-  if ANode = nil then
-    Exit;
-
-  if FNodes.IndexOf(ANode) < 0 then
   begin
     FNodes.Add(ANode);
     NotifyChanged;
-  end;
+  end
+  else if not AAppend then
+    NotifyChanged;
+end;
+
+procedure TNodeSelectionModel.BeginUpdate;
+begin
+  Inc(FUpdateCount);
 end;
 
 procedure TNodeSelectionModel.SelectLink(ALink: TNodeLink; AAppend: boolean = False);
@@ -254,13 +262,16 @@ begin
     FOnChanged(Self);
 end;
 
-procedure TPinSelectionModel.Clear;
+procedure TPinSelectionModel.Clear(Notify: Boolean);
 begin
   if FSelectedPins.Count > 0 then
   begin
+    for var Pin in FSelectedPins do
+      Pin.Selected := False;
     FSelectedPins.Clear;
     FSelectedPin := nil;
-    NotifyChanged;
+    if Notify then
+      NotifyChanged;
   end;
 end;
 
@@ -271,33 +282,35 @@ begin
 
   if not AAppend then
   begin
-    if (FSelectedPins.Count = 1) and (TNodePin(FSelectedPins[0]) = APin) then
+    if (FSelectedPins.Count = 1) and (FSelectedPins[0] = APin) then
       Exit;
-    FSelectedPins.Clear;
+    Clear(False);
   end;
 
   if FSelectedPins.IndexOf(APin) < 0 then
+  begin
     FSelectedPins.Add(APin);
+    APin.Selected := True;
+  end;
 
   FSelectedPin := APin;
   NotifyChanged;
 end;
 
 procedure TPinSelectionModel.TogglePin(APin: TNodePin);
-var
-  Idx: integer;
 begin
   if APin = nil then
     Exit;
 
-  Idx := FSelectedPins.IndexOf(APin);
+  var Idx := FSelectedPins.IndexOf(APin);
   if Idx >= 0 then
   begin
     FSelectedPins.Delete(Idx);
+    APin.Selected := False;
     if FSelectedPin = APin then
     begin
       if FSelectedPins.Count > 0 then
-        FSelectedPin := TNodePin(FSelectedPins[FSelectedPins.Count - 1])
+        FSelectedPin := FSelectedPins[FSelectedPins.Count - 1]
       else
         FSelectedPin := nil;
     end;
@@ -305,6 +318,7 @@ begin
   else
   begin
     FSelectedPins.Add(APin);
+    APin.Selected := True;
     FSelectedPin := APin;
   end;
 
@@ -319,7 +333,7 @@ end;
 function TPinSelectionModel.GetPin(Index: integer): TNodePin;
 begin
   if (Index >= 0) and (Index < FSelectedPins.Count) then
-    Result := TNodePin(FSelectedPins[Index])
+    Result := FSelectedPins[Index]
   else
     Result := nil;
 end;

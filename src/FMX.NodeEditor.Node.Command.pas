@@ -55,6 +55,19 @@ type
     procedure Undo; override;
   end;
 
+  TReconnectLinkCommand = class(TGraphCommand)
+  private
+    FOldPinId: string;
+    FNewPinId: string;
+    FLinkId: string;
+    FFrom: Boolean;
+  public
+    constructor Create(AGraph: TNodeGraph; ALink: TNodeLink; AOldPin, ANewPin: TNodePin); reintroduce;
+
+    procedure DoExecute; override;
+    procedure Undo; override;
+  end;
+
   TRemoveLinkCommand = class(TGraphCommand)
   private
     FFromPinId: string;
@@ -111,7 +124,7 @@ type
 implementation
 
 uses
-  FMX.NodeEditor.Types;
+  FMX.NodeEditor.Types, FMX.Types;
 
 { TJSONSnapshotCommand }
 
@@ -136,7 +149,7 @@ end;
 
 constructor TAddNodeCommand.Create(AGraph: TNodeGraph; ANode: TCustomNode);
 begin
-  inherited Create(AGraph, 'Add node');
+  inherited Create(AGraph, Translate('Add node'));
   FNode := ANode;
   FOwnsNode := True;
 end;
@@ -174,7 +187,7 @@ end;
 
 constructor TRemoveNodeCommand.Create(AGraph: TNodeGraph; ANode: TCustomNode);
 begin
-  inherited Create(AGraph, 'Remove node');
+  inherited Create(AGraph, Translate('Remove node'));
 
   if ANode <> nil then
     FNodeId := ANode.Id;
@@ -193,8 +206,6 @@ begin
 end;
 
 procedure TRemoveNodeCommand.DoExecute;
-var
-  N: TCustomNode;
 begin
   if FGraph = nil then
     Exit;
@@ -205,7 +216,7 @@ begin
     Exit;
   end;
 
-  N := FGraph.FindNodeById(FNodeId);
+  var N := FGraph.FindNodeById(FNodeId);
   if N <> nil then
     FGraph.RemoveNode(N);
 
@@ -213,13 +224,11 @@ begin
 end;
 
 procedure TRemoveNodeCommand.Undo;
-var
-  Data: TJSONValue;
 begin
   if (FGraph = nil) or (FGraphBeforeJSON = '') then
     Exit;
 
-  Data := TJSONValue.ParseJSONValue(FGraphBeforeJSON);
+  var Data := TJSONValue.ParseJSONValue(FGraphBeforeJSON);
   try
     if Data is TJSONObject then
       FGraph.LoadGraphFromJSON(TJSONObject(Data), True);
@@ -232,7 +241,7 @@ end;
 
 constructor TAddLinkCommand.Create(AGraph: TNodeGraph; AFromPin, AToPin: TNodePin);
 begin
-  inherited Create(AGraph, 'Add link');
+  inherited Create(AGraph, Translate('Add link'));
 
   if AFromPin <> nil then
     FFromPinId := AFromPin.Id;
@@ -275,11 +284,68 @@ begin
   end;
 end;
 
+{ TReconnectLinkCommand }
+
+constructor TReconnectLinkCommand.Create(AGraph: TNodeGraph; ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
+begin
+  inherited Create(AGraph, Translate('Reconnect link'));
+
+  if (AOldPin = nil) or (ANewPin = nil) then
+    Exit;
+
+  FFrom := ALink.FromPin = AOldPin;
+
+  FOldPinId := AOldPin.Id;
+  FNewPinId := ANewPin.Id;
+
+  FLinkId := ALink.Id;
+end;
+
+procedure TReconnectLinkCommand.DoExecute;
+begin
+  if FGraph = nil then
+    Exit;
+
+  var NewPin := FGraph.FindPinById(FNewPinId);
+
+  if NewPin = nil then
+    Exit;
+
+  var L := FGraph.FindLinkById(FLinkId);
+  if L = nil then
+    Exit;
+
+  if FFrom then
+    L.FromPin := NewPin
+  else
+    L.ToPin := NewPin;
+end;
+
+procedure TReconnectLinkCommand.Undo;
+begin
+  if FGraph = nil then
+    Exit;
+
+  var OldPin := FGraph.FindPinById(FOldPinId);
+
+  if OldPin = nil then
+    Exit;
+
+  var L := FGraph.FindLinkById(FLinkId);
+  if L = nil then
+    Exit;
+
+  if FFrom then
+    L.FromPin := OldPin
+  else
+    L.ToPin := OldPin;
+end;
+
 { TRemoveLinkCommand }
 
 constructor TRemoveLinkCommand.Create(AGraph: TNodeGraph; ALink: TNodeLink);
 begin
-  inherited Create(AGraph, 'Remove link');
+  inherited Create(AGraph, Translate('Remove link'));
 
   if ALink <> nil then
   begin
@@ -329,7 +395,7 @@ end;
 
 constructor TMoveNodesCommand.Create(AGraph: TNodeGraph; ANodes: TList<TCustomNode>; const AOldPositions, ANewPositions: array of TPointF);
 begin
-  inherited Create(AGraph, 'Move nodes');
+  inherited Create(AGraph, Translate('Move nodes'));
 
   FNodeIds := TStringList.Create;
 
@@ -345,7 +411,7 @@ begin
 
   for var i := 0 to C - 1 do
   begin
-    var N := TCustomNode(ANodes[i]);
+    var N := ANodes[i];
     FNodeIds.Add(N.Id);
 
     FOldX[i] := AOldPositions[i].x;
@@ -401,7 +467,7 @@ end;
 
 constructor TResizeNodeCommand.Create(AGraph: TNodeGraph; ANode: TCustomNode; AOldWidth, AOldHeight, ANewWidth, ANewHeight: integer);
 begin
-  inherited Create(AGraph, 'Resize node');
+  inherited Create(AGraph, Translate('Resize node'));
 
   if ANode <> nil then
     FNodeId := ANode.Id;
@@ -442,12 +508,11 @@ begin
   FGraph.DoGraphChanged;
 end;
 
-
 { TChangeNodePropertyCommand }
 
 constructor TChangeNodePropertyCommand.Create(AGraph: TNodeGraph; ANode: TCustomNode; const AOldNodeJSON, ANewNodeJSON: string);
 begin
-  inherited Create(AGraph, 'Change node property');
+  inherited Create(AGraph, Translate('Change node property'));
 
   if ANode <> nil then
     FNodeId := ANode.Id;

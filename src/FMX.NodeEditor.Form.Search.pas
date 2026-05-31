@@ -6,7 +6,8 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Layouts,
   FMX.ListBox, FMX.NodeEditor, System.Actions, FMX.ActnList,
-  FMX.Controls.Presentation, FMX.Edit, FMX.SearchBox, FMX.NodeEditor.Node.Graph, WinUI3.Form;
+  FMX.Controls.Presentation, FMX.Edit, FMX.SearchBox, FMX.NodeEditor.Node.Graph,
+  WinUI3.Form, FMX.StdCtrls;
 
 type
   TFormNodeEditorSearch = class(TWinUIForm)
@@ -14,11 +15,19 @@ type
     ActionList: TActionList;
     ActionEsc: TAction;
     SearchBoxFilter: TSearchBox;
+    Layout28: TLayout;
+    Layout9: TLayout;
+    PathLabel20: TPathLabel;
+    Label8: TLabel;
+    Label10: TLabel;
     procedure ListBoxItemsDblClick(Sender: TObject);
     procedure ActionEscExecute(Sender: TObject);
+    procedure FormShow(Sender: TObject);
   private
     FRegistry: TNodeRegistry;
     procedure FillList;
+  protected
+    procedure DoOnSettingChange; override;
   public
     SelectedNodeType: string;
     constructor CreateSearch(AOwner: TComponent; ARegistry: TNodeRegistry); reintroduce;
@@ -47,6 +56,11 @@ begin
   FillList;
 end;
 
+procedure TFormNodeEditorSearch.DoOnSettingChange;
+begin
+  inherited;
+end;
+
 procedure TFormNodeEditorSearch.FillList;
 begin
   ListBoxItems.Items.BeginUpdate;
@@ -54,7 +68,13 @@ begin
     ListBoxItems.Items.Clear;
 
     for var Item in FRegistry do
-      ListBoxItems.Items.AddObject(Item.Caption + ' [' + Item.NodeType + ']', Item);
+    begin
+      var ListItem := TListBoxItem.Create(ListBoxItems);
+      ListItem.TagString := Item.NodeType;
+      ListItem.Text := Item.Caption + ' [' + Item.NodeType + ']';
+      ListItem.ItemData.Detail := Item.Description;
+      ListBoxItems.AddObject(ListItem);
+    end;
 
     if ListBoxItems.Items.Count > 0 then
       ListBoxItems.ItemIndex := 0;
@@ -63,18 +83,18 @@ begin
   end;
 end;
 
-procedure TFormNodeEditorSearch.ListBoxItemsDblClick(Sender: TObject);
-var
-  It: TNodeRegistryItem;
+procedure TFormNodeEditorSearch.FormShow(Sender: TObject);
 begin
-  if ListBoxItems.ItemIndex < 0 then
+  DoOnSettingChange;
+  SearchBoxFilter.SetFocus;
+end;
+
+procedure TFormNodeEditorSearch.ListBoxItemsDblClick(Sender: TObject);
+begin
+  if ListBoxItems.Selected = nil then
     Exit;
 
-  It := TNodeRegistryItem(ListBoxItems.Items.Objects[ListBoxItems.ItemIndex]);
-  if It = nil then
-    Exit;
-
-  SelectedNodeType := It.NodeType;
+  SelectedNodeType := ListBoxItems.Selected.TagString;
   ModalResult := mrOk;
 end;
 

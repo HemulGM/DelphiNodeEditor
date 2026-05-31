@@ -3,39 +3,46 @@ unit FMX.NodeEditor.Types;
 interface
 
 uses
-  System.Classes, System.SysUtils, System.Types, System.UITypes, FMX.Graphics;
+  System.Classes, System.SysUtils, System.Math, System.Types, System.UITypes,
+  FMX.Graphics;
+
+{$SCOPEDENUMS ON}
 
 type
   TGridType = (Lines, Dots);
 
-  TPinDirection = (pdInput, pdOutput);
+  TPinDirection = (Input, Output);
 
   TNodeValueKind = (
-    nvkNull,
-    nvkFloat,
-    nvkInteger,
-    nvkString,
-    nvkBoolean,
-    nvkJSON
+    Null,
+    Float,
+    Integer,
+    &String,
+    Boolean,
+    JSON
     );
 
   TNodePinTypeFlag = (
-    ptfAny,
-    ptfArray,
-    ptfList,
-    ptfMap,
-    ptfObject,
-    ptfNullable,
-    ptfOptional,
-    ptfGeneric,
-    ptfWildcard
+    Any,
+    &Array,
+    List,
+    Map,
+    &Object,
+    Nullable,
+    Optional,
+    Generic,
+    Wildcard
     );
 
   TNodePinTypeFlags = set of TNodePinTypeFlag;
 
-  TPinKind = (pkData, pkExec);
+  TPinKind = (Data, Exec);
 
-  TNodeVisualKind = (nvNormal, nvReroute, nvComment);
+  TPinCompatible = (Undefined, True, False);
+
+  TNodeVisualKind = (Normal, Reroute, Comment);
+
+  TLinkVisualType = (Bezier, Direct, Rect);
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 
@@ -62,49 +69,47 @@ function NewId: string;
 
 //
 
-function RectIntersects(const A, B: TRect): boolean;
+function PointInRectInclusive(const R: TRect; X, Y: integer): boolean; inline;
 
-function PointInRectInclusive(const R: TRect; X, Y: integer): boolean;
+function Cross(const AX, AY, BX, BY, CX, CY: integer): Int64; inline;
 
-function Cross(const AX, AY, BX, BY, CX, CY: integer): Int64;
+function OnSegment(const AX, AY, BX, BY, PX, PY: integer): boolean; inline;
 
-function OnSegment(const AX, AY, BX, BY, PX, PY: integer): boolean;
+function SegmentsIntersect(AX, AY, BX, BY, CX, CY, DX, DY: integer): boolean; inline;
 
-function SegmentsIntersect(AX, AY, BX, BY, CX, CY, DX, DY: integer): boolean;
+function LineIntersectsRect(X1, Y1, X2, Y2: integer; const R: TRect): boolean; inline;
 
-function LineIntersectsRect(X1, Y1, X2, Y2: integer; const R: TRect): boolean;
+function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF; inline;
 
-function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF;
+function DistancePointToSegment(const P, A, B: TPointF): Single; inline;
 
-function DistancePointToSegment(const P, A, B: TPointF): Single;
+procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single); inline;
 
-procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single); inline;
 
-procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
+procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single); inline;
 
-procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor);
+procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor); inline;
 
-function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
+function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline;
 
-function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF;
+function PointNearPathDirect(const P, P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline;
 
-procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF);
+function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF; inline;
 
-function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor;
+procedure GetGradientPoints(const P1, P2: TPointF; out StartPos, StopPos: TPointF); inline;
 
-function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;
+function MakeColor(const Color: TAlphaColor; Alpha: Single): TAlphaColor; inline;
 
-function ColorToAlphaColor(Color: TColor): TAlphaColor;
+function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint; inline;
 
-function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
+function ColorToAlphaColor(Color: TColor): TAlphaColor; inline;
 
-function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
+function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean; inline;
 
-function RectFIntersects(const R1, R2: TRectF): Boolean;
+function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF; inline;
 
-function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
-
-function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;
+function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor; inline;
 
 var
   CachePathObject: TPathData;
@@ -112,7 +117,7 @@ var
 implementation
 
 uses
-  System.Math, FMX.Types, System.Math.Vectors;
+  FMX.Types, System.Math.Vectors;
 
 function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;
 begin
@@ -164,7 +169,7 @@ end;
 
 function PinKindToStr(AKind: TPinKind): string;
 begin
-  if AKind = pkExec then
+  if AKind = TPinKind.Exec then
     Result := 'exec'
   else
     Result := 'data';
@@ -173,14 +178,14 @@ end;
 function StrToPinKind(const S: string): TPinKind;
 begin
   if SameText(S, 'exec') then
-    Result := pkExec
+    Result := TPinKind.Exec
   else
-    Result := pkData;
+    Result := TPinKind.Data;
 end;
 
 function PinDirectionToStr(ADir: TPinDirection): string;
 begin
-  if ADir = pdInput then
+  if ADir = TPinDirection.Input then
     Result := 'input'
   else
     Result := 'output';
@@ -189,23 +194,23 @@ end;
 function StrToPinDirection(const S: string): TPinDirection;
 begin
   if SameText(S, 'output') then
-    Result := pdOutput
+    Result := TPinDirection.Output
   else
-    Result := pdInput;
+    Result := TPinDirection.Input;
 end;
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 begin
   case AKind of
-    nvkFloat:
+    TNodeValueKind.Float:
       Result := 'float';
-    nvkInteger:
+    TNodeValueKind.Integer:
       Result := 'integer';
-    nvkString:
+    TNodeValueKind.string:
       Result := 'string';
-    nvkBoolean:
+    TNodeValueKind.Boolean:
       Result := 'boolean';
-    nvkJSON:
+    TNodeValueKind.JSON:
       Result := 'json';
   else
     Result := 'null';
@@ -215,35 +220,31 @@ end;
 function StrToNodeValueKind(const S: string): TNodeValueKind;
 begin
   if SameText(S, 'float') then
-    Result := nvkFloat
+    Result := TNodeValueKind.Float
   else if SameText(S, 'integer') then
-    Result := nvkInteger
+    Result := TNodeValueKind.Integer
   else if SameText(S, 'string') then
-    Result := nvkString
+    Result := TNodeValueKind.string
   else if SameText(S, 'boolean') then
-    Result := nvkBoolean
+    Result := TNodeValueKind.Boolean
   else if SameText(S, 'json') then
-    Result := nvkJSON
+    Result := TNodeValueKind.JSON
   else
-    Result := nvkNull;
+    Result := TNodeValueKind.Null;
 end;
 
-function TypeFlagsToInt(AFlags: TNodePinTypeFlags): integer;
-var
-  F: TNodePinTypeFlag;
+function TypeFlagsToInt(AFlags: TNodePinTypeFlags): Integer;
 begin
   Result := 0;
-  for F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
+  for var F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
     if F in AFlags then
       Result := Result or (1 shl Ord(F));
 end;
 
 function IntToTypeFlags(AValue: integer): TNodePinTypeFlags;
-var
-  F: TNodePinTypeFlag;
 begin
   Result := [];
-  for F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
+  for var F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
     if (AValue and (1 shl Ord(F))) <> 0 then
       Include(Result, F);
 end;
@@ -258,12 +259,7 @@ begin
   W := R.Width * ScaleX * 0.5;
   H := R.Height * ScaleY * 0.5;
 
-  Result := TRectF.Create(
-    C.X - W,
-    C.Y - H,
-    C.X + W,
-    C.Y + H
-  );
+  Result := RectF(C.X - W, C.Y - H, C.X + W, C.Y + H);
 end;
 
 function RectIntersects(const A, B: TRect): boolean;
@@ -331,7 +327,7 @@ begin
   Result := TGUID.NewGuid.ToString;
 end;
 
-function LengthSquared(const V: TPointF): Single;
+function LengthSquared(const V: TPointF): Single; inline;
 begin
   Result := V.X * V.X + V.Y * V.Y;
 end;
@@ -352,18 +348,6 @@ begin
   Closest := A + AB * T;
 
   Result := P.Distance(Closest);
-end;
-
-function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean;
-begin
-  Result := (Pt.X >= R.Left) and (Pt.X <= R.Right) and
-    (Pt.Y >= R.Top) and (Pt.Y <= R.Bottom);
-end;
-
-function RectFIntersects(const R1, R2: TRectF): Boolean;
-begin
-  Result := not ((R1.Right < R2.Left) or (R1.Left > R2.Right) or
-    (R1.Bottom < R2.Top) or (R1.Top > R2.Bottom));
 end;
 
 function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
@@ -387,13 +371,13 @@ begin
     TTT * P3.Y;
 end;
 
-function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
+function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean;
 var
   N: TRectF;
   Dx, Dy: Single;
   T0, T1: Single;
 
-  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean;
+  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean; inline;
   var
     Rr: Single;
   begin
@@ -422,7 +406,7 @@ begin
   N := R;
   N.NormalizeRect;
 
-  if PtInRectF(P1, N) or PtInRectF(P2, N) then
+  if N.Contains(P1) or N.Contains(P2) then
     Exit(True);
 
   Dx := P2.X - P1.X;
@@ -440,18 +424,26 @@ end;
 function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
 begin
   Result := False;
-  CachePathObject.Clear;
-  CachePathObject.MoveTo(P0);
-  CachePathObject.CurveTo(P1, P2, P3);
 
-  var Poly: TPolygon;
-  CachePathObject.FlattenToPolygon(Poly);
-
-  for var i := 0 to High(Poly) - 1 do
+  var Prev := P0;
+  for var k := 1 to 20 do
   begin
-    if DistancePointToSegment(P, Poly[i], Poly[i + 1]) <= Tolerance then
+    var Cur := CubicBezierPointF(P0, P1, P2, P3, k / 20);
+    if DistancePointToSegment(P, Prev, Cur) <= Tolerance then
       Exit(True);
+    Prev := Cur;
   end;
+end;
+
+function PointNearPathDirect(const P, P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
+begin
+  Result := False;
+  if DistancePointToSegment(P, P0, P1) <= Tolerance then
+    Exit(True);
+  if DistancePointToSegment(P, P1, P2) <= Tolerance then
+    Exit(True);
+  if DistancePointToSegment(P, P2, P3) <= Tolerance then
+    Exit(True);
 end;
 
 function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF;
@@ -468,11 +460,61 @@ begin
   Result.Y := it3 * P0.Y + 3 * it2 * T * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
 end;
 
-procedure DrawCubicBezier(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+var
+  t, it, t2, it2, t3, it3, x, y: Double;
+begin
+  //var Steps := 32;
+  var Len := P0.Distance(P1) + P1.Distance(P2) + P2.Distance(P3);
+
+  var Steps := EnsureRange(Round(Len / 20), 10, 64);
+  var Bounds := TRectF.Create(0, 0, Canvas.Width, Canvas.Height);
+  Bounds.Inflate(100, 100);
+
+  CachePathObject.Clear;
+
+  var Prev := TPointF.Create(P0.X, P0.Y);
+  CachePathObject.MoveTo(Prev);
+  for var i := 1 to Steps do
+  begin
+    t := i / Steps;
+    it := 1 - t;
+    t2 := t * t;
+    it2 := it * it;
+    t3 := t2 * t;
+    it3 := it2 * it;
+
+    x := it3 * P0.X + 3 * it2 * t * P1.X + 3 * it * t2 * P2.X + t3 * P3.X;
+    y := it3 * P0.Y + 3 * it2 * t * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
+
+    var Cur := TPointF.Create(x, y);
+    if (not Bounds.Contains(Prev)) and (not Bounds.Contains(Cur)) and (i <> Steps) then
+    begin
+      Prev := Cur;
+      Continue;
+    end;
+
+    CachePathObject.LineTo(Cur);
+    Prev := Cur;
+  end;
+  Canvas.DrawPath(CachePathObject, Opacity);
+end;
+
+procedure DrawCubicBezier1(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
 begin
   CachePathObject.Clear;
   CachePathObject.MoveTo(P0);
   CachePathObject.CurveTo(P1, P2, P3);
+  C.DrawPath(CachePathObject, Opacity);
+end;
+
+procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+begin
+  CachePathObject.Clear;
+  CachePathObject.MoveTo(P0);
+  CachePathObject.LineTo(P1);
+  CachePathObject.LineTo(P2);
+  CachePathObject.LineTo(P3);
   C.DrawPath(CachePathObject, Opacity);
 end;
 

@@ -18,7 +18,7 @@ type
 
   { Custom Draw Events }
 
-  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRect; Zoom: Double; OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
+  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRectF; Zoom: Double; OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
 
   TNodeEditorDrawPinEvent = procedure(Sender: TObject; Canvas: TCanvas; APin: TNodePin; const ACenter: TPoint; ARadius: Integer; ASelected, AHovered, AHighlighted: Boolean; var AHandled: Boolean) of object;
 
@@ -118,13 +118,13 @@ type
     FGuideLineWidth: Single;
 
     // Axes properties
-    FShowAxes: boolean;
+    FShowAxes: Boolean;
     FAxesColor: TAlphaColor;
     FAxesThickness: integer;
 
     // Optimization fields
     FPaintNodesSorted: TList<TCustomNode>;
-    FPaintNodesDirty: boolean;
+    FPaintNodesDirty: Boolean;
     FLastHoverMouseX: integer;
     FLastHoverMouseY: integer;
     FLastMouseMoveTick: UInt64;
@@ -144,7 +144,7 @@ type
     FLinkHoverColor: TAlphaColor;
     FLinkThickness: integer;
     FLinkSelectedThickness: integer;
-    FHoveredPinCompatible: boolean;
+    FHoveredPinCompatible: Boolean;
     FPinCompatibleColor: TAlphaColor;
     FPinIncompatibleColor: TAlphaColor;
 
@@ -167,10 +167,12 @@ type
     FLockedAll: Boolean;
 
     FLastZoomDistance: Single;
+    FLinkVisualType: TLinkVisualType;
+    FLinkGradient: Boolean;
 
     // Internal Logic
     procedure ClearPinSelection;
-    procedure SelectPinInternal(APin: TNodePin; AAppend: boolean);
+    procedure SelectPinInternal(APin: TNodePin; AAppend: Boolean);
     procedure TogglePinSelection(APin: TNodePin);
     procedure ConnectSelectedPins;
     procedure DoPinSelectionChanged(Sender: TObject);
@@ -178,19 +180,15 @@ type
     function GetPrimarySelectedLink: TNodeLink;
 
     // Render Helpers
-    procedure DrawNode(ANode: TCustomNode);
-    procedure DrawNodePins(ANode: TCustomNode);
-    procedure DrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
+    procedure DrawNode(ANode: TCustomNode; const NodeBounds: TRectF);
 
     procedure NotifySelectionChanged;
     procedure ControllerSelectionChanged(Sender: TObject);
     procedure SyncControllerSelectionToView;
 
     // Geometry
-    function GetResizeHandleRect(ANode: TCustomNode): TRect;
     function GetNodeResizeUnderMouse(SX, SY: Integer): TCustomNode;
     function GetVisibleWorldRect: TRectF;
-    function GetPinWorldPosition(APin: TNodePin): TPointF;
 
     // Render Layers
     procedure DrawGrid;
@@ -204,7 +202,6 @@ type
 
     // Misc
     procedure BuildContextMenu;
-    procedure OnAddRegisteredNodeClick(Sender: TObject);
     procedure OnContextCopy(Sender: TObject);
     procedure OnContextPaste(Sender: TObject);
     procedure OnContextDuplicate(Sender: TObject);
@@ -212,7 +209,7 @@ type
     procedure OnContextSearchNode(Sender: TObject);
     procedure OnContextInsertReroute(Sender: TObject);
     procedure OnContextAddComment(Sender: TObject);
-    procedure ShowNodeSearchPopup(AScreenX, AScreenY: Integer; AWorldX, AWorldY: Single);
+    procedure ShowNodeSearchPopup(AScreenX, AScreenY: Integer; const WorldPosition: TPointF);
     procedure ResetStateAfterGraphReload;
     procedure ClearHoverStates;
     procedure UpdateHoverStates(SX, SY: Integer; HitLinks: Boolean = True);
@@ -222,12 +219,12 @@ type
     procedure SetOnUpdatedStatus(const Value: TNotifyEvent);
     procedure SetGridSize(const Value: Integer);
     procedure SetGridType(const Value: TGridType);
-    procedure CancelMouseOperations(const KeepSelectionRect: boolean);
+    procedure CancelMouseOperations(const KeepSelectionRect: Boolean);
     function NodeIsAbove(const Current, Target: TCustomNode): Boolean;
     procedure UpdatePinsConnectedState;
     procedure SetShowGrid(const Value: Boolean);
-    procedure DrawNavigator(ACanvas: TCanvas; ARect: TRectF);
-    procedure DrawMiniGrid(ACanvas: TCanvas; ARect: TRectF; AOffsetX, AOffsetY, AZoom: Double);
+    procedure DrawNavigator(ACanvas: TCanvas; const ARect: TRectF);
+    procedure DrawMiniGrid(ACanvas: TCanvas; const ARect: TRectF; AOffsetX, AOffsetY, AZoom: Double);
     procedure DrawNodes(FirstLevel: Boolean);
     procedure InternalWorldChanged;
     procedure BeginPaint;
@@ -242,27 +239,34 @@ type
     procedure InternalMouseUp(Button: TMouseButton; Shift: TShiftState; AX, AY: Single);
     procedure FOnDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
     procedure FOnDragDrop(Sender: TObject; const Data: TDragObject; const Point: TPointF);
+    procedure OnContextCut(Sender: TObject);
+    procedure CutSelectionToClipboard;
+    procedure OnContextRedo(Sender: TObject);
+    procedure OnContextUndo(Sender: TObject);
+    procedure OnContextSelectAll(Sender: TObject);
+    procedure SetLinkVisualType(const Value: TLinkVisualType);
+    procedure SetLinkGradient(const Value: Boolean);
   protected
     function SelectedPinCount: integer;
     function GetSelectedPin(Index: integer): TNodePin;
     function CanConnectSelectedPins: boolean;
 
-    function SnapWorldValue(V: Single): Single;
-    function SnapWorldPoint(const P: TPointF): TPointF;
-
-    function IsNodeInDragSelection(ANode: TCustomNode): boolean;
-    function GetDraggedSelectionBoundsAtOffset(const AOffsetX, AOffsetY: single): TRectF;
-    procedure ApplyNodeSnap(var AOffsetX, AOffsetY: single; out ASnappedX, ASnappedY: boolean);
+    function IsNodeInDragSelection(ANode: TCustomNode): Boolean;
+    function GetDraggedSelectionBoundsAtOffset(const AOffsetX, AOffsetY: Single): TRectF;
+    procedure ApplyNodeSnap(var AOffsetX, AOffsetY: Single; out ASnappedX, ASnappedY: Boolean);
 
     procedure InvalidateSortedNodes;
     procedure EnsureSortedNodes;
     procedure NodeGraphChanged(Sender: TObject);
-    function CanPinAcceptMoreConnections(APin: TNodePin): boolean;
+    function CanPinAcceptMoreConnections(APin: TNodePin): Boolean;
 
     // Hit Testing
     function WorldToScreen(WX, WY: Single): TPoint;
+    function ScreenToWorld(const Value: TPointF): TPointF; overload;
     function ScreenToWorld(SX, SY: Double): TPointF; overload;
     function ScreenToWorld(SX, SY: Double; AZoom: Double): TPointF; overload;
+    function SnapWorldValue(Value: Single): Single; overload;
+    function SnapWorldPoint(const P: TPointF): TPointF; overload;
 
     function GetNodeUnderMouse(SX, SY: Integer): TCustomNode;
     function GetPinUnderMouse(SX, SY: Integer; out Node: TCustomNode; out Pin: TNodePin): Boolean;
@@ -271,13 +275,10 @@ type
     // Selection Logic
     procedure ClearSelectionInternal;
     procedure SelectNodeInternal(ANode: TCustomNode; AAppend: Boolean);
-    procedure SelectLinkInternal(ALink: TNodeLink; AKeepNodes: boolean = False);
+    procedure SelectLinkInternal(ALink: TNodeLink; AKeepNodes: Boolean = False);
     procedure ToggleNodeSelection(ANode: TCustomNode);
-    procedure AddNodeToSelection(ANode: TCustomNode);
     procedure RemoveNodeFromSelection(ANode: TCustomNode);
     procedure ToggleLinkSelection(ALink: TNodeLink);
-    procedure AddLinkToSelection(ALink: TNodeLink);
-    procedure RemoveLinkFromSelection(ALink: TNodeLink);
     procedure SyncNodeSelectedFlags;
   protected
     procedure Paint; override;
@@ -301,6 +302,7 @@ type
 
     procedure ClearSelection;
     procedure DeleteSelection;
+    procedure SelectAll;
     function SelectedNodeCount: Integer;
     function SelectedLinkCount: Integer;
     function GetSelectedNode(Index: Integer): TCustomNode;
@@ -312,7 +314,7 @@ type
     procedure FitToSelection;
     procedure FrameAll;
     procedure ResetView;
-    procedure SetZoom(Value: Double; TargetPos: TPoint); overload;
+    procedure SetZoom(Value: Double; const TargetPos: TPoint); overload;
 
     function SaveToJSONText: string;
     procedure LoadFromJSONText(const JSON: string);
@@ -325,9 +327,9 @@ type
     procedure PasteFromClipboard;
     procedure DuplicateSelection;
 
-    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
-    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
-    function RemovePinFromNode(APin: TNodePin): boolean;
+    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function RemovePinFromNode(APin: TNodePin): Boolean;
 
     function ValidateGraphToStrings(AStrings: TStrings): Boolean;
 
@@ -335,23 +337,24 @@ type
     property Zoom: Double read FZoom write SetZoom;
     property Controller: TNodeEditorController read FController;
 
-    property ShowSnapGuides: boolean read FShowSnapGuides write FShowSnapGuides default True;
+    property ShowSnapGuides: Boolean read FShowSnapGuides write FShowSnapGuides default True;
     property GuideLineColor: TAlphaColor read FGuideLineColor write FGuideLineColor default $FFFFD740;
     property GuideLineStyle: TStrokeDash read FGuideLineStyle write FGuideLineStyle default TStrokeDash.Dash;
     property GuideLineWidth: Single read FGuideLineWidth write FGuideLineWidth;
-    property SnapToNodes: boolean read FSnapToNodes write FSnapToNodes default True;
-    property NodeSnapDistance: single read FNodeSnapDistance write FNodeSnapDistance;
+    property SnapToGrid: Boolean read FSnapToGrid write FSnapToGrid default False;
+    property SnapToNodes: Boolean read FSnapToNodes write FSnapToNodes default True;
+    property NodeSnapDistance: Single read FNodeSnapDistance write FNodeSnapDistance;
 
     // New Axes Properties
-    property ShowAxes: boolean read FShowAxes write FShowAxes default False;
-    property AxesColor: TAlphaColor read FAxesColor write FAxesColor default $50FFFFFF;
-    property AxesThickness: integer read FAxesThickness write FAxesThickness default 2;
-    property SnapToGrid: Boolean read FSnapToGrid write FSnapToGrid default False;
+    property ShowAxes: Boolean read FShowAxes write FShowAxes default False;
     property GridSize: Integer read FGridSize write SetGridSize default 40;
     property ShowGrid: Boolean read FShowGrid write SetShowGrid default True;
-    property GridColor: TAlphaColor read FGridColor write SetGridColor default $22E0E0E0;
+    property LockedAll: Boolean read FLockedAll write SetLockedAll;
+    property ShowFrameTime: Boolean read FShowFrameTime write SetShowFrameTime;
 
     // Styling
+    property AxesColor: TAlphaColor read FAxesColor write FAxesColor default $50FFFFFF;
+    property AxesThickness: integer read FAxesThickness write FAxesThickness default 2;
     property PinRadius: integer read FPinRadius write FPinRadius default 8;
     property PinBorderWidth: integer read FPinBorderWidth write FPinBorderWidth default 1;
     property PinBorderColor: TAlphaColor read FPinBorderColor write FPinBorderColor default TAlphaColors.Black;
@@ -370,8 +373,9 @@ type
     property PinIncompatibleColor: TAlphaColor read FPinIncompatibleColor write FPinIncompatibleColor default TAlphaColors.Red;
     property ZoomStep: Double read FZoomStep write SetZoomStep;
     property GridType: TGridType read FGridType write SetGridType;
-    property ShowFrameTime: Boolean read FShowFrameTime write SetShowFrameTime;
-    property LockedAll: Boolean read FLockedAll write SetLockedAll;
+    property GridColor: TAlphaColor read FGridColor write SetGridColor default $22E0E0E0;
+    property LinkVisualType: TLinkVisualType read FLinkVisualType write SetLinkVisualType default TLinkVisualType.Bezier;
+    property LinkGradient: Boolean read FLinkGradient write SetLinkGradient;
 
     // Events
     property OnSelectionChanged: TNodeSelectionChangedEvent read FOnSelectionChanged write FOnSelectionChanged;
@@ -402,94 +406,11 @@ type
 implementation
 
 uses
-  System.IOUtils, FMX.ListBox, FMX.NodeEditor.Form.Search,
+  System.IOUtils, FMX.ListBox, FMX.NodeEditor.Form.Search, FMX.Types3D,
   FMX.NodeEditor.Node.Command, System.Generics.Defaults, FMX.Platform,
   System.Math.Vectors;
 
-function PtInRectF(const Pt: TPointF; const R: TRectF): Boolean; inline;
-begin
-  Result := (Pt.X >= R.Left) and (Pt.X <= R.Right) and
-    (Pt.Y >= R.Top) and (Pt.Y <= R.Bottom);
-end;
-
-function RectFIntersects(const R1, R2: TRectF): Boolean;
-begin
-  Result := not ((R1.Right < R2.Left) or (R1.Left > R2.Right) or
-    (R1.Bottom < R2.Top) or (R1.Top > R2.Bottom));
-end;
-
-function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
-var
-  U, TT, UU, UUU, TTT: single;
-begin
-  U := 1 - T;
-  TT := T * T;
-  UU := U * U;
-  UUU := UU * U;
-  TTT := TT * T;
-
-  Result.X := UUU * P0.X +
-    3 * UU * T * P1.X +
-    3 * U * TT * P2.X +
-    TTT * P3.X;
-
-  Result.Y := UUU * P0.Y +
-    3 * UU * T * P1.Y +
-    3 * U * TT * P2.Y +
-    TTT * P3.Y;
-end;
-
-function LineIntersectsRectF(P1, P2: TPointF; const R: TRectF): Boolean;
-var
-  N: TRectF;
-  Dx, Dy: Single;
-  T0, T1: Single;
-
-  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean;
-  var
-    Rr: Single;
-  begin
-    if Abs(P) < 1e-6 then
-      Exit(Q >= 0);
-
-    Rr := Q / P;
-    if P < 0 then
-    begin
-      if Rr > T1 then
-        Exit(False);
-      if Rr > T0 then
-        T0 := Rr;
-    end
-    else
-    begin
-      if Rr < T0 then
-        Exit(False);
-      if Rr < T1 then
-        T1 := Rr;
-    end;
-    Result := True;
-  end;
-
-begin
-  N := R;
-  N.NormalizeRect;
-
-  if PtInRectF(P1, N) or PtInRectF(P2, N) then
-    Exit(True);
-
-  Dx := P2.X - P1.X;
-  Dy := P2.Y - P1.Y;
-  T0 := 0.0;
-  T1 := 1.0;
-
-  Result :=
-    ClipTest(-Dx, P1.X - N.Left, T0, T1) and
-    ClipTest(Dx, N.Right - P1.X, T0, T1) and
-    ClipTest(-Dy, P1.Y - N.Top, T0, T1) and
-    ClipTest(Dy, N.Bottom - P1.Y, T0, T1);
-end;
-
-function NodePaintCompare(const Item1, Item2: TCustomNode): Integer;
+function NodePaintCompare(const Item1, Item2: TCustomNode): Integer; inline;
 begin
   if Item1.Selected and not Item2.Selected then
     Result := 1
@@ -501,19 +422,6 @@ begin
     Result := 1
   else
     Result := 0;
-end;
-
-procedure BuildSortedNodeList(AGraph: TNodeGraph; AList: TList<TCustomNode>);
-begin
-  AList.Clear;
-
-  if AGraph = nil then
-    Exit;
-
-  for var i := 0 to AGraph.Nodes.Count - 1 do
-    AList.Add(AGraph.Nodes[i]);
-
-  AList.Sort(TComparer<TCustomNode>.Construct(NodePaintCompare));
 end;
 
 { TNodeEditor }
@@ -548,6 +456,11 @@ begin
   FLastHoverMouseY := Low(integer);
   FLastMouseMoveTick := 0;
   FLastPaintTick := 0;
+
+  FLinkVisualType := TLinkVisualType.Bezier;
+  TNodeLink.VisualType := TLinkVisualType.Bezier;
+  FLinkGradient := True;
+  TNodeLink.UseGradient := True;
 
   FZoom := 1.0;
   FZoomStep := 1.15;
@@ -626,9 +539,7 @@ end;
 procedure TNodeEditor.FOnDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
 begin
   if Data.Source is TListBoxItem then
-  begin
-    Operation := TDragOperation.Link;
-  end
+    Operation := TDragOperation.Link
   else
     Operation := TDragOperation.None;
 end;
@@ -640,14 +551,9 @@ begin
     var NodeType := TListBoxItem(Data.Source).TagString;
 
     var SPoint := ScreenToWorld(Point.X, Point.Y);
-    var N := FGraph.Registry.CreateNode(
-      NodeType,
-      SnapWorldValue(SPoint.X),
-      SnapWorldValue(SPoint.Y));
+    var N := FGraph.Registry.CreateNode(NodeType, SnapWorldPoint(SPoint));
     AddNode(N);
     SelectNodeInternal(N, False);
-    NotifySelectionChanged;
-    Repaint;
   end;
 end;
 
@@ -679,6 +585,11 @@ begin
         InternalMouseUp(TMouseButton.mbRight, [], Point.X, Point.Y);
       igiDoubleTap:
         InternalMouseUp(TMouseButton.mbLeft, [], Point.X, Point.Y);
+    end;
+  end
+  else
+  begin
+    case EventInfo.GestureID of
       igiZoom:
         begin
           var WheelDelta: Integer;
@@ -691,11 +602,9 @@ begin
 
           FLastZoomDistance := EventInfo.Distance;
         end;
+      igiPan, igiLongTap, igiDoubleTap:
+        InternalMouseMove([], Point.X, Point.Y);
     end;
-  end
-  else
-  begin
-    InternalMouseMove([], Point.X, Point.Y);
   end;
 end;
 
@@ -752,17 +661,16 @@ end;
 
 function TNodeEditor.GetDraggedSelectionBoundsAtOffset(const AOffsetX, AOffsetY: single): TRectF;
 var
-  i: integer;
   N: TCustomNode;
   L, T, R, B: single;
-  First: boolean;
+  First: Boolean;
 begin
   Result := RectF(0, 0, 0, 0);
   First := True;
 
-  for i := 0 to FDragCommandNodes.Count - 1 do
+  for var i := 0 to FDragCommandNodes.Count - 1 do
   begin
-    N := TCustomNode(FDragCommandNodes[i]);
+    N := FDragCommandNodes[i];
     if N = nil then
       Continue;
 
@@ -790,11 +698,11 @@ begin
   end;
 end;
 
-procedure TNodeEditor.ApplyNodeSnap(var AOffsetX, AOffsetY: single; out ASnappedX, ASnappedY: boolean);
+procedure TNodeEditor.ApplyNodeSnap(var AOffsetX, AOffsetY: Single; out ASnappedX, ASnappedY: boolean);
 var
   DragBounds: TRectF;
   OtherBounds: TRectF;
-  DragLeft, DragRight, DragTop, DragBottom: single;
+  DragLeft, DragRight, DragTop, DragBottom: Single;
   DragCenterX, DragCenterY: single;
   OtherLeft, OtherRight, OtherTop, OtherBottom: single;
   OtherCenterX, OtherCenterY: single;
@@ -802,7 +710,6 @@ var
   CandDX, CandDY: single;
   BestAbsDX, BestAbsDY: single;
   D: single;
-  i: integer;
   N: TCustomNode;
   BestGuideX, BestGuideY: single;
 begin
@@ -811,7 +718,7 @@ begin
   ASnappedY := False;
 
   if not FSnapToNodes then
-    Exit;   // ??
+    Exit;
   if FNodeSnapDistance <= 0 then
     Exit;
   if FDragCommandNodes.Count = 0 then
@@ -833,9 +740,9 @@ begin
   BestAbsDX := FNodeSnapDistance + 1;
   BestAbsDY := FNodeSnapDistance + 1;
 
-  for i := 0 to FGraph.Nodes.Count - 1 do
+  for var i := 0 to FGraph.Nodes.Count - 1 do
   begin
-    N := TCustomNode(FGraph.Nodes[i]);
+    N := FGraph.Nodes[i];
     if (N = nil) or IsNodeInDragSelection(N) then
       Continue;
 
@@ -957,25 +864,25 @@ begin
 
   if FGuideSnapXActive then
   begin
-    Canvas.Stroke.Gradient.StartPosition.Point := TPointF.Create(0.5, 0);
-    Canvas.Stroke.Gradient.StopPosition.Point := TPointF.Create(0.5, 1);
+    Canvas.Stroke.Gradient.StartPosition.Point := PointF(0.5, 0);
+    Canvas.Stroke.Gradient.StopPosition.Point := PointF(0.5, 1);
 
     var SX := Round(FGuideSnapX * FZoom + FOffsetX);
-    Canvas.DrawLine(TPointF.Create(SX, 0), TPointF.Create(SX, Height), 1);
+    Canvas.DrawLine(PointF(SX, 0), PointF(SX, Height), 1);
   end;
 
   if FGuideSnapYActive then
   begin
-    Canvas.Stroke.Gradient.StartPosition.Point := TPointF.Create(0, 0.5);
-    Canvas.Stroke.Gradient.StopPosition.Point := TPointF.Create(1, 0.5);
+    Canvas.Stroke.Gradient.StartPosition.Point := PointF(0, 0.5);
+    Canvas.Stroke.Gradient.StopPosition.Point := PointF(1, 0.5);
 
     var SY := Round(FGuideSnapY * FZoom + FOffsetY);
-    Canvas.DrawLine(TPointF.Create(0, SY), TPointF.Create(Width, SY), 1);
+    Canvas.DrawLine(PointF(0, SY), PointF(Width, SY), 1);
   end;
 
   // Reset
-  Canvas.Stroke.Gradient.StartPosition.Point := TPointF.Create(0, 0);
-  Canvas.Stroke.Gradient.StopPosition.Point := TPointF.Create(0, 1);
+  Canvas.Stroke.Gradient.StartPosition.Point := PointF(0, 0);
+  Canvas.Stroke.Gradient.StopPosition.Point := PointF(0, 1);
   Canvas.Stroke.Gradient.Points.Clear;
   TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 0;
   TGradientPoint(Canvas.Stroke.Gradient.Points.Add).Offset := 1;
@@ -1145,18 +1052,14 @@ begin
 end;
 
 procedure TNodeEditor.ConnectSelectedPins;
-var
-  P1, P2: TNodePin;
-  Allow: boolean;
-  FromPin, ToPin: TNodePin;
 begin
   if (FGraph = nil) or (FController.PinSelection.Count <> 2) then
     Exit;
 
-  P1 := FController.PinSelection.GetPin(0);
-  P2 := FController.PinSelection.GetPin(1);
+  var P1 := FController.PinSelection.GetPin(0);
+  var P2 := FController.PinSelection.GetPin(1);
 
-  Allow := True;
+  var Allow := True;
   if Assigned(FOnBeforeConnectPins) then
     FOnBeforeConnectPins(Self, P1, P2, Allow);
 
@@ -1166,7 +1069,8 @@ begin
   if (P1 = nil) or (P2 = nil) then
     Exit;
 
-  if P1.Direction = pdOutput then
+  var FromPin, ToPin: TNodePin;
+  if P1.Direction = TPinDirection.Output then
   begin
     FromPin := P1;
     ToPin := P2;
@@ -1209,8 +1113,6 @@ begin
 
   if ((FController.Selection.NodeCount > 0) or (FController.Selection.LinkCount > 0)) then
     FController.Selection.Clear;
-
-  SyncNodeSelectedFlags;
 end;
 
 function TNodeEditor.GetPrimarySelectedLink: TNodeLink;
@@ -1246,9 +1148,6 @@ begin
     FController.Selection.Links.Clear;
 
   FController.Selection.SelectNode(ANode, AAppend);
-
-  SyncNodeSelectedFlags;
-  InvalidateSortedNodes;
 end;
 
 procedure TNodeEditor.SelectLinkInternal(ALink: TNodeLink; AKeepNodes: Boolean);
@@ -1262,8 +1161,6 @@ begin
     ClearPinSelection;
   end;
   FController.Selection.SelectLink(ALink, True);
-
-  SyncNodeSelectedFlags;
 end;
 
 procedure TNodeEditor.ToggleNodeSelection(ANode: TCustomNode);
@@ -1272,27 +1169,13 @@ begin
     Exit;
 
   if FController.Selection.ContainsNode(ANode) then
-    RemoveNodeFromSelection(ANode)
+    FController.Selection.RemoveNode(ANode)
   else
-    AddNodeToSelection(ANode);
-
-  NotifySelectionChanged;
-  Repaint;
-end;
-
-procedure TNodeEditor.AddNodeToSelection(ANode: TCustomNode);
-begin
-  if ANode = nil then
-    Exit;
-
-  FController.Selection.AddNodeToSelection(ANode);
+    FController.Selection.SelectNode(ANode, True);
 
   ClearPinSelection;
-
-  FController.Selection.SelectNode(ANode, True);
-
-  SyncNodeSelectedFlags;
-  InvalidateSortedNodes;
+  NotifySelectionChanged;
+  Repaint;
 end;
 
 procedure TNodeEditor.RemoveNodeFromSelection(ANode: TCustomNode);
@@ -1301,9 +1184,6 @@ begin
     Exit;
 
   FController.Selection.RemoveNode(ANode);
-
-  SyncNodeSelectedFlags;
-  InvalidateSortedNodes;
 end;
 
 procedure TNodeEditor.ToggleLinkSelection(ALink: TNodeLink);
@@ -1312,29 +1192,12 @@ begin
     Exit;
 
   if FController.Selection.ContainsLink(ALink) then
-    RemoveLinkFromSelection(ALink)
+    FController.Selection.RemoveLinkFromSelection(ALink)
   else
-    AddLinkToSelection(ALink);
-
-  NotifySelectionChanged;
-  Repaint;
-end;
-
-procedure TNodeEditor.AddLinkToSelection(ALink: TNodeLink);
-begin
-  if ALink = nil then
-    Exit;
-
-  FController.Selection.AddLinkToSelection(ALink);
-  ClearPinSelection;
-end;
-
-procedure TNodeEditor.RemoveLinkFromSelection(ALink: TNodeLink);
-begin
-  if ALink = nil then
-    Exit;
-
-  FController.Selection.RemoveLinkFromSelection(ALink);
+  begin
+    FController.Selection.AddLinkToSelection(ALink);
+    ClearPinSelection;
+  end;
 end;
 
 procedure TNodeEditor.SyncNodeSelectedFlags;
@@ -1350,13 +1213,6 @@ begin
   end;
 end;
 
-function TNodeEditor.GetPinWorldPosition(APin: TNodePin): TPointF;
-begin
-  if (APin = nil) or (APin.OwnerNode = nil) then
-    Exit(PointF(0, 0));
-  Result := APin.OwnerNode.GetPinWorldPosition(APin);
-end;
-
 procedure TNodeEditor.NotifySelectionChanged;
 begin
   if Assigned(FOnSelectionChanged) then
@@ -1370,6 +1226,7 @@ end;
 
 procedure TNodeEditor.SyncControllerSelectionToView;
 begin
+  SyncNodeSelectedFlags;
   InvalidateSortedNodes;
   NotifySelectionChanged;
   Repaint;
@@ -1428,15 +1285,11 @@ end;
 procedure TNodeEditor.SelectNode(ANode: TCustomNode; AAppend: Boolean);
 begin
   SelectNodeInternal(ANode, AAppend);
-  NotifySelectionChanged;
-  Repaint;
 end;
 
 procedure TNodeEditor.SelectLink(ALink: TNodeLink);
 begin
   SelectLinkInternal(ALink);
-  NotifySelectionChanged;
-  Repaint;
 end;
 
 function TNodeEditor.WorldToScreen(WX, WY: Single): TPoint;
@@ -1447,9 +1300,7 @@ end;
 
 function TNodeEditor.GetVisibleWorldRect: TRectF;
 begin
-  Result := TRectF.Create(
-    ScreenToWorld(0, 0),
-    ScreenToWorld(Width, Height), True);
+  Result := TRectF.Create(ScreenToWorld(0, 0), ScreenToWorld(Width, Height), True);
 end;
 
 procedure TNodeEditor.InternalWorldChanged;
@@ -1462,23 +1313,29 @@ begin
   Result.Y := (SY - FOffsetY) / FZoom;
 end;
 
+function TNodeEditor.ScreenToWorld(const Value: TPointF): TPointF;
+begin
+  Result.X := (Value.X - FOffsetX) / FZoom;
+  Result.Y := (Value.Y - FOffsetY) / FZoom;
+end;
+
 function TNodeEditor.ScreenToWorld(SX, SY, AZoom: Double): TPointF;
 begin
   Result.X := (SX - FOffsetX) / AZoom;
   Result.Y := (SY - FOffsetY) / AZoom;
 end;
 
-function TNodeEditor.SnapWorldValue(V: Single): Single;
+function TNodeEditor.SnapWorldValue(Value: Single): Single;
 begin
   if FSnapToGrid and (FGridSize > 1) then
-    Result := Round(V / FGridSize) * FGridSize
+    Result := Round(Value / FGridSize) * FGridSize
   else
-    Result := V;
+    Result := Value;
 end;
 
-procedure TNodeEditor.DrawNode(ANode: TCustomNode);
+procedure TNodeEditor.DrawNode(ANode: TCustomNode; const NodeBounds: TRectF);
 begin
-  var NodeBounds := ANode.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+  ANode.OnScreen := True;
 
   // Override drawing
   var Handled := False;
@@ -1487,162 +1344,41 @@ begin
 
   // Draw node
   if not Handled then
-    ANode.Paint(Canvas, FZoom, FOffsetX, FOffsetY);
-
-  // Draw pins
-  if (ANode.VisualKind not in [nvComment, nvReroute]) and not ANode.Collapsed then
-    DrawNodePins(ANode);
-end;
-
-procedure TNodeEditor.DrawPin(APin: TNodePin; const Center: TPoint; Radius: integer; ASelected, AHovered, AHighlighted: boolean);
-begin
-  Canvas.Stroke.Kind := TBrushKind.Solid;
-  Canvas.Stroke.Color := TAlphaColors.Black;
-  Canvas.Stroke.Thickness := 1 * Zoom;
-
-  if APin.Kind = pkExec then
-    Canvas.Fill.Color := TAlphaColors.White
-  else if APin.PinType <> nil then
-    Canvas.Fill.Color := APin.PinType.Color
-  else
-    Canvas.Fill.Color := TAlphaColors.Green;
-
-  if APin.Connected then
-  begin
-    //
-  end;
-
-  var SRadius: Single := Radius;
-  if (APin.Id = APin.OwnerNode.HoveredPinId) or ASelected then
-  begin
-    Canvas.Stroke.Kind := TBrushKind.Solid;
-    Canvas.Stroke.Color := $FFFFD740;
-    Canvas.Stroke.Thickness := 2 * Zoom;
-  end
-  else
-  begin
-    Canvas.Stroke.Kind := TBrushKind.Solid;
-    Canvas.Stroke.Color := APin.OwnerNode.HeaderColor;
-    Canvas.Stroke.Thickness := 2 * Zoom;
-    SRadius := SRadius * 0.8;
-  end;
-
-  // Highlight frame
-  Canvas.Fill.Kind := TBrushKind.Solid;
-  var RE := TRectF.Create(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
-  Canvas.DrawEllipse(RE, 1);
-
-  // Body
-  RE.Inflate(-SRadius * 0.4, -SRadius * 0.4);
-  Canvas.FillEllipse(RE, 1);
-end;
-
-procedure TNodeEditor.DrawNodePins(ANode: TCustomNode);
-var
-  i: integer;
-  P: TNodePin;
-  PX, PY: integer;
-  PinRadiusScaled: integer;
-  Handled: boolean;
-  Center: TPoint;
-  IsSelected: boolean;
-  IsHovered: boolean;
-begin
-  PinRadiusScaled := Round(FPinRadius * FZoom);
-
-  for i := 0 to ANode.InputCount - 1 do
-  begin
-    P := ANode.GetInput(i);
-    if (P = nil) or P.Hidden then
-      Continue;
-
-    PX := Round(ANode.X * FZoom + FOffsetX);
-    PY := Round((ANode.Y + P.LocalY) * FZoom + FOffsetY);
-    Center := Point(PX, PY);
-
-    IsSelected := FController.PinSelection.Contains(P);
-    IsHovered := (FHoveredPin = P) and (FTempFromPin = nil);
-
-    Handled := False;
-    if Assigned(FOnDrawPin) then
-      FOnDrawPin(Self, Canvas, P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted, Handled);
-
-    if not Handled then
-      DrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
-
-    // Text
-    Canvas.Fill.Kind := TBrushKind.Solid;
-    Canvas.Fill.Color := TAlphaColors.White;
-    var TextSize := TSize.Create(Round(Canvas.TextWidth(P.Name)), Round(Canvas.TextHeight(P.Name)));
-    Canvas.FillText(
-      TRectF.Create(
-        Center.X + (PinRadius + 6) * FZoom,
-        Center.Y - TextSize.Height div 2,
-        Center.X + (PinRadius + 6) * FZoom + TextSize.Width,
-        Center.Y + TextSize.Height div 2),
-      P.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-  end;
-
-  for i := 0 to ANode.OutputCount - 1 do
-  begin
-    P := ANode.GetOutput(i);
-    if (P = nil) or P.Hidden then
-      Continue;
-
-    PX := Round((ANode.X + ANode.Width) * FZoom + FOffsetX);
-    PY := Round((ANode.Y + P.LocalY) * FZoom + FOffsetY);
-    Center := Point(PX, PY);
-
-    IsSelected := FController.PinSelection.Contains(P);
-    IsHovered := (FHoveredPin = P) and (FTempFromPin = nil);
-
-    Handled := False;
-    if Assigned(FOnDrawPin) then
-      FOnDrawPin(Self, Canvas, P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted, Handled);
-
-    if not Handled then
-      DrawPin(P, Center, PinRadiusScaled, IsSelected, IsHovered, ANode.Highlighted);
-
-    // Text
-    Canvas.Fill.Kind := TBrushKind.Solid;
-    Canvas.Fill.Color := TAlphaColors.White;
-    var TextSize := TSize.Create(Round(Canvas.TextWidth(P.Name)), Round(Canvas.TextHeight(P.Name)));
-    Canvas.FillText(TRectF.Create(
-        Center.X - TextSize.Width - (PinRadius + 6) * FZoom,
-        Center.Y - TextSize.Height div 2,
-        Center.X - (PinRadius + 6) * FZoom,
-        Center.Y + TextSize.Height div 2),
-      P.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
-  end;
+    ANode.Paint(Canvas, NodeBounds, FZoom, FOffsetX, FOffsetY);
 end;
 
 function TNodeEditor.SnapWorldPoint(const P: TPointF): TPointF;
 begin
-  Result.X := SnapWorldValue(P.X);
-  Result.Y := SnapWorldValue(P.Y);
+  if FSnapToGrid and (FGridSize > 1) then
+  begin
+    Result.X := Round(P.X / FGridSize) * FGridSize;
+    Result.Y := Round(P.Y / FGridSize) * FGridSize;
+  end
+  else
+    Result := P;
 end;
 
 function TNodeEditor.GetNodeUnderMouse(SX, SY: Integer): TCustomNode;
-var
-  i: Integer;
-  W: TPointF;
-  N: TCustomNode;
 begin
   Result := nil;
-  W := ScreenToWorld(SX, SY);
+  var W := ScreenToWorld(SX, SY);
   EnsureSortedNodes;
 
-  for i := FPaintNodesSorted.Count - 1 downto 0 do
+  for var i := FPaintNodesSorted.Count - 1 downto 0 do
   begin
-    N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind <> nvComment) and N.HitTest(W.X, W.Y) then
+    var N := FPaintNodesSorted[i];
+    if not N.OnScreen then
+      Continue;
+    if (N.VisualKind <> TNodeVisualKind.Comment) and N.HitTest(W.X, W.Y) then
       Exit(N);
   end;
 
-  for i := FPaintNodesSorted.Count - 1 downto 0 do
+  for var i := FPaintNodesSorted.Count - 1 downto 0 do
   begin
-    N := TCustomNode(FPaintNodesSorted[i]);
-    if (N.VisualKind = nvComment) and N.HitTest(W.X, W.Y) then
+    var N := FPaintNodesSorted[i];
+    if not N.OnScreen then
+      Continue;
+    if (N.VisualKind = TNodeVisualKind.Comment) and N.HitTest(W.X, W.Y) then
       Exit(N);
   end;
 end;
@@ -1665,23 +1401,23 @@ begin
   for i := FPaintNodesSorted.Count - 1 downto 0 do
   begin
     N := FPaintNodesSorted[i];
-    if N.VisualKind = nvComment then
+    if N.VisualKind = TNodeVisualKind.Comment then
       Continue;
-    if N.VisualKind = nvReroute then
+    if N.VisualKind = TNodeVisualKind.Reroute then
       HitRadiusWorld := FPinRadius
     else
       HitRadiusWorld := FPinRadius + 2;
 
     var SkipInput := False;
-    if N.VisualKind = nvReroute then
+    if N.VisualKind = TNodeVisualKind.Reroute then
     begin
       if N.OutputsIsBusy and N.InputsIsBusy then
         Continue;
       SkipInput := not N.OutputsIsBusy;
       if FReconnectFixedPin <> nil then
-        SkipInput := FReconnectFixedPin.Direction = TPinDirection.pdInput
+        SkipInput := FReconnectFixedPin.Direction = TPinDirection.Input
       else if FTempFromPin <> nil then
-        SkipInput := FTempFromPin.Direction = TPinDirection.pdInput;
+        SkipInput := FTempFromPin.Direction = TPinDirection.Input;
     end;
 
     if not SkipInput then
@@ -1691,7 +1427,7 @@ begin
         if P.Hidden then
           Continue;
 
-        PW := GetPinWorldPosition(P);
+        PW := P.GetPinWorldPosition;
         if Hypot(W.X - PW.X, W.Y - PW.Y) <= HitRadiusWorld then
         begin
           Node := N;
@@ -1706,7 +1442,7 @@ begin
       if P.Hidden then
         Continue;
 
-      PW := GetPinWorldPosition(P);
+      PW := P.GetPinWorldPosition;
       if Hypot(W.X - PW.X, W.Y - PW.Y) <= HitRadiusWorld then
       begin
         Node := N;
@@ -1737,7 +1473,7 @@ begin
   end;
 end;
 
-procedure TNodeEditor.DrawMiniGrid(ACanvas: TCanvas; ARect: TRectF; AOffsetX, AOffsetY, AZoom: Double);
+procedure TNodeEditor.DrawMiniGrid(ACanvas: TCanvas; const ARect: TRectF; AOffsetX, AOffsetY, AZoom: Double);
 
   function MiniScreenToWorld(SX, SY: Double): TPointF;
   begin
@@ -1765,8 +1501,8 @@ begin
   while X <= VR.Right do
   begin
     var SX := Trunc(X * 1 + AOffsetX);
-    var P1 := TPointF.Create(SX, 0).Truncate;
-    var P2 := TPointF.Create(SX, ARect.Height).Truncate;
+    var P1 := PointF(SX, 0).Truncate;
+    var P2 := PointF(SX, ARect.Height).Truncate;
     ACanvas.DrawLine(P1, P2, AbsoluteOpacity);
     X := X + SmallStep;
   end;
@@ -1775,8 +1511,8 @@ begin
   while Y <= VR.Bottom do
   begin
     var SY := Trunc(Y * 1 + AOffsetY);
-    var P1 := TPointF.Create(0, SY).Truncate;
-    var P2 := TPointF.Create(ARect.Width, SY).Truncate;
+    var P1 := PointF(0, SY).Truncate;
+    var P2 := PointF(ARect.Width, SY).Truncate;
     ACanvas.DrawLine(P1, P2, AbsoluteOpacity);
     Y := Y + SmallStep;
   end;
@@ -1815,7 +1551,7 @@ begin
     else
       Canvas.Stroke.Thickness := 1 * FZoom;
 
-    Canvas.DrawLine(TPointF.Create(ScreenX, 0), TPointF.Create(ScreenX, Height), AbsoluteOpacity);
+    Canvas.DrawLine(PointF(ScreenX, 0), PointF(ScreenX, Height), AbsoluteOpacity);
 
     WorldX := WorldX + FGridSize;
   end;
@@ -1831,7 +1567,7 @@ begin
     else
       Canvas.Stroke.Thickness := 1 * FZoom;
 
-    Canvas.DrawLine(TPointF.Create(0, ScreenY), TPointF.Create(Width, ScreenY), AbsoluteOpacity);
+    Canvas.DrawLine(PointF(0, ScreenY), PointF(Width, ScreenY), AbsoluteOpacity);
 
     WorldY := WorldY + FGridSize;
   end;
@@ -1848,12 +1584,12 @@ begin
   if (WR.Left <= 0) and (WR.Right >= 0) then
   begin
     var SX := WorldToScreen(0, 0).X;
-    Canvas.DrawLine(Canvas.AlignToPixel(TPointF.Create(SX, 0)), Canvas.AlignToPixel(TPointF.Create(SX, Height)), 1);
+    Canvas.DrawLine(Canvas.AlignToPixel(PointF(SX, 0)), Canvas.AlignToPixel(PointF(SX, Height)), 1);
   end;
   if (WR.Top <= 0) and (WR.Bottom >= 0) then
   begin
     var SY := WorldToScreen(0, 0).Y;
-    Canvas.DrawLine(Canvas.AlignToPixel(TPointF.Create(0, SY)), Canvas.AlignToPixel(TPointF.Create(Width, SY)), 1);
+    Canvas.DrawLine(Canvas.AlignToPixel(PointF(0, SY)), Canvas.AlignToPixel(PointF(Width, SY)), 1);
   end;
 end;
 
@@ -1869,7 +1605,7 @@ begin
 
     var IsSelected := FController.Selection.ContainsLink(Link);
     var IsHovered := Link = FHoveredLink;
-
+    Link.OnScreen := True;
     var Handled := False;
     if Assigned(FOnDrawLink) then
       FOnDrawLink(Self, Canvas, Link, IsSelected, IsHovered, Handled);
@@ -1891,7 +1627,7 @@ begin
 
   if FReconnectingLink and (FReconnectFixedPin <> nil) then
   begin
-    FixedPosW := GetPinWorldPosition(FReconnectFixedPin);
+    FixedPosW := FReconnectFixedPin.GetPinWorldPosition;
 
     if FReconnectMovingFromSide then
     begin
@@ -1907,7 +1643,7 @@ begin
   end
   else
   begin
-    W0 := GetPinWorldPosition(FTempFromPin);
+    W0 := FTempFromPin.GetPinWorldPosition;
     W3 := ScreenToWorld(FTempMousePos.X, FTempMousePos.Y);
   end;
 
@@ -1919,7 +1655,7 @@ begin
   W1 := W0;
   W2 := W3;
 
-  if (StartPin <> nil) and (StartPin.Direction = pdInput) then
+  if (StartPin <> nil) and (StartPin.Direction = TPinDirection.Input) then
   begin
     W1.X := W0.X - D;
     W2.X := W3.X + D;
@@ -1981,19 +1717,19 @@ begin
   Pos.Offset(Round(GetPrimarySelectedNode.Width * Zoom / 2), 0);
 
   // Bounds position
-  Pos.SetLocation(TPointF.Create(
+  Pos.SetLocation(PointF(
       EnsureRange(Pos.X, TextW / 2, Width - TextW / 2),
       EnsureRange(Pos.Y, TextH + ArrowSize, Height)).Round);
 
   // Bounds
-  var R := TRectF.Create(Pos.X - TextW * 0.5, Pos.Y, Pos.X + TextW * 0.5, Pos.Y + TextH);
+  var R := RectF(Pos.X - TextW * 0.5, Pos.Y, Pos.X + TextW * 0.5, Pos.Y + TextH);
   R.Offset(0, -R.Height - ArrowSize);
 
   Canvas.Fill.Kind := TBrushKind.Solid;
 
   // Shadow
   Canvas.Fill.Color := $20000000;
-  Canvas.FillRect(TRectF.Create(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, 1);
+  Canvas.FillRect(RectF(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, 1);
 
   // Background
   Canvas.Fill.Color := $CC2B2D30;
@@ -2008,14 +1744,14 @@ begin
 
   // Top inner highlight
   Canvas.Stroke.Color := $18FFFFFF;
-  Canvas.DrawLine(TPointF.Create(R.Left + 10, R.Top + 1), TPointF.Create(R.Right - 10, R.Top + 1), 1);
+  Canvas.DrawLine(PointF(R.Left + 10, R.Top + 1), PointF(R.Right - 10, R.Top + 1), 1);
 
   // Arrow
   var Arrow: TPolygon;
   SetLength(Arrow, 3);
-  Arrow[0] := TPointF.Create(Pos.X - ArrowSize, R.Bottom - 1);
-  Arrow[1] := TPointF.Create(Pos.X + ArrowSize, R.Bottom - 1);
-  Arrow[2] := TPointF.Create(Pos.X, R.Bottom + ArrowSize);
+  Arrow[0] := PointF(Pos.X - ArrowSize, R.Bottom - 1);
+  Arrow[1] := PointF(Pos.X + ArrowSize, R.Bottom - 1);
+  Arrow[2] := PointF(Pos.X, R.Bottom + ArrowSize);
   Canvas.Fill.Color := $EE2B2D30;
   Canvas.FillPolygon(Arrow, 1);
   Canvas.Stroke.Color := $30FFFFFF;
@@ -2030,49 +1766,45 @@ procedure TNodeEditor.DrawNodes(FirstLevel: Boolean);
 begin
   if FirstLevel then
   begin
-    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FPaintNodesSorted[i];
-      if (N.VisualKind = nvComment) and not N.Selected then
+      if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
         if FScreenRect.IntersectsWith(R) then
-          DrawNode(N);
+          DrawNode(N, R);
       end;
     end;
 
-    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FPaintNodesSorted[i];
-      if (N.VisualKind = nvComment) and N.Selected then
+      if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
         if FScreenRect.IntersectsWith(R) then
-          DrawNode(N);
+          DrawNode(N, R);
       end;
     end;
   end
   else
   begin
-    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FPaintNodesSorted[i];
-      if (N.VisualKind <> nvComment) and not N.Selected then
+      if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
         if FScreenRect.IntersectsWith(R) then
-          DrawNode(N);
+          DrawNode(N, R);
       end;
     end;
 
-    for var i := 0 to FPaintNodesSorted.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FPaintNodesSorted[i];
-      if (N.VisualKind <> nvComment) and N.Selected then
+      if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
         if FScreenRect.IntersectsWith(R) then
-          DrawNode(N);
+          DrawNode(N, R);
       end;
     end;
   end;
@@ -2088,6 +1820,10 @@ begin
   Canvas.Fill.Color := $FF222222;
   Canvas.FillRect(LocalRect, 7, 7, AllCorners, 1);
   EnsureSortedNodes;
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+    FGraph.Nodes[i].OnScreen := False;
+  for var i := 0 to FGraph.Links.Count - 1 do
+    FGraph.Links[i].OnScreen := False;
 end;
 
 procedure TNodeEditor.EndPaint;
@@ -2100,8 +1836,10 @@ begin
   Canvas.Font.Size := 12;
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.FillText(
-    TRectF.Create(20, 20, 100, 100),
-    FFrameTimeWatch.ElapsedMilliseconds.ToString + 'ms',
+    RectF(20, 20, 500, 500),
+    FFrameTimeWatch.ElapsedMilliseconds.ToString + 'ms'#13#10 +
+    'Canvas: ' + Canvas.ClassName + #13#10 +
+    'Context: ' + TContextManager.DefaultContextClass.ClassName,
     False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 end;
 
@@ -2145,21 +1883,6 @@ begin
     DrawFrameTime;
 end;
 
-function TNodeEditor.GetResizeHandleRect(ANode: TCustomNode): TRect;
-begin
-  Result := Rect(0, 0, 0, 0);
-  if ANode.VisualKind = TNodeVisualKind.nvReroute then
-    Exit;
-  if ANode.FixedSize then
-    Exit;
-  if ANode = nil then
-    Exit;
-
-  var R := ANode.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-  var S := Round(FResizeEdgeSize * FZoom);
-  Result := Rect(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
-end;
-
 function TNodeEditor.GetNodeResizeUnderMouse(SX, SY: Integer): TCustomNode;
 begin
   Result := nil;
@@ -2167,7 +1890,7 @@ begin
   var NodeUnderMouse := GetNodeUnderMouse(SX, SY);
   if Assigned(NodeUnderMouse) then
   begin
-    if GetResizeHandleRect(NodeUnderMouse).Contains(Point(SX, SY)) then
+    if NodeUnderMouse.ResizeHandleHitTest(SX, SY, FZoom, FOffsetX, FOffsetY) then
       Exit(NodeUnderMouse);
   end;
 end;
@@ -2185,39 +1908,68 @@ begin
   Sep.Text := '-';
   FPopupMenu.AddObject(Sep);
 
-  var AddRoot := TMenuItem.Create(FPopupMenu);
-  AddRoot.Text := Translate('Add Node');
-  FPopupMenu.AddObject(AddRoot);
-  for var i := 0 to FGraph.Registry.Count - 1 do
-  begin
-    var RegItem := FGraph.Registry[i];
-    Item := TMenuItem.Create(FPopupMenu);
-    Item.Text := RegItem.Caption;
-    Item.TagString := RegItem.NodeType;
-    Item.OnClick := OnAddRegisteredNodeClick;
-    AddRoot.AddObject(Item);
-  end;
+  Item := TMenuItem.Create(FPopupMenu);
+  Item.Text := Translate('Undo');
+  Item.StyleLookup := 'menuitemstyle_undo';
+  Item.ShortCut := TextToShortCut('Ctrl+Z');
+  Item.OnClick := OnContextUndo;
+  FPopupMenu.AddObject(Item);
+
+  Item := TMenuItem.Create(FPopupMenu);
+  Item.Text := Translate('Redo');
+  Item.StyleLookup := 'menuitemstyle_redo';
+  Item.ShortCut := TextToShortCut('Ctrl+Shift+Z');
+  Item.OnClick := OnContextRedo;
+  FPopupMenu.AddObject(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
   Sep.Text := '-';
   FPopupMenu.AddObject(Sep);
 
   Item := TMenuItem.Create(FPopupMenu);
+  Item.Text := Translate('Cut');
+  Item.StyleLookup := 'menuitemstyle_cut';
+  Item.ShortCut := TextToShortCut('Ctrl+X');
+  Item.OnClick := OnContextCut;
+  FPopupMenu.AddObject(Item);
+
+  Item := TMenuItem.Create(FPopupMenu);
   Item.Text := Translate('Copy');
-  Item.ShortCut := TextToShortCut('Ctrl + C');
+  Item.StyleLookup := 'menuitemstyle_copy';
+  Item.ShortCut := TextToShortCut('Ctrl+C');
   Item.OnClick := OnContextCopy;
   FPopupMenu.AddObject(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Text := Translate('Paste');
-  Item.ShortCut := TextToShortCut('Ctrl + V');
+  Item.StyleLookup := 'menuitemstyle_paste';
+  Item.ShortCut := TextToShortCut('Ctrl+V');
   Item.OnClick := OnContextPaste;
   FPopupMenu.AddObject(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Text := Translate('Duplicate');
-  Item.ShortCut := TextToShortCut('Ctrl + D');
+  Item.StyleLookup := 'menuitemstyle_copy';
+  Item.ShortCut := TextToShortCut('Ctrl+D');
   Item.OnClick := OnContextDuplicate;
+  FPopupMenu.AddObject(Item);
+
+  Item := TMenuItem.Create(FPopupMenu);
+  Item.Text := Translate('Delete');
+  Item.StyleLookup := 'menuitemstyle_delete';
+  Item.ShortCut := TextToShortCut('Del');
+  Item.OnClick := OnContextDelete;
+  FPopupMenu.AddObject(Item);
+
+  Sep := TMenuItem.Create(FPopupMenu);
+  Sep.Text := '-';
+  FPopupMenu.AddObject(Sep);
+
+  Item := TMenuItem.Create(FPopupMenu);
+  Item.Text := Translate('Select All');
+  Item.StyleLookup := 'menuitemstyle_selectall';
+  Item.ShortCut := TextToShortCut('Ctrl+A');
+  Item.OnClick := OnContextSelectAll;
   FPopupMenu.AddObject(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
@@ -2233,28 +1985,26 @@ begin
   Item.Text := Translate('Add Comment / Frame');
   Item.OnClick := OnContextAddComment;
   FPopupMenu.AddObject(Item);
-
-  Sep := TMenuItem.Create(FPopupMenu);
-  Sep.Text := '-';
-  FPopupMenu.AddObject(Sep);
-
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Delete');
-  Item.OnClick := OnContextDelete;
-  FPopupMenu.AddObject(Item);
 end;
 
-procedure TNodeEditor.OnAddRegisteredNodeClick(Sender: TObject);
+procedure TNodeEditor.OnContextSelectAll(Sender: TObject);
 begin
-  var It := TMenuItem(Sender).TagString;
-  var N := FGraph.Registry.CreateNode(
-    It,
-    SnapWorldValue(FContextWorldPos.X),
-    SnapWorldValue(FContextWorldPos.Y));
-  AddNode(N);
-  SelectNodeInternal(N, False);
-  NotifySelectionChanged;
-  Repaint;
+  SelectAll;
+end;
+
+procedure TNodeEditor.OnContextUndo(Sender: TObject);
+begin
+  Undo;
+end;
+
+procedure TNodeEditor.OnContextRedo(Sender: TObject);
+begin
+  Redo;
+end;
+
+procedure TNodeEditor.OnContextCut(Sender: TObject);
+begin
+  CutSelectionToClipboard;
 end;
 
 procedure TNodeEditor.OnContextCopy(Sender: TObject);
@@ -2280,7 +2030,7 @@ end;
 procedure TNodeEditor.OnContextSearchNode(Sender: TObject);
 begin
   var P := Screen.MousePos.Round;
-  ShowNodeSearchPopup(P.X, P.Y, FContextWorldPos.X, FContextWorldPos.Y);
+  ShowNodeSearchPopup(P.X, P.Y, FContextWorldPos);
 end;
 
 procedure TNodeEditor.OnContextInsertReroute(Sender: TObject);
@@ -2288,24 +2038,12 @@ begin
   if GetPrimarySelectedLink = nil then
     Exit;
 
-  FController.InsertRerouteOnLink(GetPrimarySelectedLink,
-    SnapWorldValue(FContextWorldPos.X),
-    SnapWorldValue(FContextWorldPos.Y));
-
-  SyncControllerSelectionToView;
-
-  NotifySelectionChanged;
-  Repaint;
+  FController.InsertRerouteOnLink(GetPrimarySelectedLink, SnapWorldPoint(FContextWorldPos));
 end;
 
 procedure TNodeEditor.OnContextAddComment(Sender: TObject);
 begin
-  FController.AddCommentNode(
-    SnapWorldValue(FContextWorldPos.X),
-    SnapWorldValue(FContextWorldPos.Y));
-  SyncControllerSelectionToView;
-  NotifySelectionChanged;
-  Repaint;
+  FController.AddCommentNode(SnapWorldPoint(FContextWorldPos));
 end;
 
 procedure TNodeEditor.CopySelectionToClipboard;
@@ -2313,27 +2051,23 @@ begin
   FController.CopySelectionToClipboard;
 end;
 
+procedure TNodeEditor.CutSelectionToClipboard;
+begin
+  FController.CutSelectionToClipboard;
+end;
+
 procedure TNodeEditor.PasteFromClipboard;
 begin
-  FController.PasteFromClipboard(
-    SnapWorldValue(FContextWorldPos.X),
-    SnapWorldValue(FContextWorldPos.Y)
-  );
+  FController.PasteFromClipboard(SnapWorldPoint(FContextWorldPos));
   SyncControllerSelectionToView;
-  Repaint;
 end;
 
 procedure TNodeEditor.DuplicateSelection;
 begin
-  var W := ScreenToWorld(Round(Width) div 2, Round(Height) div 2);
-
-  FController.DuplicateSelection(
-    SnapWorldValue(W.X + 25),
-    SnapWorldValue(W.Y + 25)
-  );
-
+  var W := ScreenToWorld(FLastMousePos);
+  W.Offset(25, 25);
+  FController.DuplicateSelection(SnapWorldPoint(W));
   SyncControllerSelectionToView;
-  Repaint;
 end;
 
 function TNodeEditor.AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
@@ -2372,7 +2106,7 @@ begin
   Repaint;
 end;
 
-procedure TNodeEditor.DrawNavigator(ACanvas: TCanvas; ARect: TRectF);
+procedure TNodeEditor.DrawNavigator(ACanvas: TCanvas; const ARect: TRectF);
 
   function WorldToMini(Rect: TRectF; AZoom, AOffsetX, AOffsetY: Double): TRectF;
   begin
@@ -2416,7 +2150,7 @@ begin
 
   // Center dot
   ACanvas.Fill.Color := TAlphaColors.Cornflowerblue;
-  ACanvas.FillEllipse(TRectF.Create(TPointF.Create(MiniOffsetX, MiniOffsetY), 4, 4), 0.8);
+  ACanvas.FillEllipse(TRectF.Create(PointF(MiniOffsetX, MiniOffsetY), 4, 4), 0.8);
   DrawMiniGrid(ACanvas, ARect, MiniOffsetX, MiniOffsetY, MiniZoom);
 
   // Draw nodes
@@ -2425,7 +2159,7 @@ begin
   for var i := 0 to FPaintNodesSorted.Count - 1 do
   begin
     var N := FPaintNodesSorted[i];
-    if (N.VisualKind = nvComment) and not N.Selected then
+    if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
       if ARect.IntersectsWith(R) then
@@ -2439,7 +2173,7 @@ begin
   for var i := 0 to FPaintNodesSorted.Count - 1 do
   begin
     var N := FPaintNodesSorted[i];
-    if (N.VisualKind = nvComment) and N.Selected then
+    if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
       if ARect.IntersectsWith(R) then
@@ -2453,7 +2187,7 @@ begin
   for var i := 0 to FPaintNodesSorted.Count - 1 do
   begin
     var N := FPaintNodesSorted[i];
-    if (N.VisualKind <> nvComment) and not N.Selected then
+    if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
       if ARect.IntersectsWith(R) then
@@ -2467,7 +2201,7 @@ begin
   for var i := 0 to FPaintNodesSorted.Count - 1 do
   begin
     var N := FPaintNodesSorted[i];
-    if (N.VisualKind <> nvComment) and N.Selected then
+    if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
       if ARect.IntersectsWith(R) then
@@ -2489,7 +2223,7 @@ begin
   // Box selecting
   if FBoxSelecting then
   begin
-    var R := ScreenToMini(TRectF.Create(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y), MiniZoom, MiniOffsetX, MiniOffsetY);
+    var R := ScreenToMini(RectF(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y), MiniZoom, MiniOffsetX, MiniOffsetY);
     ACanvas.Fill.Color := TAlphaColors.White;
     ACanvas.FillRect(R, 0, 0, [], 0.2);
   end;
@@ -2505,23 +2239,20 @@ begin
   end;
 end;
 
-procedure TNodeEditor.ShowNodeSearchPopup(AScreenX, AScreenY: Integer; AWorldX, AWorldY: Single);
+procedure TNodeEditor.ShowNodeSearchPopup(AScreenX, AScreenY: Integer; const WorldPosition: TPointF);
 begin
   var F := TFormNodeEditorSearch.CreateSearch(Self, FGraph.Registry);
   try
-    F.Left := AScreenX;
-    F.Top := AScreenY;
+    F.Left := EnsureRange(AScreenX - F.Width div 2, 0, Round(Screen.Width) - F.Width);
+    F.Top := EnsureRange(AScreenY - F.Height div 2, 0, Round(Screen.Height) - F.Height);
 
     if F.ShowModal = mrOk then
     begin
       if F.SelectedNodeType <> '' then
       begin
-        var N := FGraph.Registry.CreateNode(F.SelectedNodeType,
-          SnapWorldValue(AWorldX), SnapWorldValue(AWorldY));
+        var N := FGraph.Registry.CreateNode(F.SelectedNodeType, SnapWorldPoint(WorldPosition));
         AddNode(N);
         SelectNodeInternal(N, False);
-        NotifySelectionChanged;
-        Repaint;
       end;
     end;
   finally
@@ -2564,9 +2295,8 @@ begin
 
   ClearSnapGuides;
   ClearHoverStates;
-  NotifySelectionChanged;
-  InvalidateSortedNodes;
-  SyncNodeSelectedFlags;
+
+  SyncControllerSelectionToView;
 end;
 
 procedure TNodeEditor.Resize;
@@ -2608,13 +2338,13 @@ begin
   begin
     FHoveredNode.Hovered := False;
     FHoveredNode.HoveredPinId := '';
+    FHoveredNode.HoveredPinCompatible := TPinCompatible.Undefined;
     FHoveredNode.Highlighted := False;
   end;
 
   FHoveredNode := nil;
   FHoveredPin := nil;
   FHoveredLink := nil;
-  FHoveredPinCompatible := False;
 
   if GetPinUnderMouse(SX, SY, N, P) then
   begin
@@ -2622,28 +2352,32 @@ begin
     FHoveredPin := P;
     N.Highlighted := True;
     N.HoveredPinId := P.Id;
+    N.HoveredPinCompatible := TPinCompatible.Undefined;
 
     var TestPin := if FReconnectingLink then FReconnectFixedPin else FTempFromPin;
     if TestPin <> nil then
-    begin                    //FGraph.CanConnect(TestPin, P);
-      N.Highlighted :=
-        CanPinAcceptMoreConnections(FTempFromPin) and
-        CanPinAcceptMoreConnections(P) and
-        FGraph.CanConnect(FTempFromPin, P);
-      FHoveredPinCompatible := N.Highlighted;
+    begin
+      if FTempFromPin <> P then
+        if ((CanPinAcceptMoreConnections(TestPin) or FReconnectingLink) and
+          CanPinAcceptMoreConnections(P)) and
+          FGraph.CanConnect(TestPin, P) then
+          N.HoveredPinCompatible := TPinCompatible.True
+        else
+          N.HoveredPinCompatible := TPinCompatible.False;
+      N.Highlighted := True;
     end
     else
       N.Hovered := True;
 
-    if not N.Highlighted then
-      N.HoveredPinId := '';
+    //if not N.Highlighted then
+    //  N.HoveredPinId := '';
   end
   else
   begin
     N := GetNodeUnderMouse(SX, SY);
     if N <> nil then
     begin
-      if (N.VisualKind = nvComment) and HitLinks and GetLinkUnderMouse(SX, SY, L) then
+      if (N.VisualKind = TNodeVisualKind.Comment) and HitLinks and GetLinkUnderMouse(SX, SY, L) then
       begin
         FHoveredLink := L;
       end
@@ -2660,7 +2394,8 @@ begin
   end;
 
   NeedRepaint :=
-    (OldHoveredNode <> FHoveredNode) or (OldHoveredPin <> FHoveredPin) or
+    (OldHoveredNode <> FHoveredNode) or
+    (OldHoveredPin <> FHoveredPin) or
     (OldHoveredLink <> FHoveredLink);
 
   if NeedRepaint then
@@ -2704,7 +2439,7 @@ end;
 
 procedure TNodeEditor.ResetView;
 begin
-  var Center := TPointF.Create(Width / 2, Height / 2);
+  var Center := PointF(Width / 2, Height / 2);
   FOffsetX := Center.X;
   FOffsetY := Center.Y;
   FZoom := 1;
@@ -2792,7 +2527,7 @@ begin
     Exit(Current.Selected);
 
   if Current.VisualKind <> Target.VisualKind then
-    Exit(Current.VisualKind <> TNodeVisualKind.nvComment);
+    Exit(Current.VisualKind <> TNodeVisualKind.Comment);
 
   Result := Current.ZOrder > Target.ZOrder;
 end;
@@ -2827,24 +2562,27 @@ var
       end;
       FDraggingNode := False;
 
-      FReconnectingLink := True;
-      FReconnectLink := Link;
-      FReconnectMovingFromSide := Link.IsMouseNearLinkStart(X, Y, FZoom, FOffsetX, FOffsetY);
+      if (Button = TMouseButton.mbLeft) then
+      begin
+        FReconnectingLink := True;
+        FReconnectLink := Link;
+        FReconnectMovingFromSide := Link.IsMouseNearLinkStart(X, Y, FZoom, FOffsetX, FOffsetY);
 
-      if FReconnectMovingFromSide then
-      begin
-        FTempFromPin := Link.FromPin;
-        FReconnectFixedPin := Link.ToPin;
-      end
-      else
-      begin
-        FTempFromPin := Link.ToPin;
-        FReconnectFixedPin := Link.FromPin;
+        if FReconnectMovingFromSide then
+        begin
+          FTempFromPin := Link.FromPin;
+          FReconnectFixedPin := Link.ToPin;
+        end
+        else
+        begin
+          FTempFromPin := Link.ToPin;
+          FReconnectFixedPin := Link.FromPin;
+        end;
+
+        FTempMousePos := Point(X, Y);
+        FTempStartMousePos := Point(X, Y);
+        FDraggingLink := False;
       end;
-
-      FTempMousePos := Point(X, Y);
-      FTempStartMousePos := Point(X, Y);
-      FDraggingLink := False;
 
       NotifySelectionChanged;
       Repaint;
@@ -2856,12 +2594,12 @@ begin
   X := Round(AX);
   Y := Round(AY);
   SetFocus;
-  if Button = TMouseButton.mbLeft then
+  if (Button = TMouseButton.mbLeft) or (Button = TMouseButton.mbRight) then
   begin
     ClearSnapGuides;
 
     // Click resize
-    if not FLockedAll then
+    if (not FLockedAll) and (Button = TMouseButton.mbLeft) then
     begin
       Node := GetNodeResizeUnderMouse(X, Y);
       if Node <> nil then
@@ -2869,7 +2607,6 @@ begin
         if not FController.Selection.ContainsNode(Node) then
         begin
           SelectNodeInternal(Node, False);
-          NotifySelectionChanged;
         end;
 
         FResizingNode := True;
@@ -2891,7 +2628,7 @@ begin
     var ZNode := GetNodeUnderMouse(X, Y);
 
     // Click pins
-    if not FLockedAll then
+    if (not FLockedAll) and (Button = TMouseButton.mbLeft) then
     begin
       if GetPinUnderMouse(X, Y, Node, Pin) then
         if NodeIsAbove(Node, ZNode) then
@@ -2937,7 +2674,7 @@ begin
     // Click nodes
     if Node <> nil then
     begin
-      if Node.VisualKind = nvComment then
+      if Node.VisualKind = TNodeVisualKind.Comment then
       begin
         if ClickLink then
           Exit;
@@ -2953,7 +2690,7 @@ begin
           SelectNodeInternal(Node, False);
       end;
 
-      if not FLockedAll then
+      if (not FLockedAll) and (Button = TMouseButton.mbLeft) then
       begin
         FDraggingNode := True;
         FDragUndoPushed := False;
@@ -2988,14 +2725,17 @@ begin
     if ClickLink then
       Exit;
 
-    if not (ssShift in Shift) then
-      ClearSelectionInternal;
-    FBoxSelecting := True;
-    FBoxStart := Point(X, Y);
-    FBoxCurrent := Point(X, Y);
-    FBoxStartWorld := ScreenToWorld(X, Y);
-    FBoxCurrentWorld := FBoxStartWorld;
-    NotifySelectionChanged;
+    if Button = TMouseButton.mbLeft then
+    begin
+      if not (ssShift in Shift) then
+        ClearSelectionInternal;
+      FBoxSelecting := True;
+      FBoxStart := Point(X, Y);
+      FBoxCurrent := Point(X, Y);
+      FBoxStartWorld := ScreenToWorld(X, Y);
+      FBoxCurrentWorld := FBoxStartWorld;
+      NotifySelectionChanged;
+    end;
     Repaint;
   end
   else if Button = TMouseButton.mbMiddle then
@@ -3031,11 +2771,11 @@ begin
     InternalWorldChanged;
   end
   else if FResizingNode and (FResizeNode <> nil) then
-  begin                                   //40, 28
+  begin
     FResizeNode.Width := Max(FResizeNode.MinWidth, FResizeStartWidth + Round((X - FResizeStartMouseX) / FZoom));
     FResizeNode.Height := Max(FResizeNode.MinHeight, FResizeStartHeight + Round((Y - FResizeStartMouseY) / FZoom));
 
-    if FResizeNode.VisualKind = nvReroute then
+    if FResizeNode.VisualKind = TNodeVisualKind.Reroute then
     begin
       FResizeNode.Width := Max(12, FResizeNode.Width);
       FResizeNode.Height := FResizeNode.Width;
@@ -3128,22 +2868,15 @@ var
   X, Y: Integer;
   AllowConnect: boolean;
 begin
-  inherited MouseUp(Button, Shift, AX, AY);
   X := Round(AX);
   Y := Round(AY);
 
   if Button = TMouseButton.mbLeft then
   begin
-    // Insert reroute on Double click
+    // Insert reroute on Double click on link
     if (ssDouble in Shift) and (GetPrimarySelectedLink <> nil) then
     begin
-      if GetPrimarySelectedLink = nil then
-        Exit;
-      FContextWorldPos := ScreenToWorld(X, Y);
-
-      var Reroute := FController.InsertRerouteOnLink(GetPrimarySelectedLink,
-        SnapWorldValue(FContextWorldPos.X),
-        SnapWorldValue(FContextWorldPos.Y));
+      var Reroute := FController.InsertRerouteOnLink(GetPrimarySelectedLink, SnapWorldPoint(ScreenToWorld(X, Y)));
 
       FTempFromPin := nil;
       FDraggingLink := False;
@@ -3152,11 +2885,13 @@ begin
       FReconnectFixedPin := nil;
       ClearSnapGuides;
       SyncControllerSelectionToView;
-      AddNodeToSelection(Reroute);
+      ClearSelectionInternal;
+      FController.Selection.SelectNode(Reroute, False);
+      ClearPinSelection;
       NotifySelectionChanged;
-      Repaint;
       Exit;
     end;
+
     if FResizingNode then
     begin
       if (FResizeNode <> nil) and ((FResizeNode.Width <> FResizeOldWidth) or
@@ -3193,7 +2928,7 @@ begin
           if FReconnectMovingFromSide then
           begin
             if CanPinAcceptMoreConnections(TargetPin) and
-              CanPinAcceptMoreConnections(FReconnectFixedPin) and
+              //CanPinAcceptMoreConnections(FReconnectFixedPin) and
               FGraph.CanConnect(TargetPin, FReconnectFixedPin) then
             begin
               AllowConnect := True;
@@ -3201,9 +2936,10 @@ begin
                 FOnBeforeConnectPins(Self, TargetPin, FReconnectFixedPin, AllowConnect);
 
               if AllowConnect then
-              begin
+              begin                                                                                                      {
                 FGraph.RemoveLink(FReconnectLink);
-                FGraph.AddLink(TNodeLink.Create(TargetPin, FReconnectFixedPin));
+                FGraph.AddLink(TNodeLink.Create(TargetPin, FReconnectFixedPin));                                        }
+                FController.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, FReconnectLink, FReconnectLink.FromPin, TargetPin));
                 UpdatePinsConnectedState;
                 if Assigned(FOnAfterConnectPins) then
                   FOnAfterConnectPins(Self, TargetPin, FReconnectFixedPin);
@@ -3212,7 +2948,7 @@ begin
           end
           else
           begin
-            if CanPinAcceptMoreConnections(FReconnectFixedPin) and
+            if //CanPinAcceptMoreConnections(FReconnectFixedPin) and
               CanPinAcceptMoreConnections(TargetPin) and
               FGraph.CanConnect(FReconnectFixedPin, TargetPin) then
             begin
@@ -3221,9 +2957,10 @@ begin
                 FOnBeforeConnectPins(Self, FReconnectFixedPin, TargetPin, AllowConnect);
 
               if AllowConnect then
-              begin
+              begin                {
                 FGraph.RemoveLink(FReconnectLink);
-                FGraph.AddLink(TNodeLink.Create(FReconnectFixedPin, TargetPin));
+                FGraph.AddLink(TNodeLink.Create(FReconnectFixedPin, TargetPin)); }
+                FController.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, FReconnectLink, FReconnectLink.ToPin, TargetPin));
                 UpdatePinsConnectedState;
                 if Assigned(FOnAfterConnectPins) then
                   FOnAfterConnectPins(Self, FReconnectFixedPin, TargetPin);
@@ -3249,7 +2986,7 @@ begin
           CanPinAcceptMoreConnections(TargetPin) and
           FGraph.CanConnect(FTempFromPin, TargetPin) then
         begin
-          if FTempFromPin.Direction = pdOutput then
+          if FTempFromPin.Direction = TPinDirection.Output then
           begin
             AllowConnect := True;
             if Assigned(FOnBeforeConnectPins) then
@@ -3279,15 +3016,13 @@ begin
       end
       else if FDraggingLink then
       begin
-        TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin,
-          SnapWorldValue(ScreenToWorld(X, Y).X),
-          SnapWorldValue(ScreenToWorld(X, Y).Y));
+        TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin, SnapWorldPoint(ScreenToWorld(X, Y)));
 
         if TargetNode <> nil then
         begin
           FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, TargetNode));
 
-          if FTempFromPin.Direction = pdOutput then
+          if FTempFromPin.Direction = TPinDirection.Output then
           begin
             for i := 0 to TargetNode.InputCount - 1 do
             begin
@@ -3331,13 +3066,11 @@ begin
           end;
 
           SelectNodeInternal(TargetNode, False);
-          NotifySelectionChanged;
         end
         else
         begin
           var MPos := Screen.MousePos.Round;
-          ShowNodeSearchPopup(MPos.X, MPos.Y,
-            ScreenToWorld(X, Y).X, ScreenToWorld(X, Y).Y);
+          ShowNodeSearchPopup(MPos.X, MPos.Y, ScreenToWorld(X, Y));
         end;
       end;
 
@@ -3376,8 +3109,7 @@ begin
           DN.Y := FDragOldPositions[K].Y;
         end;
 
-        FGraph.ExecuteCommand(
-          TMoveNodesCommand.Create(FGraph, FDragCommandNodes, FDragOldPositions, NewPositions));
+        FGraph.ExecuteCommand(TMoveNodesCommand.Create(FGraph, FDragCommandNodes, FDragOldPositions, NewPositions));
 
         for K := 0 to FDragCommandNodes.Count - 1 do
         begin
@@ -3404,38 +3136,56 @@ begin
       if ssShift in Shift then
       begin
         // Shift + box: only nodes
+        FController.Selection.BeginUpdate;
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
-          N := TCustomNode(FGraph.Nodes[i]);
-          if RectFIntersects(R, RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
-            AddNodeToSelection(N);
+          N := FGraph.Nodes[i];
+          if not N.OnScreen then
+            Continue;
+          if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
+            FController.Selection.SelectNode(N, True);
         end;
+        ClearPinSelection;
+        FController.Selection.EndUpdate;
       end
       else if ssCtrl in Shift then
       begin
         // Ctrl + box: only links
+        FController.Selection.BeginUpdate;
         for i := 0 to FGraph.Links.Count - 1 do
         begin
-          var L := TNodeLink(FGraph.Links[i]);
+          var L := FGraph.Links[i];
+          if not L.OnScreen then
+            Continue;
           if L.IsInsideWorldRect(R) then
-            AddLinkToSelection(L);
+            FController.Selection.AddLinkToSelection(L);
         end;
+        ClearPinSelection;
+        FController.Selection.EndUpdate;
       end
       else
       begin
+        FController.Selection.BeginUpdate;
         for i := 0 to FGraph.Nodes.Count - 1 do
         begin
-          N := TCustomNode(FGraph.Nodes[i]);
-          if RectFIntersects(R, RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
-            AddNodeToSelection(N);
+          N := FGraph.Nodes[i];
+          if not N.OnScreen then
+            Continue;
+          if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
+            FController.Selection.SelectNode(N, True);
         end;
+        ClearPinSelection;
+        FController.Selection.EndUpdate;
 
         for i := 0 to FGraph.Links.Count - 1 do
         begin
-          var L := TNodeLink(FGraph.Links[i]);
+          var L := FGraph.Links[i];
+          if not L.OnScreen then
+            Continue;
           if L.IsInsideWorldRect(R) then
-            AddLinkToSelection(L);
+            FController.Selection.AddLinkToSelection(L);
         end;
+        ClearPinSelection;
       end;
       FBoxSelecting := False;
       NotifySelectionChanged;
@@ -3497,14 +3247,12 @@ end;
 procedure TNodeEditor.DoMouseLeave;
 begin
   inherited;
-
-  if not (csDesigning in ComponentState) then
-    CancelMouseOperations(False);
   if csDesigning in ComponentState then
     Exit;
 
-  if not (FDraggingNode or FBoxSelecting or FResizingNode or FPanning or
-    (FTempFromPin <> nil) or FReconnectingLink) then
+  CancelMouseOperations(False);
+
+  if not (FDraggingNode or FBoxSelecting or FResizingNode or FPanning or (FTempFromPin <> nil) or FReconnectingLink) then
   begin
     ClearHoverStates;
     Repaint;
@@ -3535,6 +3283,20 @@ begin
   Repaint;
 end;
 
+procedure TNodeEditor.SetLinkGradient(const Value: Boolean);
+begin
+  FLinkGradient := Value;
+  TNodeLink.UseGradient := FLinkGradient;
+  Repaint;
+end;
+
+procedure TNodeEditor.SetLinkVisualType(const Value: TLinkVisualType);
+begin
+  FLinkVisualType := Value;
+  TNodeLink.VisualType := FLinkVisualType;
+  Repaint;
+end;
+
 procedure TNodeEditor.SetLockedAll(const Value: Boolean);
 begin
   FLockedAll := Value;
@@ -3557,7 +3319,7 @@ begin
   Repaint;
 end;
 
-procedure TNodeEditor.SetZoom(Value: Double; TargetPos: TPoint);
+procedure TNodeEditor.SetZoom(Value: Double; const TargetPos: TPoint);
 begin
   var NewZoom := EnsureRange(Value, ZoomMin, ZoomMax);
 
@@ -3630,133 +3392,131 @@ begin
   SetZoom(NewZoom, FLastMousePos);
 end;
 
+procedure TNodeEditor.SelectAll;
+begin
+  ClearSelectionInternal;
+  FController.Selection.BeginUpdate;
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+    FController.Selection.SelectNode(FGraph.Nodes[i], True);
+
+  for var i := 0 to FGraph.Links.Count - 1 do
+    FController.Selection.AddLinkToSelection(FGraph.Links[i]);
+  FController.Selection.EndUpdate;
+
+  ClearPinSelection;
+  NotifySelectionChanged;
+end;
+
 procedure TNodeEditor.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
   inherited;
+  case Key of
+    vkDelete:
+      begin
+        DeleteSelection;
+      end;
+    vkZ:
+      if Shift = [ssCtrl] then
+      begin
+        Undo;
+      end
+      else if Shift = [ssCtrl] then
+      begin
+        Undo;
+      end
+      else if Shift = [ssCtrl, ssShift] then
+      begin
+        Redo;
+      end;
+    vkY:
+      if Shift = [ssCtrl] then
+      begin
+        Redo;
+      end;
+    vkC:
+      if Shift = [ssCtrl] then
+      begin
+        CopySelectionToClipboard;
+      end;
+    vkX:
+      if Shift = [ssCtrl] then
+      begin
+        CutSelectionToClipboard;
+      end;
+    vkV:
+      if Shift = [ssCtrl] then
+      begin
+        FContextWorldPos := ScreenToWorld(FLastMousePos);
+        PasteFromClipboard;
+      end;
+    vkD:
+      if Shift = [ssCtrl] then
+      begin
+        DuplicateSelection;
+      end;
+    vkF:
+      begin
+        if FController.Selection.NodeCount > 0 then
+          FitToSelection
+        else
+          FrameAll;
+      end;
+    vkL:
+      if Shift = [ssCtrl] then
+      begin
+        ConnectSelectedPins;
+      end;
+    vkA:
+      if Shift = [ssCtrl] then
+      begin
+        // Ctrl + A -> nodes + links
+        SelectAll;
+      end
+      else if Shift = [ssCtrl, ssShift] then
+      begin
+        // Ctrl + Shift + A -> only nodes
+        ClearSelectionInternal;
+        FController.Selection.BeginUpdate;
+        for var i := 0 to FGraph.Nodes.Count - 1 do
+          FController.Selection.SelectNode(FGraph.Nodes[i], True);
+        FController.Selection.EndUpdate;
+        ClearPinSelection;
+        NotifySelectionChanged;
+      end
+      else if Shift = [ssShift] then
+      begin
+        // Shift + A -> only links
+        ClearSelectionInternal;
+        FController.Selection.BeginUpdate;
+        for var i := 0 to FGraph.Links.Count - 1 do
+          FController.Selection.AddLinkToSelection(FGraph.Links[i]);
+        FController.Selection.EndUpdate;
+        ClearPinSelection;
+        NotifySelectionChanged;
+      end;
+    vkEscape:
+      begin
+        if FTempFromPin <> nil then
+        begin
+          CancelMouseOperations(False);
+        end
+        else if FDraggingNode or FBoxSelecting or FResizingNode or FPanning or FReconnectingLink then
+        begin
+          CancelMouseOperations(False);
+        end
+        else
+        begin
+          ClearSelection;
+        end;
+      end;
+  end;
+  Repaint;
+  Key := 0;
 end;
 
 procedure TNodeEditor.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
   inherited;
-  if (Key = vkDelete) then
-  begin
-    DeleteSelection;
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkZ) and (Shift = [ssCtrl]) then
-  begin
-    Undo;
-    Key := 0;
-    Exit;
-  end;
-  if ((Key = vkY) and (ssCtrl in Shift)) or ((Key = vkZ) and (Shift = [ssCtrl, ssShift])) then
-  begin
-    Redo;
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkC) and (ssCtrl in Shift) then
-  begin
-    CopySelectionToClipboard;
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkV) and (ssCtrl in Shift) then
-  begin
-    FContextWorldPos := ScreenToWorld(Round(Width) div 2, Round(Height) div 2);
-    PasteFromClipboard;
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkD) and (ssCtrl in Shift) then
-  begin
-    DuplicateSelection;
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkF) then
-  begin
-    if FController.Selection.NodeCount > 0 then
-      FitToSelection
-    else
-      FrameAll;
-
-    Key := 0;
-    Exit;
-  end;
-  if (Key = vkL) and (ssCtrl in Shift) then
-  begin
-    ConnectSelectedPins;
-    Key := 0;
-    Exit;
-  end;
-  //
-  if (Key = vkA) and (ssCtrl in Shift) and (ssShift in Shift) then
-  begin
-    // Ctrl + Shift + A -> only nodes
-    ClearSelectionInternal;
-
-    for var i := 0 to FGraph.Nodes.Count - 1 do
-      AddNodeToSelection(TCustomNode(FGraph.Nodes[i]));
-
-    NotifySelectionChanged;
-    Repaint;
-    Key := 0;
-    Exit;
-  end;
-
-  if (Key = vkA) and (ssCtrl in Shift) then
-  begin
-    // Ctrl + A -> nodes + links
-    ClearSelectionInternal;
-
-    for var i := 0 to FGraph.Nodes.Count - 1 do
-      AddNodeToSelection(TCustomNode(FGraph.Nodes[i]));
-
-    for var i := 0 to FGraph.Links.Count - 1 do
-      AddLinkToSelection(TNodeLink(FGraph.Links[i]));
-
-    NotifySelectionChanged;
-    Repaint;
-    Key := 0;
-    Exit;
-  end;
-
-  if (Key = vkA) and (ssShift in Shift) then
-  begin
-    // Shift + A -> only links
-    ClearSelectionInternal;
-
-    for var i := 0 to FGraph.Links.Count - 1 do
-      AddLinkToSelection(TNodeLink(FGraph.Links[i]));
-
-    NotifySelectionChanged;
-    Repaint;
-    Key := 0;
-    Exit;
-  end;
-
-  if Key = vkEscape then
-  begin
-    if FTempFromPin <> nil then
-    begin
-      CancelMouseOperations(False);
-      Key := 0;
-      Exit;
-    end;
-
-    if FDraggingNode or FBoxSelecting or FResizingNode or FPanning or FReconnectingLink then
-    begin
-      CancelMouseOperations(False);
-      Key := 0;
-      Exit;
-    end;
-
-    ClearSelection;
-    Key := 0;
-    Exit;
-  end;
 end;
 
 end.

@@ -71,7 +71,7 @@ type
     constructor Create; reintroduce;
     procedure RegisterNode(const ANodeType, ACaption: string; AClass: TCustomNodeClass);
     procedure RegisterNodeEx(const ANodeType, ACaption, ACategory, ADescription, ATags, AIconPath: string; AClass: TCustomNodeClass; AColor: TAlphaColor = TAlphaColors.Null; AHidden: boolean = False; ADeprecated: boolean = False; AVersion: integer = 1);
-    function CreateNode(const ANodeType: string; AX, AY: single): TCustomNode;
+    function CreateNode(const ANodeType: string; const Position: TPointF): TCustomNode;
     function FindItem(const ANodeType: string): TNodeRegistryItem;
     procedure SortByCategory;
   end;
@@ -121,13 +121,14 @@ type
     function IsNodeIdUnique(const AId: string; AExcept: TCustomNode = nil): boolean;
     function IsPinIdUnique(const AId: string; AExcept: TNodePin = nil): boolean;
 
-    function AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
-    function AddDynamicOutputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = pkData): TNodePin;
+    function AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddDynamicOutputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemoveDynamicPin(APin: TNodePin): boolean;
     procedure DoGraphChanged;
 
     function FindNodeById(const AId: string): TCustomNode;
     function FindPinById(const AId: string): TNodePin;
+    function FindLinkById(const AId: string): TNodeLink;
     function CanConnect(P1, P2: TNodePin): boolean;
     function LinkExists(FromPin, ToPin: TNodePin): boolean;
 
@@ -141,7 +142,7 @@ type
     function ValidateGraph: boolean;
     function ValidateGraphIssues(AIssues: TObjectList<TGraphValidationIssue>): boolean;
     function HasCycle: boolean;
-    function CreateRerouteForLink(ALink: TNodeLink; AX, AY: single): TCustomNode;
+    function CreateRerouteForLink(ALink: TNodeLink; const Position: TPointF): TCustomNode;
     function GetCompatibleNodesForPin(APin: TNodePin): TStringList;
 
     procedure ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean = False);
@@ -364,7 +365,7 @@ begin
     Exit;
   end;
 
-  if ALink.FromPin.Direction = pdOutput then
+  if ALink.FromPin.Direction = TPinDirection.Output then
   begin
     OutPin := ALink.FromPin;
     InPin := ALink.ToPin;
@@ -530,7 +531,7 @@ begin
         if P.OwnerNode <> N then
           AddError(Format(Translate('Input pin "%s" has invalid OwnerNode.'), [P.Name]));
 
-        if P.Direction <> pdInput then
+        if P.Direction <> TPinDirection.Input then
           AddError(Format(Translate('Pin "%s" in input list has non-input direction.'), [P.Name]));
 
         if P.SortIndex <> j then
@@ -558,7 +559,7 @@ begin
         if P.OwnerNode <> N then
           AddError('Output pin "' + P.Name + '" has invalid OwnerNode.');
 
-        if P.Direction <> pdOutput then
+        if P.Direction <> TPinDirection.Output then
           AddError('Pin "' + P.Name + '" in output list has non-output direction.');
 
         if P.SortIndex <> j then
@@ -590,10 +591,10 @@ begin
       if L.ToPin = nil then
         AddError('Link has nil ToPin.');
 
-      if (L.FromPin <> nil) and (L.FromPin.Direction <> pdOutput) then
+      if (L.FromPin <> nil) and (L.FromPin.Direction <> TPinDirection.Output) then
         AddError('Link FromPin is not output.');
 
-      if (L.ToPin <> nil) and (L.ToPin.Direction <> pdInput) then
+      if (L.ToPin <> nil) and (L.ToPin.Direction <> TPinDirection.Input) then
         AddError('Link ToPin is not input.');
 
       if (L.FromPin <> nil) and ((L.FromPin.OwnerNode = nil) or
@@ -668,6 +669,17 @@ begin
   end;
 end;
 
+function TNodeGraph.FindLinkById(const AId: string): TNodeLink;
+begin
+  Result := nil;
+  for var i := 0 to FLinks.Count - 1 do
+  begin
+    var L := FLinks[i];
+    if (L <> nil) and SameText(L.Id, AId) then
+      Exit(L);
+  end;
+end;
+
 function TNodeGraph.FindNodeById(const AId: string): TCustomNode;
 begin
   Result := nil;
@@ -720,7 +732,7 @@ begin
   if P1.Kind <> P2.Kind then
     Exit;
 
-  if P1.Direction = pdOutput then
+  if P1.Direction = TPinDirection.Output then
   begin
     OutPin := P1;
     InPin := P2;
@@ -731,13 +743,13 @@ begin
     InPin := P1;
   end;
 
-  if OutPin.Direction <> pdOutput then
+  if OutPin.Direction <> TPinDirection.Output then
     Exit;
 
-  if InPin.Direction <> pdInput then
+  if InPin.Direction <> TPinDirection.Input then
     Exit;
 
-  if OutPin.Kind = pkExec then
+  if OutPin.Kind = TPinKind.Exec then
   begin
     Result := True;
     Exit;
@@ -765,7 +777,7 @@ begin
   if (FromPin = nil) or (ToPin = nil) then
     Exit;
 
-  if FromPin.Direction = pdOutput then
+  if FromPin.Direction = TPinDirection.Output then
   begin
     AFrom := FromPin;
     ATo := ToPin;
@@ -1057,7 +1069,7 @@ begin
         var NodeObj := NodesArr.Items[i] as TJSONObject;
         var NodeType := NodeObj.GetValue('type', 'default');
 
-        var N := FRegistry.CreateNode(NodeType, NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0));
+        var N := FRegistry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
         N.LoadFromJSON(NodeObj, UseAlphaColor);
         FNodes.Add(N);
       end;
@@ -1227,7 +1239,7 @@ begin
   Result := not FNodes.IsAcyclic;
 end;
 
-function TNodeGraph.CreateRerouteForLink(ALink: TNodeLink; AX, AY: single): TCustomNode;
+function TNodeGraph.CreateRerouteForLink(ALink: TNodeLink; const Position: TPointF): TCustomNode;
 var
   N: TCustomNode;
   OldFrom: TNodePin;
@@ -1241,7 +1253,7 @@ begin
   OldFrom := ALink.FromPin;
   OldTo := ALink.ToPin;
 
-  N := FRegistry.CreateNode('reroute', AX, AY);
+  N := FRegistry.CreateNode('reroute', Position);
   N.X := N.X - N.Width / 2;
   N.Y := N.Y - N.Height / 2;
 
@@ -1380,18 +1392,16 @@ begin
   Result := nil;
 end;
 
-function TNodeRegistry.CreateNode(const ANodeType: string; AX, AY: single): TCustomNode;
-var
-  It: TNodeRegistryItem;
+function TNodeRegistry.CreateNode(const ANodeType: string; const Position: TPointF): TCustomNode;
 begin
-  It := FindItem(ANodeType);
+  var It := FindItem(ANodeType);
 
   if It <> nil then
   begin
     Result := It.NodeClass.Create;
     Result.Title := It.Caption;
-    Result.X := AX;
-    Result.Y := AY;
+    Result.X := Position.X;
+    Result.Y := Position.Y;
     Result.NodeType := It.NodeType;
     Result.SetupPins;
   end
@@ -1399,8 +1409,8 @@ begin
   begin
     Result := TDefaultNode.Create;
     Result.Title := Translate('Unknown') + ': ' + ANodeType;
-    Result.X := AX;
-    Result.Y := AY;
+    Result.X := Position.X;
+    Result.Y := Position.Y;
     Result.NodeType := ANodeType;
     Result.SetupPins;
   end;

@@ -207,13 +207,12 @@ type
     LabelTitle: TLabel;
     Layout42: TLayout;
     ImageIcon: TImage;
-    MenuBar1: TMenuBar;
+    MenuBarMain: TMenuBar;
     MenuItemFile: TMenuItem;
     MenuItemFileNew: TMenuItem;
     MenuItem1: TMenuItem;
     MenuItemFileSave: TMenuItem;
     MenuItemFileLoad: TMenuItem;
-    MenuItem4: TMenuItem;
     MenuItemFileExit: TMenuItem;
     MenuItemEdit: TMenuItem;
     MenuItemEditUndo: TMenuItem;
@@ -230,22 +229,8 @@ type
     MenuItem3: TMenuItem;
     MenuItemEditDeselect: TMenuItem;
     MenuItemView: TMenuItem;
-    MenuItemViewFitSel: TMenuItem;
-    MenuItemViewFrameAll: TMenuItem;
-    MenuItemViewZoom1x1: TMenuItem;
     MenuItemGraph: TMenuItem;
     MenuItemGraphValidate: TMenuItem;
-    MenuItemAdd: TMenuItem;
-    MenuItemAddFloat: TMenuItem;
-    MenuItemAddAdd: TMenuItem;
-    MenuItemAddMul: TMenuItem;
-    MenuItemAddMath: TMenuItem;
-    MenuItemAddString: TMenuItem;
-    MenuItemAddBranch: TMenuItem;
-    MenuItemAddReroute: TMenuItem;
-    MenuItemAddComment: TMenuItem;
-    MenuItemAddDefault: TMenuItem;
-    MenuItemJSON: TMenuItem;
     MenuItemJSONLoad: TMenuItem;
     MenuItemJSONSave: TMenuItem;
     Layout2: TLayout;
@@ -264,7 +249,7 @@ type
     ButtonZoomTo50: TButton;
     Panel12: TPanel;
     Panel13: TPanel;
-    SizeGrip1: TSizeGrip;
+    SizeGrip: TSizeGrip;
     PopupTheme: TPopup;
     Panel61: TPanel;
     PopupBoxStyle: TPopupBox;
@@ -279,7 +264,6 @@ type
     CheckBoxCustomTitle: TCheckBox;
     CheckBoxCustomAccent: TCheckBox;
     MenuItemNodeLibrary: TMenuItem;
-    MenuItem16: TMenuItem;
     SearchBox1: TSearchBox;
     Layout1: TLayout;
     Layout21: TLayout;
@@ -298,6 +282,15 @@ type
     LayoutZoomMobile: TLayout;
     Button3: TButton;
     Button4: TButton;
+    MenuItem15: TMenuItem;
+    MenuItem17: TMenuItem;
+    ButtonZoomReset: TButton;
+    ButtonZoomToSelect: TButton;
+    ComboBoxVisualLinkType: TComboBox;
+    Label16: TLabel;
+    PathLabel24: TPathLabel;
+    CheckBoxLinkGradient: TCheckBox;
+    PathLabel25: TPathLabel;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -310,22 +303,10 @@ type
     procedure MenuItemEditPasteClick(Sender: TObject);
     procedure MenuItemEditRedoClick(Sender: TObject);
     procedure MenuItemEditUndoClick(Sender: TObject);
-    procedure MenuItemViewFitSelClick(Sender: TObject);
-    procedure MenuItemViewFrameAllClick(Sender: TObject);
-    procedure MenuItemViewZoom1x1Click(Sender: TObject);
     procedure MenuItemGraphValidateClick(Sender: TObject);
     procedure MenuItemEditDeselectClick(Sender: TObject);
     procedure MenuItemEditToFrontClick(Sender: TObject);
     procedure MenuItemEditToBackClick(Sender: TObject);
-    procedure MenuItemAddFloatClick(Sender: TObject);
-    procedure MenuItemAddAddClick(Sender: TObject);
-    procedure MenuItemAddBranchClick(Sender: TObject);
-    procedure MenuItemAddCommentClick(Sender: TObject);
-    procedure MenuItemAddDefaultClick(Sender: TObject);
-    procedure MenuItemAddMathClick(Sender: TObject);
-    procedure MenuItemAddMulClick(Sender: TObject);
-    procedure MenuItemAddRerouteClick(Sender: TObject);
-    procedure MenuItemAddStringClick(Sender: TObject);
     procedure SpinBoxSizeChange(Sender: TObject);
     procedure ButtonNodeApplyClick(Sender: TObject);
     procedure StringGridNodeValuesSelectCell(Sender: TObject; const ACol, ARow: Integer; var CanSelect: Boolean);
@@ -354,6 +335,9 @@ type
     procedure LayoutMobileMenuResize(Sender: TObject);
     procedure CornerButtonMenuAddClick(Sender: TObject);
     procedure RadioButtonMenuSettingsChange(Sender: TObject);
+    procedure ButtonZoomResetClick(Sender: TObject);
+    procedure ButtonZoomToSelectClick(Sender: TObject);
+    procedure ComboBoxVisualLinkTypeChange(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -373,20 +357,17 @@ type
 
     { Helpers }
     procedure UpdateStatus;
-    function CenterWorldPos: TPointF;
-    procedure AddNodeAtCenter(const ANodeType: string);
     procedure RefreshFromSelection;
-    procedure ShowNoSelection;
     procedure ClearAllSections;
     procedure OnUpdatedStatus(Sender: TObject);
     procedure OnJsonNodeEditorChanged(Sender: TObject);
     procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
     procedure UpdateNodeRegistry;
     procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
-    procedure MobileMode;
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
+    procedure MobileMode;
     procedure DoOnSettingChange; override;
   public
     { Public declarations }
@@ -413,7 +394,7 @@ begin
   EndUpdate;
   OverTheme := 0;
   SetSystemWindowControls(ButtonWinClose, ButtonWinMax, ButtonWinMin);
-  CaptionControls := [LayoutCaption, LayoutHead, MenuBar1];
+  CaptionControls := [LayoutCaption, LayoutHead];
   OffsetControls := [LayoutHead];
   TitleControls := [LabelTitle];
   IconControl := ImageIcon;
@@ -498,6 +479,7 @@ begin
       ListItem.StyleLookup := 'listboxitemstyle_node';
       ListItem.OnDragOver := FOnItemOver;
       ListItem.Text := Item.Caption;
+      ListItem.Hint := Item.Description;
       ListItem.TagString := Item.NodeType;
       ListItem.StylesData['background.Fill.Color'] := ChangeAlpha(Item.Color, $64);
       ListItem.StylesData['background.Stroke.Color'] := Item.Color;
@@ -580,15 +562,15 @@ begin
     var VStr := StringGridNodeValues.Cells[2, i].Trim;
 
     case V.Kind of
-      nvkFloat:
+      TNodeValueKind.Float:
         V.FloatValue := StrToFloatDef(VStr, V.FloatValue);
-      nvkInteger:
+      TNodeValueKind.Integer:
         V.IntegerValue := StrToInt64Def(VStr, V.IntegerValue);
-      nvkString:
+      TNodeValueKind.string:
         V.StringValue := VStr;
-      nvkBoolean:
+      TNodeValueKind.Boolean:
         V.BooleanValue := SameText(VStr, 'true') or (VStr = '1');
-      nvkJSON:
+      TNodeValueKind.JSON:
         V.JSONValue := VStr;
     end;
   end;
@@ -631,38 +613,61 @@ end;
 
 procedure TFormMain.ButtonZoomInClick(Sender: TObject);
 begin
-  FEditor.SetZoom(FEditor.Zoom + 0.25, FEditor.LocalRect.CenterPoint.Round);
   PopupZoom.IsOpen := False;
+  FEditor.SetZoom(FEditor.Zoom + 0.25, FEditor.LocalRect.CenterPoint.Round);
+  UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomOutClick(Sender: TObject);
 begin
-  FEditor.SetZoom(FEditor.Zoom - 0.25, FEditor.LocalRect.CenterPoint.Round);
   PopupZoom.IsOpen := False;
+  FEditor.SetZoom(FEditor.Zoom - 0.25, FEditor.LocalRect.CenterPoint.Round);
+  UpdateStatus;
+end;
+
+procedure TFormMain.ButtonZoomResetClick(Sender: TObject);
+begin
+  PopupZoom.IsOpen := False;
+  FEditor.ResetView;
+  UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomTo100Click(Sender: TObject);
 begin
-  FEditor.SetZoom(1, FEditor.LocalRect.CenterPoint.Round);
   PopupZoom.IsOpen := False;
+  FEditor.SetZoom(1, FEditor.LocalRect.CenterPoint.Round);
+  UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomTo200Click(Sender: TObject);
 begin
-  FEditor.SetZoom(2, FEditor.LocalRect.CenterPoint.Round);
   PopupZoom.IsOpen := False;
+  FEditor.SetZoom(2, FEditor.LocalRect.CenterPoint.Round);
+  UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomTo50Click(Sender: TObject);
 begin
-  FEditor.SetZoom(0.5, FEditor.LocalRect.CenterPoint.Round);
   PopupZoom.IsOpen := False;
+  FEditor.SetZoom(0.5, FEditor.LocalRect.CenterPoint.Round);
+  UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomToFitClick(Sender: TObject);
 begin
-  FEditor.FrameAll;
   PopupZoom.IsOpen := False;
+  FEditor.FrameAll;
+  UpdateStatus;
+end;
+
+procedure TFormMain.ButtonZoomToSelectClick(Sender: TObject);
+begin
+  PopupZoom.IsOpen := False;
+  if FEditor.SelectedNodeCount > 0 then
+    FEditor.FitToSelection
+  else
+    FEditor.FrameAll;
+  UpdateStatus;
 end;
 
 procedure TFormMain.FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
@@ -772,7 +777,7 @@ var
   V: TNodeValue;
 begin
   // ── Float sources ──────────────────────────────────────────────
-  NFloat1 := FEditor.Graph.Registry.CreateNode('float', 40, 120);
+  NFloat1 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 120));
   NFloat1.Title := 'Value A';
   TFloatNode(NFloat1).SetupPins;
   V := NFloat1.FindValue('value');
@@ -780,7 +785,7 @@ begin
     V.FloatValue := 3.14;
   FEditor.AddNode(NFloat1);
 
-  NFloat2 := FEditor.Graph.Registry.CreateNode('float', 40, 240);
+  NFloat2 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 240));
   NFloat2.Title := 'Value B';
   TFloatNode(NFloat2).SetupPins;
   V := NFloat2.FindValue('value');
@@ -788,7 +793,7 @@ begin
     V.FloatValue := 2.71;
   FEditor.AddNode(NFloat2);
 
-  NFloat3 := FEditor.Graph.Registry.CreateNode('float', 40, 360);
+  NFloat3 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 360));
   NFloat3.Title := 'Value C';
   TFloatNode(NFloat3).SetupPins;
   V := NFloat3.FindValue('value');
@@ -797,42 +802,42 @@ begin
   FEditor.AddNode(NFloat3);
 
   // ── Add node ───────────────────────────────────────────────────
-  NAdd := FEditor.Graph.Registry.CreateNode('add', 280, 160);
+  NAdd := FEditor.Graph.Registry.CreateNode('add', PointF(280, 160));
   NAdd.Title := 'A + B';
   FEditor.AddNode(NAdd);
 
   // ── Multiply node (custom) ─────────────────────────────────────
-  NMul := FEditor.Graph.Registry.CreateNode('multiply_node', 280, 310);
+  NMul := FEditor.Graph.Registry.CreateNode('multiply_node', PointF(280, 310));
   NMul.Title := '(A+B) × C';
   FEditor.AddNode(NMul);
 
   // ── Math Expression (exec + values) ───────────────────────────
-  NMath := FEditor.Graph.Registry.CreateNode('math_expr', 520, 180);
+  NMath := FEditor.Graph.Registry.CreateNode('math_expr', PointF(520, 180));
   NMath.Title := 'Math Expr';
   NMath.FixedSize := True;
   FEditor.AddNode(NMath);
 
   // ── String node ────────────────────────────────────────────────
-  NStr := FEditor.Graph.Registry.CreateNode('string_node', 520, 420);
+  NStr := FEditor.Graph.Registry.CreateNode('string_node', PointF(520, 420));
   NStr.Title := 'Label';
   FEditor.AddNode(NStr);
 
   // ── Branch node (exec flow) ───────────────────────────────────
-  NBranch := FEditor.Graph.Registry.CreateNode('branch_node', 760, 160);
+  NBranch := FEditor.Graph.Registry.CreateNode('branch_node', PointF(760, 160));
   NBranch.Title := 'If Enabled?';
   FEditor.AddNode(NBranch);
 
   // ── Reroute ────────────────────────────────────────────────────
-  NReroute := FEditor.Graph.Registry.CreateNode('reroute', 430, 370);
+  NReroute := FEditor.Graph.Registry.CreateNode('reroute', PointF(430, 370));
   FEditor.AddNode(NReroute);
 
   // ── Default node ───────────────────────────────────────────────
-  NDefault := FEditor.Graph.Registry.CreateNode('default', 760, 360);
+  NDefault := FEditor.Graph.Registry.CreateNode('default', PointF(760, 360));
   NDefault.Title := 'Default Node';
   FEditor.AddNode(NDefault);
 
   // ── Comment / Frame 1 (Math block) ────────────────────────────
-  NComment1 := FEditor.Graph.Registry.CreateNode('comment', 20, 80);
+  NComment1 := FEditor.Graph.Registry.CreateNode('comment', PointF(20, 80));
   NComment1.Title := 'Math Block';
   NComment1.Width := 460;
   NComment1.Height := 360;
@@ -842,7 +847,7 @@ begin
   FEditor.AddNode(NComment1);
 
   // ── Comment / Frame 2 (Flow block) ────────────────────────────
-  NComment2 := FEditor.Graph.Registry.CreateNode('comment', 500, 120);
+  NComment2 := FEditor.Graph.Registry.CreateNode('comment', PointF(500, 120));
   NComment2.Title := 'Flow Block';
   NComment2.Width := 320;
   NComment2.Height := 200;
@@ -909,51 +914,6 @@ end;
 procedure TFormMain.ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
 begin
   Operation := TDragOperation.None;
-end;
-
-procedure TFormMain.MenuItemAddAddClick(Sender: TObject);
-begin
-  AddNodeAtCenter('add');
-end;
-
-procedure TFormMain.MenuItemAddBranchClick(Sender: TObject);
-begin
-  AddNodeAtCenter('branch_node');
-end;
-
-procedure TFormMain.MenuItemAddCommentClick(Sender: TObject);
-begin
-  AddNodeAtCenter('comment');
-end;
-
-procedure TFormMain.MenuItemAddDefaultClick(Sender: TObject);
-begin
-  AddNodeAtCenter('default');
-end;
-
-procedure TFormMain.MenuItemAddFloatClick(Sender: TObject);
-begin
-  AddNodeAtCenter('float');
-end;
-
-procedure TFormMain.MenuItemAddMathClick(Sender: TObject);
-begin
-  AddNodeAtCenter('math_expr');
-end;
-
-procedure TFormMain.MenuItemAddMulClick(Sender: TObject);
-begin
-  AddNodeAtCenter('multiply_node');
-end;
-
-procedure TFormMain.MenuItemAddRerouteClick(Sender: TObject);
-begin
-  AddNodeAtCenter('reroute');
-end;
-
-procedure TFormMain.MenuItemAddStringClick(Sender: TObject);
-begin
-  AddNodeAtCenter('string_node');
 end;
 
 procedure TFormMain.MenuItemEditCopyClick(Sender: TObject);
@@ -1083,37 +1043,6 @@ begin
   LayoutNodeLibrary.Visible := True;
 end;
 
-procedure TFormMain.MenuItemViewFitSelClick(Sender: TObject);
-begin
-  if FEditor.SelectedNodeCount > 0 then
-    FEditor.FitToSelection
-  else
-    FEditor.FrameAll;
-  UpdateStatus;
-end;
-
-procedure TFormMain.MenuItemViewFrameAllClick(Sender: TObject);
-begin
-  FEditor.FrameAll;
-  UpdateStatus;
-end;
-
-procedure TFormMain.MenuItemViewZoom1x1Click(Sender: TObject);
-begin
-  // Сбрасываем zoom к 1:1, центрируем на центр экрана
-  FEditor.ResetView;
-  UpdateStatus;
-end;
-
-function TFormMain.CenterWorldPos: TPointF;
-begin
-  Result.X := (Round(FEditor.Width) div 2 - 90);
-  Result.Y := (Round(FEditor.Height) div 2 - 60);
-  // грубое приближение без доступа к ScreenToWorld — достаточно для демки
-  Result.X := (Result.X - 0) / FEditor.Zoom;
-  Result.Y := (Result.Y - 0) / FEditor.Zoom;
-end;
-
 procedure TFormMain.CheckBoxCustomAccentChange(Sender: TObject);
 begin
   if FUpdating > 0 then
@@ -1135,18 +1064,8 @@ begin
   FEditor.ShowAxes := CheckBoxShowAxes.IsChecked;
   FEditor.ShowSnapGuides := CheckBoxShowSnapGuides.IsChecked;
   FEditor.LockedAll := CheckBoxLockedAll.IsChecked;
+  Feditor.LinkGradient := CheckBoxLinkGradient.IsChecked;
   UpdateStatus;
-end;
-
-procedure TFormMain.AddNodeAtCenter(const ANodeType: string);
-begin
-  var W := CenterWorldPos;
-  var N := FEditor.Graph.Registry.CreateNode(ANodeType,
-    W.X + Random(60) - 30,
-    W.Y + Random(60) - 30);
-  FEditor.AddNode(N);
-  FEditor.SelectNode(N, False);
-  RefreshFromSelection;
 end;
 
 procedure TFormMain.OnSelectionChanged(Sender: TObject);
@@ -1154,25 +1073,11 @@ begin
   RefreshFromSelection;
 end;
 
-procedure TFormMain.ShowNoSelection;
-begin
-  FNodeUpdating := True;
-  try
-    ClearAllSections;
-    LabelNodeType.Text := 'Node (no selection)';
-    ButtonNodeApply.Enabled := False;
-    PanelInspector.Enabled := False;
-    ButtonNodeRevert.Enabled := False;
-  finally
-    FNodeUpdating := False;
-  end;
-end;
-
 procedure TFormMain.ClearAllSections;
 begin
   FNodeUpdating := True;
   try
-    LabelNodeType.Text := 'Node';
+    LabelNodeType.Text := 'Node (no selection)';
     EditNodeTitle.Text := '';
     SpinBoxNodeX.Value := 0;
     SpinBoxNodeY.Value := 0;
@@ -1184,9 +1089,17 @@ begin
     StringGridNodeValues.RowCount := 0;
     StringGridNodeValues.Height := StringGridNodeValues.RowCount * StringGridNodeValues.RowHeight + (32 + 8);
     LayoutNodeData.Height := StringGridNodeValues.Height + 40 + 10;
+    ButtonNodeApply.Enabled := False;
+    PanelInspector.Enabled := False;
+    ButtonNodeRevert.Enabled := False;
   finally
     FNodeUpdating := False;
   end;
+end;
+
+procedure TFormMain.ComboBoxVisualLinkTypeChange(Sender: TObject);
+begin
+  FEditor.LinkVisualType := TLinkVisualType(ComboBoxVisualLinkType.ItemIndex);
 end;
 
 procedure TFormMain.ComboColorBoxAccentColorChange(Sender: TObject);
@@ -1247,16 +1160,19 @@ var
   V: TNodeValue;
   VStr: string;
 begin
+  UpdateStatus;
   if (FEditor = nil) or (FEditor.SelectedNodeCount <> 1) then
   begin
-    ShowNoSelection;
+    ClearAllSections;
+    if FEditor.SelectedNodeCount > 1 then
+      LabelNodeType.Text := 'Node (multiple)';
     Exit;
   end;
 
   N := FEditor.GetSelectedNode(0);
   if N = nil then
   begin
-    ShowNoSelection;
+    ClearAllSections;
     Exit;
   end;
 
@@ -1265,7 +1181,7 @@ begin
     ClearAllSections;
 
     // --- Info ---
-    LabelNodeType.Text := 'Node (' + N.NodeType + ')';
+    LabelNodeType.Text := Format('Node (%s)', [N.NodeType]);
 
     // --- Basic ---
     EditNodeTitle.Text := N.Title;
@@ -1294,15 +1210,15 @@ begin
         StringGridNodeValues.Cells[1, i] := NodeValueKindToStr(V.Kind);
 
         case V.Kind of
-          nvkFloat:
+          TNodeValueKind.Float:
             VStr := FormatFloat('0.######', V.FloatValue);
-          nvkInteger:
+          TNodeValueKind.Integer:
             VStr := IntToStr(V.IntegerValue);
-          nvkString:
+          TNodeValueKind.string:
             VStr := V.StringValue;
-          nvkBoolean:
+          TNodeValueKind.Boolean:
             VStr := if V.BooleanValue then 'true' else 'false';
-          nvkJSON:
+          TNodeValueKind.JSON:
             VStr := V.JSONValue;
         else
           VStr := '';
@@ -1322,7 +1238,6 @@ begin
   finally
     FNodeUpdating := False;
   end;
-  UpdateStatus;
 end;
 
 procedure TFormMain.OnNodeChanged(Sender: TObject; ANode: TCustomNode);
@@ -1343,7 +1258,7 @@ begin
 end;
 
 procedure TFormMain.DoOnSettingChange;
-begin
+begin       //FF2C4361 - FF0B1E39
   if CheckBoxCustomAccent.IsChecked then
     OverAccentColor := ComboColorBoxAccentColor.Color
   else
@@ -1374,7 +1289,13 @@ begin
   end;
 
   inherited;
-  //Fill.Kind := TBrushKind.None;
+  if IsDark then
+  begin
+    //Fill.Kind := TBrushKind.None;
+    Fill.Kind := TBrushKind.Gradient;
+    Fill.Gradient.Color := $FF2C4361;
+    Fill.Gradient.Color1 := $FF0B1E39;
+  end;
   TMessageManager.DefaultManager.SendMessage(Self, TStyleChangedMessage.Create(StyleBook, Self), True);
   TMessageManager.DefaultManager.SendMessage(Self, TInternalSettingChangedMessage.Create(StyleBook, Self), True);
 end;
@@ -1403,11 +1324,13 @@ var
   SelStr: string;
 begin
   if FEditor.SelectedNodeCount > 1 then
-    SelStr := 'Selected: ' + IntToStr(FEditor.SelectedNodeCount) + ' nodes'
+    SelStr := Format('Selected: %d nodes', [FEditor.SelectedNodeCount])
   else if FEditor.SelectedNodeCount = 1 then
     SelStr := 'Selected: ' + FEditor.GetSelectedNode(0).Title
-  else if FEditor.SelectedLinkCount > 0 then
+  else if FEditor.SelectedLinkCount = 1 then
     SelStr := 'Selected: 1 link'
+  else if FEditor.SelectedLinkCount > 0 then
+    SelStr := Format('Selected: %d links', [FEditor.SelectedLinkCount])
   else
     SelStr := 'No selection';
 
@@ -1451,19 +1374,19 @@ begin
   IconPath := 'M110 72a6 6 0 0 1-6 6H40a6 6 0 0 1 0-12h64a6 6 0 0 1 6 6m-6 106H78v-26a6 6 0 0 0-12 0v26H40a6 6 0 0 0 0 12h26v26a6 6 0 0 0 12 0v-26h26a6 6 0 0 0 0-12m48-4h64a6 6 0 0 0 0-12h-64a6 6 0 0 0 0 12m64 20h-64a6 6 0 0 0 0 12h64a6 6 0 0 0 0-12m-60.24-93.76a6 6 0 0 0 8.48 0L184 80.49l19.76 19.75a6 6 0 0 0 8.48-8.48L192.49 72l19.75-19.76a6 6 0 0 0-8.48-8.48L184 63.51l-19.76-19.75a6 6 0 0 0-8.48 8.48L175.51 72l-19.75 19.76a6 6 0 0 0 0 8.48';
 
   // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
-  var V := AddValue('expression', nvkString);
+  var V := AddValue('expression', TNodeValueKind.string);
   V.StringValue := 'A + B * C';
 
-  V := AddValue('precision', nvkInteger);
+  V := AddValue('precision', TNodeValueKind.Integer);
   V.IntegerValue := 6;
 
-  V := AddValue('scale', nvkFloat);
+  V := AddValue('scale', TNodeValueKind.Float);
   V.FloatValue := 1.0;
 
-  V := AddValue('enabled', nvkBoolean);
+  V := AddValue('enabled', TNodeValueKind.Boolean);
   V.BooleanValue := True;
 
-  V := AddValue('meta', nvkJSON);
+  V := AddValue('meta', TNodeValueKind.JSON);
   V.JSONValue := '{"mode":"fast"}';
   Width := 200;
   Height := 170;
@@ -1473,13 +1396,13 @@ procedure TMathExprNode.SetupPins;
 begin
   ClearPins;
   // Exec-пины
-  AddInputPin('▶ Exec In', 'exec', pkExec, 35);
-  AddOutputPin('▶ Exec Out', 'exec', pkExec, 35);
+  AddInputPin('▶ Exec In', 'exec', TPinKind.Exec, 35);
+  AddOutputPin('▶ Exec Out', 'exec', TPinKind.Exec, 35);
   // Data-пины
-  AddInputPin('A', 'float', pkData, 75);
-  AddInputPin('B', 'float', pkData, 105);
-  AddInputPin('C', 'float', pkData, 135);
-  AddOutputPin('Result', 'float', pkData, 90);
+  AddInputPin('A', 'float', TPinKind.Data, 75);
+  AddInputPin('B', 'float', TPinKind.Data, 105);
+  AddInputPin('C', 'float', TPinKind.Data, 135);
+  AddOutputPin('Result', 'float', TPinKind.Data, 90);
   // IsRequired demo
   GetInput(1).IsRequired := True;
   GetInput(2).IsRequired := True;
@@ -1502,9 +1425,9 @@ end;
 procedure TMultiplyNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('A', 'float', pkData, 45);
-  AddInputPin('B', 'float', pkData, 75);
-  AddOutputPin('Result', 'float', pkData, 60);
+  AddInputPin('A', 'float', TPinKind.Data, 45);
+  AddInputPin('B', 'float', TPinKind.Data, 75);
+  AddOutputPin('Result', 'float', TPinKind.Data, 60);
   GetInput(0).IsRequired := True;
   GetInput(1).IsRequired := True;
 end;
@@ -1517,7 +1440,7 @@ begin
   NodeType := 'string_node';
   HeaderColor := $FF00C080;
   IconPath := 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm9.5 6h-1A1.5 1.5 0 0 1 10 9.5A1.5 1.5 0 0 1 11.5 8h1A1.5 1.5 0 0 1 14 9.5h2A3.5 3.5 0 0 0 12.5 6h-1A3.5 3.5 0 0 0 8 9.5a3.5 3.5 0 0 0 3.5 3.5h1a1.5 1.5 0 0 1 1.5 1.5a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5H8a3.5 3.5 0 0 0 3.5 3.5h1a3.5 3.5 0 0 0 3.5-3.5a3.5 3.5 0 0 0-3.5-3.5';
-  var V := AddValue('text', nvkString);
+  var V := AddValue('text', TNodeValueKind.string);
   V.StringValue := 'Hello, Node!';
   Width := 180;
   Height := 70;
@@ -1526,7 +1449,7 @@ end;
 procedure TStringNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('Text', 'string', pkData, 45);
+  AddOutputPin('Text', 'string', TPinKind.Data, 45);
 end;
 
 { TBranchNode }
@@ -1544,10 +1467,10 @@ end;
 procedure TBranchNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('▶ Exec', 'exec', pkExec, 35);
-  AddInputPin('Condition', 'boolean', pkData, 75);
-  AddOutputPin('▶ True', 'exec', pkExec, 55);
-  AddOutputPin('▶ False', 'exec', pkExec, 90);
+  AddInputPin('▶ Exec', 'exec', TPinKind.Exec, 35);
+  AddInputPin('Condition', 'boolean', TPinKind.Data, 75);
+  AddOutputPin('▶ True', 'exec', TPinKind.Exec, 55);
+  AddOutputPin('▶ False', 'exec', TPinKind.Exec, 90);
   GetInput(1).IsRequired := True;
 end;
 
@@ -1566,7 +1489,7 @@ procedure TPrintNode.SetupPins;
 begin
   inherited;
   ClearPins;
-  AddInputPin('Text', 'string', pkData, 45);
+  AddInputPin('Text', 'string', TPinKind.Data, 45);
 end;
 
 initialization
