@@ -15,7 +15,7 @@ type
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
     function NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
-    procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF; ASelection: TNodeSelectionModel);
+    procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF);
   public
     constructor Create(AGraph: TNodeGraph);
     destructor Destroy; override;
@@ -29,6 +29,8 @@ type
     procedure RemoveNode(ANode: TCustomNode);
     procedure RemoveLink(ALink: TNodeLink);
     procedure Clear;
+    function CanConnectSelectedPins: Boolean;
+    procedure ConnectSelectedPins;
 
     procedure DeleteSelection;
     procedure CutSelectionToClipboard;
@@ -67,6 +69,8 @@ uses
 constructor TNodeEditorController.Create(AGraph: TNodeGraph);
 begin
   inherited Create;
+  if AGraph = nil then
+    raise Exception.Create('Graph can''t be nil');
   FGraph := AGraph;
   FSelection := TNodeSelectionModel.Create;
 end;
@@ -79,7 +83,7 @@ end;
 
 procedure TNodeEditorController.AddNode(ANode: TCustomNode; Silent: Boolean);
 begin
-  if (FGraph = nil) or (ANode = nil) then
+  if ANode = nil then
     Exit;
 
   FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
@@ -87,7 +91,7 @@ end;
 
 procedure TNodeEditorController.RemoveNode(ANode: TCustomNode);
 begin
-  if (FGraph = nil) or (ANode = nil) then
+  if ANode = nil then
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
@@ -101,7 +105,7 @@ end;
 
 procedure TNodeEditorController.RemoveLink(ALink: TNodeLink);
 begin
-  if (FGraph = nil) or (ALink = nil) then
+  if ALink = nil then
     Exit;
 
   FSelection.RemoveLinkFromSelection(ALink);
@@ -110,11 +114,8 @@ end;
 
 procedure TNodeEditorController.Clear;
 begin
-  if FGraph = nil then
-    Exit;
-
-  FGraph.Clear;
   FSelection.Clear;
+  FGraph.Clear;
 end;
 
 function TNodeEditorController.SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
@@ -140,8 +141,10 @@ begin
   AZoom := 1.0;
   AOffsetX := 0;
   AOffsetY := 0;
+  Clear;
+  ClearUndoRedo;
 
-  if (FGraph = nil) or (JSON.Trim.IsEmpty) then
+  if JSON.Trim.IsEmpty then
     Exit;
 
   try
@@ -158,27 +161,19 @@ begin
       if GraphObj = nil then
         raise Exception.Create(Translate('Graph data is missing'));
 
-      if GraphObj <> nil then
-      begin
-        var UseAlphaColor := Data.GetValue<Boolean>('alpha', False);
+      var UseAlphaColor := Data.GetValue<Boolean>('alpha', False);
 
-        var BeforeJSON := FGraph.CaptureJSONText;
-        FGraph.LoadGraphFromJSON(GraphObj, UseAlphaColor);
-        var AfterJSON := FGraph.CaptureJSONText;
+      FGraph.LoadGraphFromJSON(GraphObj, UseAlphaColor);
 
-        AZoom := Data.GetValue<Double>('zoom', 1.0);
-        AOffsetX := Data.GetValue<Double>('offsetX', 0.0);
-        AOffsetY := Data.GetValue<Double>('offsetY', 0.0);
-
-        FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Load graph'));
-      end;
-
-      FSelection.Clear;
+      AZoom := Data.GetValue<Double>('zoom', 1.0);
+      AOffsetX := Data.GetValue<Double>('offsetX', 0.0);
+      AOffsetY := Data.GetValue<Double>('offsetY', 0.0);
     finally
       Data.Free;
     end;
   except
-    raise Exception.Create(Translate('Couldn''t load graph'));
+    on E: Exception do
+      raise Exception.Create(Translate('Couldn''t load graph') + ':'#13#10 + E.Message);
   end;
 end;
 
@@ -225,7 +220,7 @@ function TNodeEditorController.AddInputPinToNode(ANode: TCustomNode; const AName
 begin
   Result := nil;
 
-  if (FGraph = nil) or (ANode = nil) then
+  if ANode = nil then
     Exit;
 
   Result := FGraph.AddDynamicInputPin(ANode, AName, ADataType, AKind);
@@ -235,7 +230,7 @@ function TNodeEditorController.AddOutputPinToNode(ANode: TCustomNode; const ANam
 begin
   Result := nil;
 
-  if (FGraph = nil) or (ANode = nil) then
+  if ANode = nil then
     Exit;
 
   Result := FGraph.AddDynamicOutputPin(ANode, AName, ADataType, AKind);
@@ -245,7 +240,7 @@ function TNodeEditorController.RemovePinFromNode(APin: TNodePin): boolean;
 begin
   Result := False;
 
-  if (FGraph = nil) or (APin = nil) then
+  if APin = nil then
     Exit;
 
   Result := FGraph.RemoveDynamicPin(APin);
@@ -305,7 +300,7 @@ function TNodeEditorController.InsertRerouteOnLink(ALink: TNodeLink; const Posit
 begin
   Result := nil;
 
-  if (FGraph = nil) or (ALink = nil) then
+  if ALink = nil then
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
@@ -341,69 +336,51 @@ begin
   if ACmd = nil then
     Exit;
 
-  if FGraph = nil then
-  begin
-    ACmd.Free;
-    Exit;
-  end;
-
   FGraph.ExecuteCommand(ACmd);
 end;
 
 procedure TNodeEditorController.Undo;
 begin
-  if FGraph <> nil then
-    FGraph.Undo;
+  FGraph.Undo;
 end;
 
 procedure TNodeEditorController.Redo;
 begin
-  if FGraph <> nil then
-    FGraph.Redo;
+  FGraph.Redo;
 end;
 
 procedure TNodeEditorController.ClearUndoRedo;
 begin
-  if FGraph <> nil then
-    FGraph.ClearUndoRedo;
+  FGraph.ClearUndoRedo;
 end;
 
 procedure TNodeEditorController.DeleteSelection;
-var
-  i: integer;
-  BeforeJSON, AfterJSON: string;
-  NodeToRemove: TCustomNode;
-  LinkToRemove: TNodeLink;
-  LinksToDelete: TObjectList<TNodeLink>;
 begin
-  if FGraph = nil then
-    Exit;
-
   if (FSelection.NodeCount = 0) and (FSelection.LinkCount = 0) then
     Exit;
 
-  BeforeJSON := FGraph.CaptureJSONText;
-  LinksToDelete := TObjectList<TNodeLink>.Create(False);
+  var BeforeJSON := FGraph.CaptureJSONText;
+  var LinksToDelete := TList<TNodeLink>.Create;
   try
-    for i := 0 to FSelection.LinkCount - 1 do
+    for var i := 0 to FSelection.LinkCount - 1 do
     begin
-      LinkToRemove := FSelection.GetLink(i);
+      var LinkToRemove := FSelection.GetLink(i);
       if LinkToRemove <> nil then
         LinksToDelete.Add(LinkToRemove);
     end;
 
-    for i := LinksToDelete.Count - 1 downto 0 do
+    for var i := LinksToDelete.Count - 1 downto 0 do
       FGraph.RemoveLink(LinksToDelete[i]);
 
-    for i := FSelection.NodeCount - 1 downto 0 do
+    for var i := FSelection.NodeCount - 1 downto 0 do
     begin
-      NodeToRemove := FSelection.GetNode(i);
+      var NodeToRemove := FSelection.GetNode(i);
       if NodeToRemove <> nil then
         FGraph.RemoveNode(NodeToRemove);
     end;
 
     FSelection.Clear;
-    AfterJSON := FGraph.CaptureJSONText;
+    var AfterJSON := FGraph.CaptureJSONText;
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Delete selection'));
   finally
     LinksToDelete.Free;
@@ -412,7 +389,7 @@ end;
 
 procedure TNodeEditorController.CopySelectionToClipboard;
 begin
-  if (FGraph = nil) or (FSelection.NodeCount = 0) then
+  if FSelection.NodeCount = 0 then
     Exit;
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
@@ -423,7 +400,7 @@ end;
 
 procedure TNodeEditorController.CutSelectionToClipboard;
 begin
-  if (FGraph = nil) or (FSelection.NodeCount = 0) then
+  if FSelection.NodeCount = 0 then
     Exit;
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
@@ -435,9 +412,6 @@ end;
 
 procedure TNodeEditorController.PasteFromClipboard(const Position: TPointF);
 begin
-  if FGraph = nil then
-    Exit;
-
   var Clipboard: IFMXExtendedClipboardService;
   if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
   begin
@@ -446,7 +420,7 @@ begin
       Exit;
 
     var BeforeJSON := FGraph.CaptureJSONText;
-    PasteNodesFromJSONText(ClipboardText, Position, FSelection);
+    PasteNodesFromJSONText(ClipboardText, Position);
     var AfterJSON := FGraph.CaptureJSONText;
 
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Paste nodes'));
@@ -455,7 +429,7 @@ end;
 
 procedure TNodeEditorController.DuplicateSelection(const Position: TPointF);
 begin
-  if (FGraph = nil) or (FSelection.NodeCount = 0) then
+  if FSelection.NodeCount = 0 then
     Exit;
 
   var NodeCopy := NodesToJSONText(FSelection.Nodes);
@@ -463,10 +437,73 @@ begin
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
-  PasteNodesFromJSONText(NodeCopy, Position, FSelection);
+  PasteNodesFromJSONText(NodeCopy, Position);
   var AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
+end;
+
+function TNodeEditorController.CanConnectSelectedPins: Boolean;
+begin
+  Result := False;
+  if Selection.PinCount <> 2 then
+    Exit;
+
+  var P1 := Selection.GetPin(0);
+  var P2 := Selection.GetPin(1);
+
+  if (P1 = nil) or (P2 = nil) then
+    Exit;
+
+  if not P1.CanAcceptMoreConnections then
+    Exit;
+
+  if not P2.CanAcceptMoreConnections then
+    Exit;
+
+  Result := (FGraph <> nil) and FGraph.CanConnect(P1, P2);
+end;
+
+procedure TNodeEditorController.ConnectSelectedPins;
+begin
+  if Selection.PinCount <> 2 then
+    Exit;
+  var P1 := Selection.GetPin(0);
+  var P2 := Selection.GetPin(1);
+  if (P1 = nil) or (P2 = nil) then
+    Exit;
+
+  var FromPin: TNodePin;
+  var ToPin: TNodePin;
+  if P1.Direction = TPinDirection.Output then
+  begin
+    FromPin := P1;
+    ToPin := P2;
+  end
+  else
+  begin
+    FromPin := P2;
+    ToPin := P1;
+  end;
+
+  if not FromPin.CanAcceptMoreConnections or not ToPin.CanAcceptMoreConnections then
+    Exit;
+
+  var Allow := True;
+  //if Assigned(FOnBeforeConnectPins) then
+  //  FOnBeforeConnectPins(Self, FromPin, ToPin, Allow);
+  if not Allow then
+    Exit;
+  if not FGraph.CanConnect(FromPin, ToPin) then
+    Exit;
+
+  if not FGraph.LinkExists(FromPin, ToPin) then
+    FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
+
+  //if Assigned(FOnAfterConnectPins) then
+  //  FOnAfterConnectPins(Self, FromPin, ToPin);
+
+  Selection.ClearPins;
 end;
 
 function TNodeEditorController.NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
@@ -502,7 +539,8 @@ begin
       if (L.FromPin = nil) or (L.ToPin = nil) then
         Continue;
       if (ANodes.IndexOf(L.FromPin.OwnerNode) >= 0) and
-        (ANodes.IndexOf(L.ToPin.OwnerNode) >= 0) then
+        (ANodes.IndexOf(L.ToPin.OwnerNode) >= 0)
+        then
       begin
         LinkObj := TJSONObject.Create;
         LinkObj.AddPair('id', L.Id);
@@ -518,7 +556,7 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.PasteNodesFromJSONText(const AJSON: string; const Position: TPointF; ASelection: TNodeSelectionModel);
+procedure TNodeEditorController.PasteNodesFromJSONText(const AJSON: string; const Position: TPointF);
 var
   Data: TJSONObject;
   Root: TJSONObject;
@@ -534,102 +572,104 @@ var
   FromPin, ToPin: TNodePin;
   NewFromId, NewToId: string;
 begin
-  if Trim(AJSON) = '' then
+  if AJSON.Trim.IsEmpty then
     Exit;
-
-  if ASelection <> nil then
-    ASelection.Clear;
-
-  Data := TJSONObject.ParseJSONValue(AJSON) as TJSONObject;
+  Selection.BeginUpdate;
   try
-    Root := TJSONObject(Data);
-    NodesArr := Root.GetValue<TJSONArray>('nodes', nil);
-    if NodesArr = nil then
-      Exit;
+    Selection.Clear;
 
-    OldToNewNodeIds := TStringList.Create;
-    OldToNewPinIds := TStringList.Create;
-    OldToNewNodeIds.NameValueSeparator := '=';
-    OldToNewPinIds.NameValueSeparator := '=';
-
+    Data := TJSONObject.ParseJSONValue(AJSON) as TJSONObject;
     try
-      First := True;
-      MinX := 0;
-      MinY := 0;
-      for i := 0 to NodesArr.Count - 1 do
-      begin
-        NodeObj := NodesArr.Items[i] as TJSONObject;
-        if First then
-        begin
-          MinX := NodeObj.GetValue<Single>('x', 0.0);
-          MinY := NodeObj.GetValue<Single>('y', 0.0);
-          First := False;
-        end
-        else
-        begin
-          MinX := Min(MinX, NodeObj.GetValue<Single>('x', 0.0));
-          MinY := Min(MinY, NodeObj.GetValue<Single>('y', 0.0));
-        end;
-      end;
+      Root := TJSONObject(Data);
+      NodesArr := Root.GetValue<TJSONArray>('nodes', nil);
+      if NodesArr = nil then
+        Exit;
 
-      for i := 0 to NodesArr.Count - 1 do
-      begin
-        NodeObj := NodesArr.Items[i] as TJSONObject;
-        NodeType := NodeObj.GetValue('type', 'default');
-        OldNodeId := NodeObj.GetValue('id', '');
+      OldToNewNodeIds := TStringList.Create;
+      OldToNewPinIds := TStringList.Create;
+      OldToNewNodeIds.NameValueSeparator := '=';
+      OldToNewPinIds.NameValueSeparator := '=';
 
-        N := FGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
-        N.LoadFromJSON(NodeObj, True);
-        NewNodeId := NewId;
-        N.Id := NewNodeId;
-        N.X := Position.X + (N.X - MinX);
-        N.Y := Position.Y + (N.Y - MinY);
-
-        OldToNewNodeIds.Values[OldNodeId] := NewNodeId;
-
-        for j := 0 to N.InputCount - 1 do
+      try
+        First := True;
+        MinX := 0;
+        MinY := 0;
+        for i := 0 to NodesArr.Count - 1 do
         begin
-          P := N.GetInput(j);
-          NewPinId := NewId;
-          OldToNewPinIds.Values[P.Id] := NewPinId;
-          P.Id := NewPinId;
-        end;
-        for j := 0 to N.OutputCount - 1 do
-        begin
-          P := N.GetOutput(j);
-          NewPinId := NewId;
-          OldToNewPinIds.Values[P.Id] := NewPinId;
-          P.Id := NewPinId;
+          NodeObj := NodesArr.Items[i] as TJSONObject;
+          if First then
+          begin
+            MinX := NodeObj.GetValue<Single>('x', 0.0);
+            MinY := NodeObj.GetValue<Single>('y', 0.0);
+            First := False;
+          end
+          else
+          begin
+            MinX := Min(MinX, NodeObj.GetValue<Single>('x', 0.0));
+            MinY := Min(MinY, NodeObj.GetValue<Single>('y', 0.0));
+          end;
         end;
 
-        N.ZOrder := 0;
-        FGraph.AddNode(N);
-
-        if ASelection <> nil then
-          ASelection.SelectNode(N, True);
-      end;
-
-      LinksArr := Root.GetValue<TJSONArray>('links', nil);
-      if LinksArr <> nil then
-      begin
-        for i := 0 to LinksArr.Count - 1 do
+        for i := 0 to NodesArr.Count - 1 do
         begin
-          LinkObj := LinksArr.Items[i] as TJSONObject;
-          NewFromId := OldToNewPinIds.Values[LinkObj.GetValue('fromPinId', '')];
-          NewToId := OldToNewPinIds.Values[LinkObj.GetValue('toPinId', '')];
-          FromPin := FGraph.FindPinById(NewFromId);
-          ToPin := FGraph.FindPinById(NewToId);
-          if (FromPin <> nil) and (ToPin <> nil) and
-            FGraph.CanConnect(FromPin, ToPin) then
-            FGraph.AddLink(TNodeLink.Create(FromPin, ToPin));
+          NodeObj := NodesArr.Items[i] as TJSONObject;
+          NodeType := NodeObj.GetValue('type', 'default');
+          OldNodeId := NodeObj.GetValue('id', '');
+
+          N := FGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
+          N.LoadFromJSON(NodeObj, True);
+          NewNodeId := NewId;
+          N.Id := NewNodeId;
+          N.X := Position.X + (N.X - MinX);
+          N.Y := Position.Y + (N.Y - MinY);
+
+          OldToNewNodeIds.Values[OldNodeId] := NewNodeId;
+
+          for j := 0 to N.InputCount - 1 do
+          begin
+            P := N.GetInput(j);
+            NewPinId := NewId;
+            OldToNewPinIds.Values[P.Id] := NewPinId;
+            P.Id := NewPinId;
+          end;
+          for j := 0 to N.OutputCount - 1 do
+          begin
+            P := N.GetOutput(j);
+            NewPinId := NewId;
+            OldToNewPinIds.Values[P.Id] := NewPinId;
+            P.Id := NewPinId;
+          end;
+
+          N.ZOrder := 0;
+          FGraph.AddNode(N);
+
+          Selection.SelectNode(N, True);
         end;
+
+        LinksArr := Root.GetValue<TJSONArray>('links', nil);
+        if LinksArr <> nil then
+        begin
+          for i := 0 to LinksArr.Count - 1 do
+          begin
+            LinkObj := LinksArr.Items[i] as TJSONObject;
+            NewFromId := OldToNewPinIds.Values[LinkObj.GetValue('fromPinId', '')];
+            NewToId := OldToNewPinIds.Values[LinkObj.GetValue('toPinId', '')];
+            FromPin := FGraph.FindPinById(NewFromId);
+            ToPin := FGraph.FindPinById(NewToId);
+            if (FromPin <> nil) and (ToPin <> nil) and
+              FGraph.CanConnect(FromPin, ToPin) then
+              FGraph.AddLink(TNodeLink.Create(FromPin, ToPin));
+          end;
+        end;
+      finally
+        OldToNewNodeIds.Free;
+        OldToNewPinIds.Free;
       end;
     finally
-      OldToNewNodeIds.Free;
-      OldToNewPinIds.Free;
+      Data.Free;
     end;
   finally
-    Data.Free;
+    Selection.EndUpdate;
   end;
 end;
 

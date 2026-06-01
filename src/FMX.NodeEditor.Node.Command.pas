@@ -21,7 +21,7 @@ type
   TAddNodeCommand = class(TGraphCommand)
   private
     FNode: TCustomNode;
-    FOwnsNode: boolean;
+    FOwnsNode: Boolean;
   public
     constructor Create(AGraph: TNodeGraph; ANode: TCustomNode); reintroduce;
     destructor Destroy; override;

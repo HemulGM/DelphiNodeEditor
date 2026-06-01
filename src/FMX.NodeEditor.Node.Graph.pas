@@ -243,7 +243,6 @@ end;
 destructor TNodeGraph.Destroy;
 begin
   Clear;
-  ClearUndoRedo;
   FUndoStack.Free;
   FRedoStack.Free;
   FRegistry.Free;

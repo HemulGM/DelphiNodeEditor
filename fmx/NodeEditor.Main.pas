@@ -502,7 +502,7 @@ begin
   if not FDidInitialFrame then
   begin
     FDidInitialFrame := True;
-    FEditor.FrameAll;
+    FEditor.Fit;
   end;
 end;
 
@@ -656,7 +656,7 @@ end;
 procedure TFormMain.ButtonZoomToFitClick(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
-  FEditor.FrameAll;
+  FEditor.Fit;
   UpdateStatus;
 end;
 
@@ -664,9 +664,9 @@ procedure TFormMain.ButtonZoomToSelectClick(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
   if FEditor.SelectedNodeCount > 0 then
-    FEditor.FitToSelection
+    FEditor.FitSelection
   else
-    FEditor.FrameAll;
+    FEditor.Fit;
   UpdateStatus;
 end;
 
@@ -857,46 +857,34 @@ begin
   FEditor.AddNode(NComment2);
 
   // ── Links: Float → Add ─────────────────────────────────────────
-  if FEditor.Graph.CanConnect(NFloat1.GetOutput(0), NAdd.GetInput(0)) then
-    FEditor.Graph.AddLink(TNodeLink.Create(NFloat1.GetOutput(0), NAdd.GetInput(0)));
-
-  if FEditor.Graph.CanConnect(NFloat2.GetOutput(0), NAdd.GetInput(1)) then
-    FEditor.Graph.AddLink(TNodeLink.Create(NFloat2.GetOutput(0), NAdd.GetInput(1)));
+  FEditor.AddLink(NFloat1.GetOutput(0), NAdd.GetInput(0));
+  FEditor.AddLink(NFloat2.GetOutput(0), NAdd.GetInput(1));
 
   // ── Links: Add+Float3 → Mul ────────────────────────────────────
-  if FEditor.Graph.CanConnect(NAdd.GetOutput(0), NMul.GetInput(0)) then
-    FEditor.Graph.AddLink(TNodeLink.Create(NAdd.GetOutput(0), NMul.GetInput(0)));
+  FEditor.AddLink(NAdd.GetOutput(0), NMul.GetInput(0));
 
   // Float3 → Reroute → Mul.B
   if (NReroute.InputCount > 0) and (NReroute.OutputCount > 0) then
   begin
-    if FEditor.Graph.CanConnect(NFloat3.GetOutput(0), NReroute.GetInput(0)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NFloat3.GetOutput(0), NReroute.GetInput(0)));
-
-    if FEditor.Graph.CanConnect(NReroute.GetOutput(0), NMul.GetInput(1)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NReroute.GetOutput(0), NMul.GetInput(1)));
+    FEditor.AddLink(NFloat3.GetOutput(0), NReroute.GetInput(0));
+    FEditor.AddLink(NReroute.GetOutput(0), NMul.GetInput(1));
   end;
 
   // ── Links: Mul → Math A, Float1 → Math B, Float2 → Math C ─────
   if NMath.InputCount >= 4 then // exec + A + B + C
   begin
-    if FEditor.Graph.CanConnect(NMul.GetOutput(0), NMath.GetInput(1)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NMul.GetOutput(0), NMath.GetInput(1)));
-    if FEditor.Graph.CanConnect(NFloat1.GetOutput(0), NMath.GetInput(2)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NFloat1.GetOutput(0), NMath.GetInput(2)));
-    if FEditor.Graph.CanConnect(NFloat2.GetOutput(0), NMath.GetInput(3)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NFloat2.GetOutput(0), NMath.GetInput(3)));
+    FEditor.AddLink(NMul.GetOutput(0), NMath.GetInput(1));
+    FEditor.AddLink(NFloat1.GetOutput(0), NMath.GetInput(2));
+    FEditor.AddLink(NFloat2.GetOutput(0), NMath.GetInput(3));
   end;
 
   // ── Links: Math Exec Out → Branch Exec In ──────────────────────
   if (NMath.OutputCount >= 1) and (NBranch.InputCount >= 1) then
-    if FEditor.Graph.CanConnect(NMath.GetOutput(0), NBranch.GetInput(0)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NMath.GetOutput(0), NBranch.GetInput(0)));
+    FEditor.AddLink(NMath.GetOutput(0), NBranch.GetInput(0));
 
   // ── Links: Branch True → Default In ───────────────────────────
   if (NBranch.OutputCount >= 1) and (NDefault.InputCount >= 1) then
-    if FEditor.Graph.CanConnect(NBranch.GetOutput(0), NDefault.GetInput(0)) then
-      FEditor.Graph.AddLink(TNodeLink.Create(NBranch.GetOutput(0), NDefault.GetInput(0)));
+    FEditor.AddLink(NBranch.GetOutput(0), NDefault.GetInput(0));
 
   // ── Select Math node — демонстрируем все его values в инспекторе
   FEditor.SelectNode(NMath, False);
@@ -957,8 +945,7 @@ begin
   if FEditor.SelectedNodeCount = 0 then
     Exit;
   for var i := 0 to FEditor.SelectedNodeCount - 1 do
-    FEditor.Graph.SendNodeToBack(FEditor.GetSelectedNode(i));
-  FEditor.Repaint;
+    FEditor.SendNodeToBack(FEditor.GetSelectedNode(i));
   LabelStat5.Text := 'Sent to back';
 end;
 
@@ -967,8 +954,7 @@ begin
   if FEditor.SelectedNodeCount = 0 then
     Exit;
   for var i := 0 to FEditor.SelectedNodeCount - 1 do
-    FEditor.Graph.BringNodeToFront(FEditor.GetSelectedNode(i));
-  FEditor.Repaint;
+    FEditor.BringNodeToFront(FEditor.GetSelectedNode(i));
   LabelStat5.Text := 'Brought to front';
 end;
 
@@ -989,7 +975,7 @@ begin
   begin
     FEditor.LoadFromFile(OpenDialogJSON.FileName);
     RefreshFromSelection;
-    FEditor.FrameAll;
+    FEditor.Fit;
     LabelStat5.Text := 'Loaded: ' + ExtractFileName(OpenDialogJSON.FileName);
   end;
 end;
@@ -1331,13 +1317,15 @@ begin
     SelStr := 'Selected: 1 link'
   else if FEditor.SelectedLinkCount > 0 then
     SelStr := Format('Selected: %d links', [FEditor.SelectedLinkCount])
+  else if FEditor.SelectedPinCount = 1 then
+    SelStr := 'Selected: 1 pin'
+  else if FEditor.SelectedPinCount > 0 then
+    SelStr := Format('Selected: %d pins', [FEditor.SelectedPinCount])
   else
     SelStr := 'No selection';
 
   LabelStat1.Text := SelStr;
-  LabelStat2.Text :=
-    'Nodes: ' + IntToStr(FEditor.Graph.Nodes.Count) +
-    '  Links: ' + IntToStr(FEditor.Graph.Links.Count);
+  LabelStat2.Text := Format('Nodes: %d | Links: %d', [FEditor.Graph.Nodes.Count, FEditor.Graph.Links.Count]);
   LabelStat3.Text := Format('Zoom: %.0f%%', [FEditor.Zoom * 100]);
   ButtonZoom.Text := Format('%.0f%%', [FEditor.Zoom * 100]);
   LabelStat4.Text :=

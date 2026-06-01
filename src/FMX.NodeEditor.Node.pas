@@ -67,15 +67,15 @@ type
     IsRequired: boolean;
     DefaultValue: string;
     Tooltip: string;
-    Hidden: boolean;
-    Advanced: boolean;
-    AllowMultipleConnections: boolean;
+    Hidden: Boolean;
+    Advanced: Boolean;
+    AllowMultipleConnections: Boolean;
     SortIndex: integer;
-    Connected: boolean;
+    Connected: Boolean;
 
     constructor Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
     destructor Destroy; override;
-
+    function CanAcceptMoreConnections: Boolean;
     function EffectiveDisplayName: string; inline;
     function GetPinWorldPosition: TPointF; inline;
     procedure SetTypeId(const ATypeId: string); inline;
@@ -98,7 +98,7 @@ type
     constructor Create(AFrom, ATo: TNodePin);
     function HitTest(AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; virtual;
     function IsInsideWorldRect(const R: TRectF): Boolean; virtual;
-    function IsMouseNearLinkStart(SX, SY: Integer; Zoom, OffsetX, OffsetY: Double): Boolean;
+    function IsMouseNearLinkStart(SX, SY: Single; Zoom, OffsetX, OffsetY: Double): Boolean;
     function BoundsRect(Zoom, OffsetX, OffsetY: Double): TRectF; overload; virtual;
     function BoundsRect: TRectF; overload; virtual;
     procedure Paint(Canvas: TCanvas; Zoom: Double; OffsetX, OffsetY: Double; Selected, Hovered: Boolean; Opacity: Single); virtual;
@@ -1284,6 +1284,11 @@ end;
 
 { TNodePin }
 
+function TNodePin.CanAcceptMoreConnections: Boolean;
+begin
+  Result := (not Connected) or AllowMultipleConnections;
+end;
+
 constructor TNodePin.Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
 begin
   inherited Create;
@@ -1330,12 +1335,17 @@ begin
   Canvas.Stroke.Color := TAlphaColors.Black;
   Canvas.Stroke.Thickness := 1 * Zoom;
 
-  if Kind = TPinKind.Exec then
-    Canvas.Fill.Color := TAlphaColors.White
-  else if PinType <> nil then
-    Canvas.Fill.Color := PinType.Color
+  if not Connected then
+  begin
+    if Kind = TPinKind.Exec then
+      Canvas.Fill.Color := TAlphaColors.White
+    else if PinType <> nil then
+      Canvas.Fill.Color := PinType.Color
+    else
+      Canvas.Fill.Color := TAlphaColors.Green;
+  end
   else
-    Canvas.Fill.Color := TAlphaColors.Green;
+    Canvas.Fill.Color := OwnerNode.HeaderColor;
 
   if Id = OwnerNode.HoveredPinId then
     case OwnerNode.HoveredPinCompatible of
@@ -1382,7 +1392,10 @@ begin
   Canvas.DrawEllipse(RE, 1);
 
   // Body
-  RE.Inflate(-SRadius * 0.4, -SRadius * 0.4);
+  if not Connected then
+    RE.Inflate(-SRadius * 0.4, -SRadius * 0.4)
+  else
+    RE.Inflate(-SRadius * 0.2, -SRadius * 0.2);
   Canvas.FillEllipse(RE, 1);
 
   if Id = OwnerNode.HoveredPinId then
@@ -1542,7 +1555,7 @@ begin
   Result := TRectF.Create(P0, P3, True);
 end;
 
-function TNodeLink.IsMouseNearLinkStart(SX, SY: Integer; Zoom, OffsetX, OffsetY: Double): Boolean;
+function TNodeLink.IsMouseNearLinkStart(SX, SY: Single; Zoom, OffsetX, OffsetY: Double): Boolean;
 begin
   Result := False;
 
