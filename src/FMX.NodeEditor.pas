@@ -6,7 +6,8 @@ uses
   System.Classes, System.SysUtils, FMX.Graphics, FMX.Controls, System.Math,
   System.Types, FMX.Menus, System.Diagnostics, FMX.Forms, System.UITypes,
   FMX.Types, System.Generics.Collections, FMX.NodeEditor.Node, FMX.StdCtrls,
-  FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Types, FMX.NodeEditor.Controller;
+  FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Types, FMX.NodeEditor.Controller,
+  FMX.Ani, FMX.InertialMovement;
 
 {$SCOPEDENUMS ON}
 
@@ -39,7 +40,7 @@ type
 
   TNodeEditor = class(TControl)
     const
-      ZoomMin = 0.25;
+      ZoomMin = 0.01;
       ZoomMax = 6.00;
   private
     FGraph: TNodeGraph;
@@ -111,6 +112,7 @@ type
     FNodeSnapDistance: single;
 
     FShowSnapGuides: boolean;
+    FSnapAllSelectionGroup: Boolean;
     FGuideSnapXActive: boolean;
     FGuideSnapYActive: boolean;
     FGuideSnapX: single;
@@ -126,6 +128,7 @@ type
 
     // Optimization fields
     FPaintNodesSorted: TList<TCustomNode>;
+    FPaintNodesSortedNav: TList<TCustomNode>;
     FPaintNodesDirty: Boolean;
     FLastMouseMoveTick: UInt64;
     FLastPaintTick: UInt64;
@@ -167,6 +170,18 @@ type
     FLastZoomDistance: Single;
     FLinkVisualType: TLinkVisualType;
     FLinkGradient: Boolean;
+
+  private // Auto scroll
+    FAutoScrollTimer: TTimer;
+    FAutoScroll: Boolean;
+    FAutoScrollOrigin: TPointF;
+    FCurrentMousePos: TPointF;
+    FScrollSpeedX: Single;
+    FScrollSpeedY: Single;
+    FAni: TAniCalculations;
+    procedure AniChanged(Sender: TObject);
+    procedure TimerAutoScrollProc(Sender: TObject);
+  private
 
     // Internal Logic
     function GetPrimarySelectedNode: TCustomNode;
@@ -251,7 +266,7 @@ type
     procedure InternalResizing(X, Y: Single);
     procedure InternalDragging(X, Y: Single; Shift: TShiftState);
     procedure InternalPanningBegin(X, Y: Single);
-    procedure InternalPanningEnd;
+    procedure InternalPanningEnd(X, Y: Single);
     function InternalResizingBegin(X, Y: Single): Boolean;
     function InternalPinClick(X, Y: Single; Shift: TShiftState; NodeUnderMouse: TCustomNode): Boolean;
     function InternalLinkClick(X, Y: Single; Shift: TShiftState; SelectOnly: Boolean): Boolean;
@@ -260,10 +275,13 @@ type
     procedure InternalBoxSelecting(X, Y: Single);
     procedure InternalPinConnecting(X, Y: Single);
     procedure InternalResizingEnd;
+    procedure InternalAutoScrollBegin(X, Y: Single);
     function InternalPinConnectingTry(X, Y: Single): Boolean;
     procedure InternalDraggingEnd(X, Y: Single);
     procedure InternalBoxSelectingEnd(X, Y: Single; Shift: TShiftState);
     procedure InternalDraggingBegin(X, Y: Single; Node: TCustomNode);
+    procedure InternalAutoScroll(X, Y: Single);
+    procedure InternalAutoScrollEnd;
   protected
     function GetSelectedPin(Index: integer): TNodePin;
 
@@ -360,6 +378,7 @@ type
     property Controller: TNodeEditorController read FController;
 
     property ShowSnapGuides: Boolean read FShowSnapGuides write FShowSnapGuides default True;
+    property SnapAllSelectionGroup: Boolean read FSnapAllSelectionGroup write FSnapAllSelectionGroup default False;
     property GuideLineColor: TAlphaColor read FGuideLineColor write FGuideLineColor default $FFFFD740;
     property GuideLineStyle: TStrokeDash read FGuideLineStyle write FGuideLineStyle default TStrokeDash.Dash;
     property GuideLineWidth: Single read FGuideLineWidth write FGuideLineWidth;
@@ -461,6 +480,15 @@ begin
       TInteractiveGesture.DoubleTap];
   OnGesture := FOnGesture;
 
+  FAutoScrollTimer := TTimer.Create(Self);
+  FAutoScrollTimer.OnTimer := TimerAutoScrollProc;
+  FAutoScrollTimer.Interval := 16;
+  FAutoScrollTimer.Enabled := False;
+
+  FAni := TAniCalculations.Create(Self);
+  FAni.Animation := True;
+  FAni.OnChanged := AniChanged;
+
   FHorzScroll := TScrollBar.Create(Self);
   FHorzScroll.Parent := Self;
   FHorzScroll.Orientation := TOrientation.Horizontal;
@@ -484,6 +512,7 @@ begin
 
   FDragCommandNodes := TList<TCustomNode>.Create;
   FPaintNodesSorted := TList<TCustomNode>.Create;
+  FPaintNodesSortedNav := TList<TCustomNode>.Create;
 
   FPaintNodesDirty := True;
   FLastMouseMoveTick := 0;
@@ -506,6 +535,7 @@ begin
 
   FShowGrid := True;
   FShowSnapGuides := True;
+  FSnapAllSelectionGroup := False;
   FGuideSnapXActive := False;
   FGuideSnapYActive := False;
   FGuideSnapX := 0;
@@ -549,7 +579,7 @@ begin
   FDraggingLink := False;
   FTempStartMousePos := Point(0, 0);
 
-  InternalPanningEnd;
+  InternalPanningEnd(FLastMousePos.X, FLastMousePos.Y);
   FRightButtonDown := False;
 
   FPopupMenu := TPopupMenu.Create(Self);
@@ -558,7 +588,9 @@ end;
 
 destructor TNodeEditor.Destroy;
 begin
+  FAni.Free;
   FPaintNodesSorted.Free;
+  FPaintNodesSortedNav.Free;
   FController.Free;
   FDragCommandNodes.Free;
   FGraph.Free;
@@ -582,7 +614,7 @@ begin
 
     var SPoint := ScreenToWorld(Point.X, Point.Y);
     var N := FGraph.Registry.CreateNode(NodeType, SnapWorldPoint(SPoint));
-    AddNode(N);
+    FController.AddNode(N);
     SelectNodeInternal(N, False);
   end;
 end;
@@ -661,14 +693,23 @@ begin
 
   FPaintNodesSorted.Capacity := FGraph.Nodes.Count;
   FPaintNodesSorted.Clear;
+  FPaintNodesSortedNav.Capacity := FGraph.Nodes.Count;
+  FPaintNodesSortedNav.Clear;
 
   if FGraph = nil then
     Exit;
 
   for var i := 0 to FGraph.Nodes.Count - 1 do
-    FPaintNodesSorted.Add(FGraph.Nodes[i]);
+  begin
+    var N := FGraph.Nodes[i];
+    var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+    if FScreenRect.IntersectsWith(R) then
+      FPaintNodesSorted.Add(N);
+    FPaintNodesSortedNav.Add(N);
+  end;
 
   FPaintNodesSorted.Sort(TComparer<TCustomNode>.Construct(NodePaintCompare));
+  FPaintNodesSortedNav.Sort(TComparer<TCustomNode>.Construct(NodePaintCompare));
   FPaintNodesDirty := False;
 end;
 
@@ -737,8 +778,9 @@ begin
   for var i := 0 to FDragCommandNodes.Count - 1 do
   begin
     var N := FDragCommandNodes[i];
-    if N <> FDragNode then
-      Continue;
+    if not FSnapAllSelectionGroup then
+      if N <> FDragNode then
+        Continue;
     BaseX := FDragOldPositions[i].X;
     BaseY := FDragOldPositions[i].Y;
     Break;
@@ -763,7 +805,6 @@ var
   CandDX, CandDY: single;
   BestAbsDX, BestAbsDY: single;
   D: single;
-  N: TCustomNode;
   BestGuideX, BestGuideY: single;
 begin
   ClearSnapGuides;
@@ -791,9 +832,8 @@ begin
   BestAbsDX := FNodeSnapDistance + 1;
   BestAbsDY := FNodeSnapDistance + 1;
 
-  for var i := 0 to FGraph.Nodes.Count - 1 do
+  for var N in FPaintNodesSorted do
   begin
-    N := FGraph.Nodes[i];
     if (N = nil) or IsNodeInDragSelection(N) then
       Continue;
 
@@ -946,9 +986,9 @@ begin
   if Assigned(FOnBeforeConnectPins) then
     FOnBeforeConnectPins(Self, APinFrom, APinTo, AllowConnect);
 
-  if AllowConnect and not FGraph.LinkExists(APinFrom, APinTo) then
+  if AllowConnect and not FController.LinkExists(APinFrom, APinTo) then
   begin
-    FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, APinFrom, APinTo));
+    FController.AddLink(APinFrom, APinTo);
     if Assigned(FOnAfterConnectPins) then
       FOnAfterConnectPins(Self, APinFrom, APinTo);
   end;
@@ -1016,14 +1056,8 @@ begin
 end;
 
 procedure TNodeEditor.LoadFromFile(const AFileName: string);
-var
-  Z: Double;
-  OX, OY: Double;
 begin
-  FController.LoadFromFile(AFileName, Z, OX, OY);
-  FZoom := Z;
-  FOffsetX := OX;
-  FOffsetY := OY;
+  FController.LoadFromFile(AFileName, FZoom, FOffsetX, FOffsetY);
 
   ResetStateAfterGraphReload;
   InternalWorldChanged;
@@ -1058,7 +1092,7 @@ end;
 
 procedure TNodeEditor.ClearSelection;
 begin
-  if ((FController.Selection.NodeCount > 0) or (FController.Selection.LinkCount > 0)) then
+  if FController.Selection.SelectedCount > 0 then
     FController.Selection.Clear;
 end;
 
@@ -1077,7 +1111,7 @@ end;
 
 procedure TNodeEditor.SendNodeToBack(ANode: TCustomNode);
 begin
-  FGraph.SendNodeToBack(ANode);
+  FController.SendNodeToBack(ANode);
 end;
 
 procedure TNodeEditor.SelectLinkInternal(ALink: TNodeLink; AKeepNodes: Boolean);
@@ -1175,7 +1209,7 @@ begin
   end;
   for var i := 0 to FGraph.Links.Count - 1 do
   begin
-    var L := TNodeLink(FGraph.Links[i]);
+    var L := FGraph.Links[i];
     if L = nil then
       Continue;
     if L.FromPin <> nil then
@@ -1243,35 +1277,39 @@ begin
   MinX := Min(B.Left, B.Right - Width);
   MaxX := Max(B.Left, B.Right - Width);
 
-  FHorzScroll.OnChange := nil;
+  FHorzScroll.BeginUpdate;
   try
+    //FHorzScroll.ValueRange.ViewportSize := 1000;
     FHorzScroll.Min := MinX;
     FHorzScroll.Max := MaxX;
     FHorzScroll.Visible := (B.Left < -FOffsetX) or (B.Right > -FOffsetX + Width);
 
     FHorzScroll.Value := -FOffsetX;
   finally
-    FHorzScroll.OnChange := HorzScrollChange;
+    FHorzScroll.EndUpdate;
   end;
 
   // вертикаль
   MinY := Min(B.Top, B.Bottom - Height);
   MaxY := Max(B.Top, B.Bottom - Height);
 
-  FVertScroll.OnChange := nil;
+  FVertScroll.BeginUpdate;
   try
+    //FVertScroll.ValueRange.ViewportSize := 1000;
     FVertScroll.Min := MinY;
     FVertScroll.Max := MaxY;
     FVertScroll.Visible := (B.Top < -FOffsetY) or (B.Bottom > -FOffsetY + Height);
 
     FVertScroll.Value := -FOffsetY;
   finally
-    FVertScroll.OnChange := VertScrollChange;
+    FVertScroll.EndUpdate;
   end;
 end;
 
 procedure TNodeEditor.InternalWorldChanged;
 begin
+  FAni.ViewportPosition := PointF(-FOffsetX, -FOffsetY);
+  InvalidateSortedNodes;
   UpdateScrollBars(False);
   UpdatedStatus;
   Repaint;
@@ -1282,8 +1320,7 @@ begin
   if FHorzScroll.IsUpdating then
     Exit;
   FOffsetX := -FHorzScroll.Value;
-  //InternalWorldChanged;
-  Repaint;
+  InternalWorldChanged;
 end;
 
 procedure TNodeEditor.VertScrollChange(Sender: TObject);
@@ -1291,8 +1328,7 @@ begin
   if FVertScroll.IsUpdating then
     Exit;
   FOffsetY := -FVertScroll.Value;
-  //InternalWorldChanged;
-  Repaint;
+  InternalWorldChanged;
 end;
 
 function TNodeEditor.ScreenToWorld(SX, SY: Double): TPointF;
@@ -1355,8 +1391,6 @@ begin
   for var i := FPaintNodesSorted.Count - 1 downto 0 do
   begin
     var N := FPaintNodesSorted[i];
-    if not N.OnScreen then
-      Continue;
     if (N.VisualKind <> TNodeVisualKind.Comment) and N.HitTest(W.X, W.Y) then
       Exit(N);
   end;
@@ -1364,8 +1398,6 @@ begin
   for var i := FPaintNodesSorted.Count - 1 downto 0 do
   begin
     var N := FPaintNodesSorted[i];
-    if not N.OnScreen then
-      Continue;
     if (N.VisualKind = TNodeVisualKind.Comment) and N.HitTest(W.X, W.Y) then
       Exit(N);
   end;
@@ -1679,11 +1711,11 @@ begin
   var R := RectF(FBoxStart.X, FBoxStart.Y, FBoxCurrent.X, FBoxCurrent.Y);
   R.NormalizeRect;
   Canvas.Fill.Kind := TBrushKind.Solid;
-  Canvas.Fill.Color := TAlphaColorF.Create(1, 1, 1, 0.05).ToAlphaColor;
+  Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Stroke.Color := $FFFFD740;
   Canvas.Stroke.Dash := TStrokeDash.Dash;
   Canvas.Stroke.Thickness := 1;
-  Canvas.FillRect(R, 1);
+  Canvas.FillRect(R, 0.05);
   Canvas.DrawRect(R, 1);
   Canvas.Stroke.Kind := TBrushKind.Solid;
 end;
@@ -1705,6 +1737,7 @@ begin
   Pos.Offset(Round(GetPrimarySelectedNode.Width * Zoom / 2), 0);
 
   // Bounds position
+  var OldPos := Pos;
   Pos.SetLocation(PointF(
       EnsureRange(Pos.X, TextW / 2, Width - TextW / 2),
       EnsureRange(Pos.Y, TextH + ArrowSize, Height)).Round);
@@ -1735,15 +1768,18 @@ begin
   Canvas.DrawLine(PointF(R.Left + 10, R.Top + 1), PointF(R.Right - 10, R.Top + 1), 1);
 
   // Arrow
-  var Arrow: TPolygon;
-  SetLength(Arrow, 3);
-  Arrow[0] := PointF(Pos.X - ArrowSize, R.Bottom - 1);
-  Arrow[1] := PointF(Pos.X + ArrowSize, R.Bottom - 1);
-  Arrow[2] := PointF(Pos.X, R.Bottom + ArrowSize);
-  Canvas.Fill.Color := $EE2B2D30;
-  Canvas.FillPolygon(Arrow, 1);
-  Canvas.Stroke.Color := $30FFFFFF;
-  Canvas.DrawPolygon(Arrow, 1);
+  if Pos = OldPos then
+  begin
+    var Arrow: TPolygon;
+    SetLength(Arrow, 3);
+    Arrow[0] := PointF(Pos.X - ArrowSize, R.Bottom - 1);
+    Arrow[1] := PointF(Pos.X + ArrowSize, R.Bottom - 1);
+    Arrow[2] := PointF(Pos.X, R.Bottom + ArrowSize);
+    Canvas.Fill.Color := $EE2B2D30;
+    Canvas.FillPolygon(Arrow, 1);
+    Canvas.Stroke.Color := $30FFFFFF;
+    Canvas.DrawPolygon(Arrow, 1);
+  end;
 
   // Text
   Canvas.Fill.Color := $FFF2F2F2;
@@ -1759,8 +1795,7 @@ begin
       if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-        if FScreenRect.IntersectsWith(R) then
-          DrawNode(N, R);
+        DrawNode(N, R);
       end;
     end;
 
@@ -1769,8 +1804,7 @@ begin
       if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-        if FScreenRect.IntersectsWith(R) then
-          DrawNode(N, R);
+        DrawNode(N, R);
       end;
     end;
   end
@@ -1781,8 +1815,7 @@ begin
       if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-        if FScreenRect.IntersectsWith(R) then
-          DrawNode(N, R);
+        DrawNode(N, R);
       end;
     end;
 
@@ -1791,8 +1824,7 @@ begin
       if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
       begin
         var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-        if FScreenRect.IntersectsWith(R) then
-          DrawNode(N, R);
+        DrawNode(N, R);
       end;
     end;
   end;
@@ -1808,15 +1840,13 @@ begin
   Canvas.Fill.Color := $FF222222;
   Canvas.FillRect(LocalRect, 7, 7, AllCorners, 1);
   EnsureSortedNodes;
-  for var i := 0 to FGraph.Nodes.Count - 1 do
-    FGraph.Nodes[i].OnScreen := False;
   for var i := 0 to FGraph.Links.Count - 1 do
     FGraph.Links[i].OnScreen := False;
 end;
 
 procedure TNodeEditor.BringNodeToFront(ANode: TCustomNode);
 begin
-  FGraph.BringNodeToFront(ANode);
+  FController.BringNodeToFront(ANode);
 end;
 
 procedure TNodeEditor.EndPaint;
@@ -1828,14 +1858,13 @@ procedure TNodeEditor.DrawFrameTime;
 begin
   Canvas.Font.Size := 12;
   Canvas.Fill.Color := TAlphaColors.White;
-  var R := GetContentSize;
   Canvas.FillText(
     RectF(20, 20, 500, 500),
     FFrameTimeWatch.ElapsedMilliseconds.ToString + 'ms'#13#10 +
     'Canvas: ' + Canvas.ClassName + #13#10 +
     'Context: ' + TContextManager.DefaultContextClass.ClassName + #13#10 +
     Format('X: %f, Y: %f', [FOffsetX, FOffsetY]) + #13#10 +
-    Format('%f %f %f %f', [R.Left, R.Top, R.Right, R.Bottom])
+    Format('Paint nodes: %d', [FPaintNodesSorted.Count])
     ,
     False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 end;
@@ -2150,9 +2179,9 @@ begin
   // Draw nodes
   EnsureSortedNodes;
 
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
+  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
   begin
-    var N := FPaintNodesSorted[i];
+    var N := FPaintNodesSortedNav[i];
     if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
@@ -2164,9 +2193,9 @@ begin
     end;
   end;
 
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
+  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
   begin
-    var N := FPaintNodesSorted[i];
+    var N := FPaintNodesSortedNav[i];
     if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
@@ -2178,9 +2207,9 @@ begin
     end;
   end;
 
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
+  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
   begin
-    var N := FPaintNodesSorted[i];
+    var N := FPaintNodesSortedNav[i];
     if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
@@ -2192,9 +2221,9 @@ begin
     end;
   end;
 
-  for var i := 0 to FPaintNodesSorted.Count - 1 do
+  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
   begin
-    var N := FPaintNodesSorted[i];
+    var N := FPaintNodesSortedNav[i];
     if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
     begin
       var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
@@ -2245,7 +2274,7 @@ begin
       if Form.SelectedNodeType <> '' then
       begin
         var N := FGraph.Registry.CreateNode(Form.SelectedNodeType, SnapWorldPoint(WorldPosition));
-        AddNode(N);
+        FController.AddNode(N);
         SelectNodeInternal(N, False);
       end;
     end;
@@ -2320,7 +2349,7 @@ var
   P: TNodePin;
   L: TNodeLink;
 begin
-  Cursor := crDefault;
+  var CurUpdated := False;
 
   if FHoveredNode <> nil then
   begin
@@ -2346,7 +2375,7 @@ begin
     if TestPin <> nil then
     begin
       if TestPin <> P then
-        if ((TestPin.CanAcceptMoreConnections or FReconnectingLink) and P.CanAcceptMoreConnections) and FGraph.CanConnect(TestPin, P) then
+        if ((TestPin.CanAcceptMoreConnections or FReconnectingLink) and P.CanAcceptMoreConnections) and FController.CanConnect(TestPin, P) then
           N.HoveredPinCompatible := TPinCompatible.True
         else
           N.HoveredPinCompatible := TPinCompatible.False;
@@ -2371,10 +2400,14 @@ begin
         Cursor := crSizeNWSE
       else
         Cursor := crDefault;
+      CurUpdated := True;
     end
     else if HitLinks and GetLinkUnderMouse(SX, SY, L) then
       FHoveredLink := L;
   end;
+
+  if not CurUpdated then
+    Cursor := crDefault;
 end;
 
 procedure TNodeEditor.FitSelection;
@@ -2452,6 +2485,7 @@ begin
   end;
 
   Result := RectF(MinX * FZoom, MinY * FZoom, MaxX * FZoom, MaxY * FZoom);
+  Result.Inflate(100 * Zoom, 100 * Zoom);
 end;
 
 procedure TNodeEditor.Fit;
@@ -2569,7 +2603,10 @@ begin
         InternalBoxSelectingBegin(X, Y, Shift);
     end
     else if Button = TMouseButton.mbMiddle then
+    begin
+      //InternalAutoScrollBegin(X, Y);
       InternalPanningBegin(X, Y);
+    end;
   finally
     Repaint;
   end;
@@ -2600,11 +2637,8 @@ begin
     // Shift + box: only nodes
     FController.Selection.BeginUpdate;
     FController.Selection.ClearPins;
-    for var i := 0 to FGraph.Nodes.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FGraph.Nodes[i];
-      if not N.OnScreen then
-        Continue;
       if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
         FController.Selection.SelectNode(N, True);
     end;
@@ -2629,11 +2663,8 @@ begin
   begin
     FController.Selection.BeginUpdate;
     FController.Selection.ClearPins;
-    for var i := 0 to FGraph.Nodes.Count - 1 do
+    for var N in FPaintNodesSorted do
     begin
-      var N := FGraph.Nodes[i];
-      if not N.OnScreen then
-        Continue;
       if R.IntersectsWith(RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height)) then
         FController.Selection.SelectNode(N, True);
     end;
@@ -2649,6 +2680,75 @@ begin
     FController.Selection.EndUpdate;
   end;
   FBoxSelecting := False;
+end;
+
+procedure TNodeEditor.InternalAutoScrollBegin(X, Y: Single);
+begin
+  Cursor := crCross;
+  FAutoScroll := True;
+  FAutoScrollOrigin := PointF(X, Y);
+  FCurrentMousePos := FAutoScrollOrigin;
+  FScrollSpeedX := 0;
+  FScrollSpeedY := 0;
+
+  FAutoScrollTimer.Enabled := True;
+end;
+
+procedure TNodeEditor.AniChanged(Sender: TObject);
+begin
+  FOffsetX := -FAni.ViewportPositionF.X;
+  FOffsetY := -FAni.ViewportPositionF.Y;
+
+  InternalWorldChanged;
+end;
+
+procedure TNodeEditor.TimerAutoScrollProc(Sender: TObject);
+begin
+  if not FAutoScroll then
+    Exit;
+
+  FOffsetX := FOffsetX - FScrollSpeedX;
+  FOffsetY := FOffsetY - FScrollSpeedY;
+
+  InternalWorldChanged;
+end;
+
+procedure TNodeEditor.InternalAutoScroll(X, Y: Single);
+
+  function CalcSpeed(D: Single): Single;
+  begin
+    if Abs(D) < 10 then
+      Exit(0);
+
+    Result := Sign(D) * Sqr(Abs(D) / 20);
+  end;
+
+const
+  DeadZone = 10;
+  SpeedFactor = 0.15;
+begin
+  if not FAutoScroll then
+    Exit;
+  FCurrentMousePos := PointF(X, Y);
+
+  var DX := X - FAutoScrollOrigin.X;
+  var DY := Y - FAutoScrollOrigin.Y;
+
+  if Abs(DX) < DeadZone then
+    DX := 0;
+
+  if Abs(DY) < DeadZone then
+    DY := 0;
+
+  FScrollSpeedX := CalcSpeed(DX);
+  FScrollSpeedY := CalcSpeed(DY);
+end;
+
+procedure TNodeEditor.InternalAutoScrollEnd;
+begin
+  Cursor := crDefault;
+  FAutoScroll := False;
+  FAutoScrollTimer.Enabled := False;
 end;
 
 procedure TNodeEditor.InternalBoxSelecting(X, Y: Single);
@@ -2792,7 +2892,7 @@ begin
     begin
       if FReconnectMovingFromSide then
       begin
-        if TargetPin.CanAcceptMoreConnections and FGraph.CanConnect(TargetPin, FReconnectFixedPin) then
+        if TargetPin.CanAcceptMoreConnections and FController.CanConnect(TargetPin, FReconnectFixedPin) then
         begin
           var AllowConnect := True;
           if Assigned(FOnBeforeConnectPins) then
@@ -2800,7 +2900,7 @@ begin
 
           if AllowConnect then
           begin
-            FController.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, FReconnectLink, FReconnectLink.FromPin, TargetPin));
+            FController.ReconnectLink(FReconnectLink, FReconnectLink.FromPin, TargetPin);
             if Assigned(FOnAfterConnectPins) then
               FOnAfterConnectPins(Self, TargetPin, FReconnectFixedPin);
             Result := True;
@@ -2809,7 +2909,7 @@ begin
       end
       else
       begin
-        if TargetPin.CanAcceptMoreConnections and FGraph.CanConnect(FReconnectFixedPin, TargetPin) then
+        if TargetPin.CanAcceptMoreConnections and FController.CanConnect(FReconnectFixedPin, TargetPin) then
         begin
           var AllowConnect := True;
           if Assigned(FOnBeforeConnectPins) then
@@ -2817,7 +2917,7 @@ begin
 
           if AllowConnect then
           begin
-            FController.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, FReconnectLink, FReconnectLink.ToPin, TargetPin));
+            FController.ReconnectLink(FReconnectLink, FReconnectLink.ToPin, TargetPin);
             if Assigned(FOnAfterConnectPins) then
               FOnAfterConnectPins(Self, FReconnectFixedPin, TargetPin);
             Result := True;
@@ -2830,7 +2930,7 @@ begin
   begin
     if FTempFromPin.CanAcceptMoreConnections and
       TargetPin.CanAcceptMoreConnections and
-      FGraph.CanConnect(FTempFromPin, TargetPin)
+      FController.CanConnect(FTempFromPin, TargetPin)
       then
     begin
       if FTempFromPin.Direction = TPinDirection.Output then
@@ -2843,10 +2943,9 @@ begin
   else if FDraggingLink then
   begin
     TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin, SnapWorldPoint(ScreenToWorld(X, Y)));
-
     if TargetNode <> nil then
     begin
-      FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, TargetNode));
+      FController.AddNode(TargetNode);
 
       if FTempFromPin.Direction = TPinDirection.Output then
       begin
@@ -2855,7 +2954,7 @@ begin
           TargetPin := TargetNode.GetInput(i);
           if FTempFromPin.CanAcceptMoreConnections and
             TargetPin.CanAcceptMoreConnections and
-            FGraph.CanConnect(FTempFromPin, TargetPin)
+            FController.CanConnect(FTempFromPin, TargetPin)
             then
           begin
             var AllowConnect := True;
@@ -2863,7 +2962,7 @@ begin
               FOnBeforeConnectPins(Self, FTempFromPin, TargetPin, AllowConnect);
             if AllowConnect then
             begin
-              FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, FTempFromPin, TargetPin));
+              FController.AddLink(FTempFromPin, TargetPin);
               if Assigned(FOnAfterConnectPins) then
                 FOnAfterConnectPins(Self, FTempFromPin, TargetPin);
               Result := True;
@@ -2877,14 +2976,14 @@ begin
         for var i := 0 to TargetNode.OutputCount - 1 do
         begin
           TargetPin := TargetNode.GetOutput(i);
-          if FGraph.CanConnect(TargetPin, FTempFromPin) then
+          if FController.CanConnect(TargetPin, FTempFromPin) then
           begin
             var AllowConnect := True;
             if Assigned(FOnBeforeConnectPins) then
               FOnBeforeConnectPins(Self, TargetPin, FTempFromPin, AllowConnect);
             if AllowConnect then
             begin
-              FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, TargetPin, FTempFromPin));
+              FController.AddLink(TargetPin, FTempFromPin);
               if Assigned(FOnAfterConnectPins) then
                 FOnAfterConnectPins(Self, TargetPin, FTempFromPin);
               Result := True;
@@ -2910,15 +3009,22 @@ begin
   FPanning := True;
   FPanStartX := X;
   FPanStartY := Y;
+  //
+  FAni.MouseDown(X, Y);
 end;
 
-procedure TNodeEditor.InternalPanningEnd;
+procedure TNodeEditor.InternalPanningEnd(X, Y: Single);
 begin
   FPanning := False;
+  //
+  FAni.MouseUp(X, Y);
 end;
 
 procedure TNodeEditor.InternalPanning(X, Y: Single);
 begin
+  FAni.MouseMove(X, Y);
+  Exit;
+  //
   FOffsetX := FOffsetX + (X - FPanStartX);
   FOffsetY := FOffsetY + (Y - FPanStartY);
   FPanStartX := X;
@@ -2966,7 +3072,7 @@ begin
     FResizeNode.Width := FResizeOldWidth;
     FResizeNode.Height := FResizeOldHeight;
 
-    FGraph.ExecuteCommand(TResizeNodeCommand.Create(FGraph, FResizeNode, FResizeOldWidth, FResizeOldHeight, SaveWidth, SaveHeight));
+    FController.ResizeNode(FResizeNode, FResizeOldWidth, FResizeOldHeight, SaveWidth, SaveHeight);
 
     if Assigned(FOnNodeChanged) then
       FOnNodeChanged(Self, FResizeNode);
@@ -3055,7 +3161,7 @@ begin
       DN.Y := FDragOldPositions[i].Y;
     end;
 
-    FGraph.ExecuteCommand(TMoveNodesCommand.Create(FGraph, FDragCommandNodes, FDragOldPositions, NewPositions));
+    FController.MoveNodes(FDragCommandNodes, FDragOldPositions, NewPositions);
 
     for var i := 0 to FDragCommandNodes.Count - 1 do
     begin
@@ -3073,7 +3179,12 @@ begin
   FLastMousePos := PointF(X, Y);
   FLastWorldMousePos := ScreenToWorld(FLastMousePos);
 
-  if FPanning then
+  if FAutoScroll then
+  begin
+    InternalAutoScroll(X, Y);
+    Exit;
+  end
+  else if FPanning then
   begin
     InternalPanning(X, Y);
   end
@@ -3129,28 +3240,30 @@ begin
   end
   else if Button = TMouseButton.mbMiddle then
   begin
-    InternalPanningEnd;
+    //InternalAutoScrollEnd;
+    InternalPanningEnd(X, Y);
   end
   else if Button = TMouseButton.mbRight then
   begin
-    // Cancel mouse
-    CancelMouseOperations(True);
     // If link dragging - exit to cancel link drugging
     if (FTempFromPin <> nil) or FReconnectingLink then
+    begin
+      CancelMouseOperations(True);
       Exit;
+    end;
 
     var MPos := Screen.MousePos.Round;
     FPopupMenu.PopupComponent := Self;
     FPopupMenu.Popup(MPos.X, MPos.Y);
-    Exit;
   end;
   CancelMouseOperations(False);
 end;
 
 procedure TNodeEditor.CancelMouseOperations(const KeepSelectionRect: boolean);
 begin
-  InternalPanningEnd;
+  InternalPanningEnd(FLastMousePos.X, FLastMousePos.Y);
   FRightButtonDown := False;
+  ReleaseCapture;
 
   DraggingNode := False;
   FDragCommandNodes.Clear;
@@ -3165,6 +3278,8 @@ begin
 
   ResizingNode := False;
   FResizeNode := nil;
+
+  InternalAutoScrollEnd;
 
   if not KeepSelectionRect then
     FBoxSelecting := False;
@@ -3183,12 +3298,6 @@ begin
     Exit;
 
   CancelMouseOperations(False);
-
-  if not (DraggingNode or FBoxSelecting or ResizingNode or FPanning or (FTempFromPin <> nil) or FReconnectingLink) then
-  begin
-    ClearHoverStates;
-    Repaint;
-  end;
 end;
 
 procedure TNodeEditor.UpdatedStatus;
@@ -3331,18 +3440,29 @@ procedure TNodeEditor.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Ha
 begin
   inherited;
   Handled := True;
-  var NewZoom: Double;
-  var OldZoom := FZoom;
+  if Shift = [ssCtrl] then
+  begin
+    FAni.MouseWheel(-WheelDelta, 0);
+  end
+  else if Shift = [ssShift] then
+  begin
+    FAni.MouseWheel(0, -WheelDelta);
+  end
+  else if Shift = [] then
+  begin
+    var NewZoom: Double;
+    var OldZoom := FZoom;
 
-  var Factor := Power(FZoomStep, WheelDelta / 120.0);
+    var Factor := Power(FZoomStep, WheelDelta / 120.0);
 
-  if ssCtrl in Shift then
-    Factor := Power(Factor, 1.7)
-  else if ssShift in Shift then
-    Factor := Power(Factor, 0.4);
+    if ssCtrl in Shift then
+      Factor := Power(Factor, 1.7)
+    else if ssShift in Shift then
+      Factor := Power(Factor, 0.4);
 
-  NewZoom := OldZoom * Factor;
-  SetZoom(NewZoom, FLastMousePos);
+    NewZoom := OldZoom * Factor;
+    SetZoom(NewZoom, FLastMousePos);
+  end;
 end;
 
 procedure TNodeEditor.SelectAll;
@@ -3381,94 +3501,79 @@ end;
 procedure TNodeEditor.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
   inherited;
-  case Key of
-    vkDelete:
-      begin
-        DeleteSelection;
-      end;
-    vkZ:
-      if Shift = [ssCtrl] then
-      begin
-        Undo;
-      end
-      else if Shift = [ssCtrl] then
-      begin
-        Undo;
-      end
-      else if Shift = [ssCtrl, ssShift] then
-      begin
-        Redo;
-      end;
-    vkY:
-      if Shift = [ssCtrl] then
-      begin
-        Redo;
-      end;
-    vkC:
-      if Shift = [ssCtrl] then
-      begin
-        CopySelectionToClipboard;
-      end;
-    vkX:
-      if Shift = [ssCtrl] then
-      begin
-        CutSelectionToClipboard;
-      end;
-    vkV:
-      if Shift = [ssCtrl] then
-      begin
-        PasteFromClipboard;
-      end;
-    vkD:
-      if Shift = [ssCtrl] then
-      begin
-        DuplicateSelection;
-      end;
-    vkF:
-      begin
-        if FController.Selection.NodeCount > 0 then
-          FitSelection
-        else
-          Fit;
-      end;
-    vkL:
-      if Shift = [ssCtrl] then
-      begin
-        FController.ConnectSelectedPins;
-      end;
-    vkA:
-      if Shift = [ssCtrl] then
-      begin
-        // Ctrl + A -> nodes + links
-        SelectAll;
-      end
-      else if Shift = [ssCtrl, ssShift] then
-      begin
-        // Ctrl + Shift + A -> only nodes
-        SelectAllNodes;
-      end
-      else if Shift = [ssShift] then
-      begin
-        // Shift + A -> only links
-        SelectAllLinks;
-      end;
-    vkEscape:
-      begin
-        if FTempFromPin <> nil then
-        begin
-          CancelMouseOperations(False);
-        end
-        else if DraggingNode or FBoxSelecting or ResizingNode or FPanning or FReconnectingLink then
-        begin
-          CancelMouseOperations(False);
-        end
-        else
-        begin
-          ClearSelection;
-        end;
-      end;
+  if (Key = vkA) and (Shift = [ssCtrl]) then
+    SelectAll;
+  if (Key = vkA) and (Shift = [ssCtrl, ssShift]) then
+    SelectAllNodes;
+  if (Key = vkA) and (Shift = [ssShift]) then
+    SelectAllLinks;
+  if (Key = vkC) and (Shift = [ssCtrl]) then
+    CopySelectionToClipboard;
+  if (Key = vkD) and (Shift = [ssCtrl]) then
+    DuplicateSelection;
+  if (Key = vkF) and (Shift = []) then
+  begin
+    if FController.Selection.NodeCount > 0 then
+      FitSelection
+    else
+      Fit;
   end;
-  Repaint;
+  if (Key = vkL) and (Shift = [ssCtrl]) then
+    FController.ConnectSelectedPins;
+  if (Key = vkV) and (Shift = [ssCtrl]) then
+    PasteFromClipboard;
+  if (Key = vkX) and (Shift = [ssCtrl]) then
+    CutSelectionToClipboard;
+  if (Key = vkY) and (Shift = [ssCtrl]) then
+    Redo;
+  if (Key = vkZ) and (Shift = [ssCtrl]) then
+    Undo;
+  if (Key = vkZ) and (Shift = [ssCtrl, ssShift]) then
+    Redo;
+  if (Key = vkDelete) and (Shift = []) then
+    DeleteSelection;
+  if (Key = vkEscape) and (Shift = []) then
+  begin
+    if FController.Selection.SelectedCount > 0 then
+    begin
+      ClearSelection;
+    end
+    else
+    begin
+      CancelMouseOperations(False);
+    end;
+  end;
+
+  if (Key = vkL) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Left);
+  if (Key = vkR) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Right);
+  if (Key = vkT) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Top);
+  if (Key = vkB) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Bottom);
+  if (Key = vkH) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.CenterHorizontal);
+  if (Key = vkV) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.CenterVertical);
+
+  if (Key = vkH) and (Shift = [ssCtrl, ssAlt]) then
+    Controller.DistributeSelectedNodes(TDistributeMode.Horizontal);
+  if (Key = vkV) and (Shift = [ssCtrl, ssAlt]) then
+    Controller.DistributeSelectedNodes(TDistributeMode.Vertical);
+
+  if (Key = vkW) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Width);
+  if (Key = vkH) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Height);
+  if (Key = vkS) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Both);
+
+  if (Key = vkF) and (Shift = [ssCtrl, ssShift]) then
+    FController.FrameSelected;
+  if (Key = vkA) and (Shift = [ssCtrl, ssShift]) then
+    FController.AutoLayoutSelected;
+
   Key := 0;
 end;
 

@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Node;
+﻿unit FMX.NodeEditor.Node;
 
 interface
 
@@ -79,7 +79,7 @@ type
     function EffectiveDisplayName: string; inline;
     function GetPinWorldPosition: TPointF; inline;
     procedure SetTypeId(const ATypeId: string); inline;
-    procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Integer); virtual;
+    procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single); virtual;
   end;
 
   TNodeLink = class
@@ -109,8 +109,9 @@ type
       HeaderHeight = 28;
       BottomPad = 10;
       PinRadius = 8;
-      ResizeEdgeSize = 6;
-      RectCornerRadius = 10;
+      ResizeEdgeSize = 16;
+      RectCornerRadius = 10; //10
+      ZoomDetailLimit = 0.5;
       DrawShadow = True;
   private
     FInputs: TObjectList<TNodePin>;
@@ -192,6 +193,7 @@ type
 
     procedure SaveToJSON(AObj: TJSONObject); virtual;
     procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean); virtual;
+    procedure LoadFromJSONText(const JSON: string; UseAlphaColor: Boolean); virtual;
   protected
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
     function TextHeight(Canvas: TCanvas; const AText: string): Single;
@@ -201,7 +203,7 @@ type
     procedure SetIconPath(const Value: string);
     procedure UpdateIconPath;
     procedure CreateTextLayout(Canvas: TCanvas);
-    procedure FillText(Canvas: TCanvas; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign: TTextAlign; const AVTextAlign: TTextAlign = TTextAlign.Center);
+    procedure FillText(Canvas: TCanvas; AZoom: Double; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign: TTextAlign; const AVTextAlign: TTextAlign = TTextAlign.Center);
     procedure DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
     procedure MeasureText(Canvas: TCanvas; var ARect: TRectF; const AText: string; const WordWrap: Boolean; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
   public
@@ -267,7 +269,7 @@ end;
 
 constructor TCustomNode.Create(const ATitle: string; AX, AY: single; AWidth: integer; AHeight: integer);
 begin
-  inherited Create;
+  Create;
   Title := ATitle;
 
   X := AX;
@@ -412,7 +414,7 @@ end;
 
 function TCustomNode.ResizeHandleHitTest(WX, WY: Single; Zoom: Double; OffsetX, OffsetY: Double): Boolean;
 begin
-  Result := GetResizeHandleRect(Zoom, OffsetX, OffsetY).Contains(TPointF.Create(WX, WY));
+  Result := GetResizeHandleRect(Zoom, OffsetX, OffsetY).Contains(PointF(WX, WY));
 end;
 
 procedure TCustomNode.ReindexPins;
@@ -519,23 +521,23 @@ begin
   if APin.Direction = TPinDirection.Input then
   begin
     if Collapsed then
-      Result := TPoint.Create(0, HeaderHeight div 2)
+      Result := Point(0, HeaderHeight div 2)
     else
-      Result := TPoint.Create(0, APin.LocalY);
+      Result := Point(0, APin.LocalY);
   end
   else
   begin
     if Collapsed then
-      Result := TPoint.Create(Width, HeaderHeight div 2)
+      Result := Point(Width, HeaderHeight div 2)
     else
-      Result := TPoint.Create(Width, APin.LocalY);
+      Result := Point(Width, APin.LocalY);
   end;
 end;
 
 function TCustomNode.GetPinScreenPosition(APin: TNodePin; Zoom: Double; OffsetX, OffsetY: Double): TPoint;
 begin
   if (APin = nil) or (APin.OwnerNode <> Self) then
-    Exit(TPoint.Create(0, 0));
+    Exit(Point(0, 0));
 
   var P := GetPinLocalPosition(APin);
   Result.X := Round((X + P.X) * Zoom + OffsetX);
@@ -545,10 +547,10 @@ end;
 function TCustomNode.GetPinWorldPosition(APin: TNodePin): TPointF;
 begin
   if (APin = nil) or (APin.OwnerNode <> Self) then
-    Exit(TPointF.Create(0, 0));
+    Exit(PointF(0, 0));
 
   var LocalPos := GetPinLocalPosition(APin);
-  Result := TPointF.Create(X + LocalPos.X, Y + LocalPos.Y);
+  Result := PointF(X + LocalPos.X, Y + LocalPos.Y);
 end;
 
 function TCustomNode.HitTest(WX, WY: Single): boolean;
@@ -639,7 +641,7 @@ begin
     Result := nil;
 end;
 
-procedure TCustomNode.FillText(Canvas: TCanvas; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
+procedure TCustomNode.FillText(Canvas: TCanvas; AZoom: Double; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
 begin        //Exit;
   FTextLayout.BeginUpdate;
   FTextLayout.TopLeft := ARect.TopLeft;
@@ -653,23 +655,27 @@ begin        //Exit;
   FTextLayout.Color := Canvas.Fill.Color;
   FTextLayout.RightToLeft := TFillTextFlag.RightToLeft in Flags;
   FTextLayout.EndUpdate;
-  FTextLayout.RenderLayout(Canvas);
+
+  if AZoom < ZoomDetailLimit then
+  begin
+    var R := FTextLayout.TextRect;
+    R.Inflate(0, -3 * AZoom);
+    Canvas.FillRect(R, AOpacity * 0.5);
+  end
+  else
+    FTextLayout.RenderLayout(Canvas);
 end;
 
 function TCustomNode.TextWidth(Canvas: TCanvas; const AText: string): Single;
-var
-  R: TRectF;
 begin
-  R := RectF(0, 0, 10000, 20);
+  var R := RectF(0, 0, 10000, 20);
   MeasureText(Canvas, R, AText, False, [], TTextAlign.Leading, TTextAlign.Center);
   Result := R.Right;
 end;
 
 function TCustomNode.TextHeight(Canvas: TCanvas; const AText: string): Single;
-var
-  R: TRectF;
 begin
-  R := RectF(0, 0, 10000, 10000);
+  var R := RectF(0, 0, 10000, 10000);
   MeasureText(Canvas, R, AText, False, [], TTextAlign.Leading, TTextAlign.Leading);
   Result := R.Bottom;
 end;
@@ -712,18 +718,20 @@ begin
 
   var ScaledHeaderHeight := HeaderHeight * Zoom;
 
-  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeHead := RectF(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
   var NodeHeadText := NodeHead;
   NodeHeadText.Inflate(-10 * Zoom, 0);
 
-  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+  var NodeBody := RectF(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
   var NodeBodyText := NodeBody;
   NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
 
   var CornerRadius := RectCornerRadius * Zoom;
+  if Zoom < ZoomDetailLimit then
+    CornerRadius := 0;
 
   // Shadow
-  if DrawShadow then
+  if DrawShadow and (Zoom > ZoomDetailLimit) then
     DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
 
   // Fill Body
@@ -797,13 +805,13 @@ begin
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Font.Size := 10 * Zoom;
-  FillText(Canvas, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, Zoom, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
 
   if (not Collapsed) and (VisualKind = TNodeVisualKind.Normal) then
     DrawNodePins(Canvas, Zoom, OffsetX, OffsetY, 1);
 
   // Size grip
-  if Selected and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
+  if (Selected or Hovered) and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
     DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
 end;
 
@@ -816,13 +824,15 @@ begin
     Exit;
 
   var R := GetScreenBounds(Zoom, OffsetX, OffsetY);
-  var S := Round(ResizeEdgeSize * Zoom);
-  Result := TRectF.Create(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
+  var S := ResizeEdgeSize * Zoom;
+  Result := RectF(R.Right - S, R.Bottom - S, R.Right + 1, R.Bottom + 1);
 end;
 
 procedure TCustomNode.DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
 begin
   var R := GetResizeHandleRect(Zoom, OffsetX, OffsetY);
+  R.Left := R.Left + R.Width / 2;
+  R.Top := R.Top + R.Height / 2;
   var GripSize := Min(R.Width, R.Height);
   R.Offset(-GripSize, -GripSize);
 
@@ -832,7 +842,7 @@ begin
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Cap := TStrokeCap.Round;
   Canvas.Stroke.Thickness := Max(1.5, GripSize * 0.08);
-  Canvas.Stroke.Color := TAlphaColorF.Create(1, 1, 1, 0.85 * AOpacity).ToAlphaColor;
+  Canvas.Stroke.Color := TAlphaColors.White;
 
   for var i := 0 to 2 do
   begin
@@ -843,13 +853,13 @@ begin
     var Y2 := R.Top + Margin + i * Step;
 
     // Bright line
-    Canvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), 1);
+    Canvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), 0.85 * AOpacity);
   end;
 end;
 
 procedure TCustomNode.DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
 begin
-  var PinRadiusScaled := Round(PinRadius * Zoom);
+  var PinRadiusScaled := PinRadius * Zoom;
   Canvas.Font.Size := 10 * Zoom;
 
   for var P in FInputs do
@@ -857,9 +867,9 @@ begin
     if (P = nil) or P.Hidden then
       Continue;
 
-    var PX := Round(X * Zoom + OffsetX);
-    var PY := Round((Y + P.LocalY) * Zoom + OffsetY);
-    var Center := Point(PX, PY);
+    var PX := X * Zoom + OffsetX;
+    var PY := (Y + P.LocalY) * Zoom + OffsetY;
+    var Center := PointF(PX, PY);
 
     P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
 
@@ -867,14 +877,14 @@ begin
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := TAlphaColors.White;
 
-    var TextSize := TSize.Create(Round((Width / 2 - 5) * Zoom), Round(20 * Zoom));
-    FillText(Canvas,
-      TRectF.Create(
+    var TextSize := PointF((Width / 2 - 5) * Zoom, 20 * Zoom);
+    FillText(Canvas, Zoom,
+      RectF(
         Center.X + (PinRadius + 6) * Zoom,
-        Center.Y - TextSize.Height div 2,
+        Center.Y - TextSize.Y / 2,
         Center.X + Width * Zoom / 2,
-        Center.Y + TextSize.Height div 2),
-      P.Name, False, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+        Center.Y + TextSize.Y / 2),
+      P.Name, False, AOpacity, [], TTextAlign.Leading, TTextAlign.Center);
   end;
 
   for var P in FOutputs do
@@ -882,22 +892,20 @@ begin
     if (P = nil) or P.Hidden then
       Continue;
 
-    var PX := Round((X + Width) * Zoom + OffsetX);
-    var PY := Round((Y + P.LocalY) * Zoom + OffsetY);
-    var Center := Point(PX, PY);
+    var Center := PointF((X + Width) * Zoom + OffsetX, (Y + P.LocalY) * Zoom + OffsetY);
 
     P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
 
     // Text
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := TAlphaColors.White;
-    var TextSize := TSize.Create(Round((Width / 2 - 5) * Zoom), Round(20 * Zoom));
-    FillText(Canvas, TRectF.Create(
-        Center.X - TextSize.Width - (PinRadius + 6) * Zoom,
-        Center.Y - TextSize.Height div 2,
+    var TextSize := PointF((Width / 2 - 5) * Zoom, 20 * Zoom);
+    FillText(Canvas, Zoom, RectF(
+        Center.X - TextSize.X - (PinRadius + 6) * Zoom,
+        Center.Y - TextSize.Y / 2,
         Center.X - (PinRadius + 6) * Zoom,
-        Center.Y + TextSize.Height div 2),
-      P.Name, False, 1, [], TTextAlign.Trailing, TTextAlign.Leading);
+        Center.Y + TextSize.Y / 2),
+      P.Name, False, AOpacity, [], TTextAlign.Trailing, TTextAlign.Center);
   end;
 end;
 
@@ -1090,6 +1098,17 @@ begin
       V.LoadFromJSON(TJSONObject(ValueObj));
       FValues.Add(V);
     end;
+end;
+
+procedure TCustomNode.LoadFromJSONText(const JSON: string; UseAlphaColor: Boolean);
+begin
+  var JObj := TJSONObject.ParseJSONValue(JSON);
+  try
+    if JObj is TJSONObject then
+      LoadFromJSON(TJSONObject(JObj), UseAlphaColor);
+  finally
+    JObj.Free;
+  end;
 end;
 
 procedure TCustomNode.ApplyPropertiesFromJSON(AObj: TJSONObject);
@@ -1329,7 +1348,7 @@ begin
     Result := Name;
 end;
 
-procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Integer);
+procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single);
 begin
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Color := TAlphaColors.Black;
@@ -1388,7 +1407,7 @@ begin
 
   // Highlight frame
   Canvas.Fill.Kind := TBrushKind.Solid;
-  var RE := TRectF.Create(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
+  var RE := RectF(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
   Canvas.DrawEllipse(RE, 1);
 
   // Body
@@ -1501,10 +1520,10 @@ begin
   P2.X := P2.X - D;
 end;
 
-function WorldToScreen(X, Y: Single; Zoom, OffsetX, OffsetY: Double): TPoint;
+function WorldToScreen(X, Y: Single; Zoom, OffsetX, OffsetY: Double): TPointF;
 begin
-  Result.X := Round(X * Zoom + OffsetX);
-  Result.Y := Round(Y * Zoom + OffsetY);
+  Result.X := X * Zoom + OffsetX;
+  Result.Y := Y * Zoom + OffsetY;
 end;
 
 function ScreenToWorld(X, Y: Double; Zoom, OffsetX, OffsetY: Double): TPointF;
@@ -1524,7 +1543,7 @@ begin
     TLinkVisualType.Direct:
       GetDirectWorldPoints(1, P0, P1, P2, P3);
   end;
-  Result := TRectF.Create(
+  Result := RectF(
     Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
     Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
     Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
@@ -1547,7 +1566,7 @@ begin
   var P1 := WorldToScreen(W1.X, W1.Y, Zoom, OffsetX, OffsetY);
   var P2 := WorldToScreen(W2.X, W2.Y, Zoom, OffsetX, OffsetY);
   var P3 := WorldToScreen(W3.X, W3.Y, Zoom, OffsetX, OffsetY);
-  Result := TRectF.Create(
+  Result := RectF(
     Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
     Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
     Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
@@ -1591,7 +1610,7 @@ begin
       begin
         GetBezierWorldPoints(1, P0, P1, P2, P3);
 
-        BR := TRectF.Create(
+        BR := RectF(
           Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
           Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
           Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
@@ -1621,7 +1640,7 @@ begin
       begin
         GetRectWorldPoints(1, P0, P1, P2, P3);
 
-        BR := TRectF.Create(
+        BR := RectF(
           Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
           Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
           Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
@@ -1645,7 +1664,7 @@ begin
       begin
         GetDirectWorldPoints(1, P0, P1, P2, P3);
 
-        BR := TRectF.Create(
+        BR := RectF(
           Min(Min(P0.X, P1.X), Min(P2.X, P3.X)),
           Min(Min(P0.Y, P1.Y), Min(P2.Y, P3.Y)),
           Max(Max(P0.X, P1.X), Max(P2.X, P3.X)),
@@ -1825,7 +1844,7 @@ begin
   if APin = nil then
     Exit(Point(0, 0));
 
-  Result := TRect.Create(0, 0, Width, Height).CenterPoint;
+  Result := Rect(0, 0, Width, Height).CenterPoint;
 end;
 
 procedure TRerouteNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
@@ -1869,7 +1888,7 @@ begin
     Radius := Radius * 0.8;
   end;
 
-  var BodyRect := TRectF.Create(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
+  var BodyRect := RectF(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
 
   // Highlight frame
   Canvas.DrawEllipse(BodyRect, 1);
@@ -1929,11 +1948,11 @@ begin
 
   var ScaledHeaderHeight := HeaderHeight * Zoom;
 
-  var NodeHead := TRectF.Create(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeHead := RectF(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
   var NodeHeadText := NodeHead;
   NodeHeadText.Inflate(-10 * Zoom, 0);
 
-  var NodeBody := TRectF.Create(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+  var NodeBody := RectF(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
   var NodeBodyText := NodeBody;
   NodeBodyText.Inflate(-10 * Zoom, -10 * Zoom);
 
@@ -2005,14 +2024,14 @@ begin
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Font.Size := 10 * Zoom;
   Canvas.Fill.Kind := TBrushKind.Solid;
-  FillText(Canvas, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, Zoom, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
 
   // Text Body
   if (CommentText <> '') and (not Collapsed) then
-    FillText(Canvas, NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+    FillText(Canvas, Zoom, NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
 
   // Size grip
-  if Selected and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
+  if (Selected or Hovered) and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
     DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
 end;
 

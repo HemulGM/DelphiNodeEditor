@@ -129,8 +129,8 @@ type
     function FindNodeById(const AId: string): TCustomNode;
     function FindPinById(const AId: string): TNodePin;
     function FindLinkById(const AId: string): TNodeLink;
-    function CanConnect(P1, P2: TNodePin): boolean;
-    function LinkExists(FromPin, ToPin: TNodePin): boolean;
+    function CanConnect(P1, P2: TNodePin): Boolean;
+    function LinkExists(FromPin, ToPin: TNodePin): Boolean;
 
     procedure Clear;
     procedure Undo;
@@ -704,7 +704,7 @@ begin
   end;
 end;
 
-function TNodeGraph.CanConnect(P1, P2: TNodePin): boolean;
+function TNodeGraph.CanConnect(P1, P2: TNodePin): Boolean;
 var
   OutPin, InPin: TNodePin;
 begin
@@ -766,7 +766,7 @@ begin
     (InPin.DataType = '');
 end;
 
-function TNodeGraph.LinkExists(FromPin, ToPin: TNodePin): boolean;
+function TNodeGraph.LinkExists(FromPin, ToPin: TNodePin): Boolean;
 var
   L: TNodeLink;
   AFrom, ATo: TNodePin;

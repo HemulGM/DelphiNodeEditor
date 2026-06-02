@@ -5,7 +5,7 @@ uses
   FMX.Forms,
   {$IF DEFINED(ANDROID) or DEFINED(IOS)}
   FMX.Skia,
-  {$ENDIF}
+  {$ENDIF }
   FMX.Skia,
   FMX.Types,
   NodeEditor.Main in 'NodeEditor.Main.pas' {FormMain},
@@ -43,7 +43,9 @@ uses
   {$ENDIF }
   DelphiWindowStyle.FMX in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.FMX.pas',
   DelphiWindowStyle.Types in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.Types.pas',
-  FMX.Windows.Hints in '..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas';
+  FMX.Windows.Hints in '..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas',
+  FMX.NodeEditor.Parser.ComfyUI in '..\src\FMX.NodeEditor.Parser.ComfyUI.pas',
+  FMX.NodeEditor.Parser in '..\src\FMX.NodeEditor.Parser.pas';
 
 {$R *.res}
 
@@ -95,7 +97,7 @@ begin
       begin
         GlobalUseSkia := True;
         GlobalUseVulkan := True;
-        GlobalUseSkiaRasterWhenAvailable := False;
+        GlobalUseSkiaRasterWhenAvailable := True;
       end;
   end;
   Application.Initialize;

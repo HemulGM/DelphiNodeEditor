@@ -10,9 +10,8 @@ type
   TNodeSelectionModel = class
   private
     FSelectedPins: TList<TNodePin>;
-    FSelectedPin: TNodePin;
-    FNodes: TObjectList<TCustomNode>;
-    FSelectedLinks: TObjectList<TNodeLink>;
+    FSelectedNodes: TList<TCustomNode>;
+    FSelectedLinks: TList<TNodeLink>;
     FOnChanged: TNotifyEvent;
     FUpdateCount: Integer;
     procedure NotifyChanged; inline;
@@ -46,13 +45,15 @@ type
     function PinCount: integer;
     function GetPin(Index: integer): TNodePin;
     function Contains(APin: TNodePin): boolean; overload;
+    function SelectedCount: Integer;
 
     function SelectedLink: TNodeLink; // returns first selected link
-    property SelectedPin: TNodePin read FSelectedPin;
+    function SelectedPin: TNodePin; // returns first selected pin
 
     property OnChanged: TNotifyEvent read FOnChanged write FOnChanged;
-    property Nodes: TObjectList<TCustomNode> read FNodes;
-    property Links: TObjectList<TNodeLink> read FSelectedLinks;
+    property Nodes: TList<TCustomNode> read FSelectedNodes;
+    property Links: TList<TNodeLink> read FSelectedLinks;
+    property Pins: TList<TNodePin> read FSelectedPins;
   end;
 
 implementation
@@ -62,18 +63,16 @@ implementation
 constructor TNodeSelectionModel.Create;
 begin
   inherited Create;
-  FNodes := TObjectList<TCustomNode>.Create(False);
-  FSelectedLinks := TObjectList<TNodeLink>.Create(False);
+  FSelectedNodes := TList<TCustomNode>.Create;
+  FSelectedLinks := TList<TNodeLink>.Create;
   FSelectedPins := TList<TNodePin>.Create;
-  FSelectedPin := nil;
 end;
 
 destructor TNodeSelectionModel.Destroy;
 begin
   FSelectedLinks.Free;
-  FNodes.Free;
+  FSelectedNodes.Free;
   FSelectedPins.Free;
-  FSelectedPin := nil;
   inherited Destroy;
 end;
 
@@ -99,11 +98,16 @@ end;
 
 procedure TNodeSelectionModel.Clear;
 begin
-  FNodes.Clear;
+  FSelectedNodes.Clear;
   FSelectedLinks.Clear;
   ClearPins(False);
 
   NotifyChanged;
+end;
+
+function TNodeSelectionModel.SelectedCount: Integer;
+begin
+  Result := FSelectedNodes.Count + FSelectedLinks.Count + FSelectedPins.Count;
 end;
 
 procedure TNodeSelectionModel.ClearPins(Notify: Boolean);
@@ -113,7 +117,6 @@ begin
     for var Pin in FSelectedPins do
       Pin.Selected := False;
     FSelectedPins.Clear;
-    FSelectedPin := nil;
     if Notify then
       NotifyChanged;
   end;
@@ -126,13 +129,13 @@ begin
 
   if not AAppend then
   begin
-    FNodes.Clear;
+    FSelectedNodes.Clear;
     FSelectedLinks.Clear;
   end;
 
-  if FNodes.IndexOf(ANode) < 0 then
+  if FSelectedNodes.IndexOf(ANode) < 0 then
   begin
-    FNodes.Add(ANode);
+    FSelectedNodes.Add(ANode);
     NotifyChanged;
   end
   else if not AAppend then
@@ -157,7 +160,6 @@ begin
     APin.Selected := True;
   end;
 
-  FSelectedPin := APin;
   NotifyChanged;
 end;
 
@@ -173,7 +175,7 @@ begin
 
   if not AAppend then
   begin
-    FNodes.Clear;
+    FSelectedNodes.Clear;
     FSelectedLinks.Clear;
   end;
 
@@ -204,19 +206,11 @@ begin
   begin
     FSelectedPins.Delete(Idx);
     APin.Selected := False;
-    if FSelectedPin = APin then
-    begin
-      if FSelectedPins.Count > 0 then
-        FSelectedPin := FSelectedPins[FSelectedPins.Count - 1]
-      else
-        FSelectedPin := nil;
-    end;
   end
   else
   begin
     FSelectedPins.Add(APin);
     APin.Selected := True;
-    FSelectedPin := APin;
   end;
 
   NotifyChanged;
@@ -232,7 +226,7 @@ end;
 
 function TNodeSelectionModel.ContainsNode(ANode: TCustomNode): boolean;
 begin
-  Result := FNodes.IndexOf(ANode) >= 0;
+  Result := FSelectedNodes.IndexOf(ANode) >= 0;
 end;
 
 function TNodeSelectionModel.Contains(APin: TNodePin): boolean;
@@ -257,7 +251,7 @@ procedure TNodeSelectionModel.RemoveNode(ANode: TCustomNode);
 begin
   if ANode = nil then
     Exit;
-  FNodes.Remove(ANode);
+  FSelectedNodes.Remove(ANode);
 
   for var i := FSelectedLinks.Count - 1 downto 0 do
   begin
@@ -274,13 +268,13 @@ end;
 
 function TNodeSelectionModel.NodeCount: integer;
 begin
-  Result := FNodes.Count;
+  Result := FSelectedNodes.Count;
 end;
 
 function TNodeSelectionModel.GetNode(Index: integer): TCustomNode;
 begin
-  if (Index >= 0) and (Index < FNodes.Count) then
-    Result := FNodes[Index]
+  if (Index >= 0) and (Index < FSelectedNodes.Count) then
+    Result := FSelectedNodes[Index]
   else
     Result := nil;
 end;
@@ -315,6 +309,14 @@ function TNodeSelectionModel.SelectedLink: TNodeLink;
 begin
   if FSelectedLinks.Count > 0 then
     Result := FSelectedLinks[0]
+  else
+    Result := nil;
+end;
+
+function TNodeSelectionModel.SelectedPin: TNodePin;
+begin
+  if FSelectedPins.Count > 0 then
+    Result := FSelectedPins[0]
   else
     Result := nil;
 end;

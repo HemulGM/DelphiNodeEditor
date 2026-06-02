@@ -14,7 +14,7 @@ type
   private
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
-    function NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
+    function NodesToJSONText(ANodes: TList<TCustomNode>): string;
     procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF);
   public
     constructor Create(AGraph: TNodeGraph);
@@ -27,21 +27,34 @@ type
 
     procedure AddNode(ANode: TCustomNode; Silent: Boolean = False);
     procedure RemoveNode(ANode: TCustomNode);
+    procedure AddLink(FromPin, ToPin: TNodePin);
     procedure RemoveLink(ALink: TNodeLink);
+    function CanConnect(P1, P2: TNodePin): Boolean;
+    procedure ReconnectLink(ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
+    procedure ResizeNode(ANode: TCustomNode; AOldWidth, AOldHeight, ANewWidth, ANewHeight: Integer);
+    procedure MoveNodes(ANodes: TList<TCustomNode>; const AOldPositions, ANewPositions: TArray<TPointF>);
+    function LinkExists(FromPin, ToPin: TNodePin): Boolean;
     procedure Clear;
+    procedure FrameSelected;
+    procedure AutoLayoutSelected;
     function CanConnectSelectedPins: Boolean;
+    procedure SendNodeToBack(ANode: TCustomNode);
+    procedure BringNodeToFront(ANode: TCustomNode);
     procedure ConnectSelectedPins;
 
     procedure DeleteSelection;
+    procedure AlignSelectedNodes(Mode: TAlignMode);
+    procedure DistributeSelectedNodes(Mode: TDistributeMode);
+    procedure MakeSelectedNodesSameSize(Mode: TMatchSizeMode);
     procedure CutSelectionToClipboard;
     procedure CopySelectionToClipboard;
     procedure PasteFromClipboard(const Position: TPointF);
     procedure DuplicateSelection(const Position: TPointF);
 
     function SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
-    procedure LoadFromJSONText(const JSON: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
+    procedure LoadFromJSONText(const JSON: string; var AZoom, AOffsetX, AOffsetY: Double);
     procedure SaveToFile(const AFileName: string; AZoom: Double; AOffsetX, AOffsetY: Double);
-    procedure LoadFromFile(const AFileName: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
+    procedure LoadFromFile(const AFileName: string; var AZoom, AOffsetX, AOffsetY: Double);
 
     function ValidateGraphToStrings(AStrings: TStrings): Boolean;
 
@@ -89,6 +102,45 @@ begin
   FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
 end;
 
+procedure TNodeEditorController.AlignSelectedNodes(Mode: TAlignMode);
+begin
+  if FSelection.NodeCount < 2 then
+    Exit;
+
+  FGraph.ExecuteCommand(TAlignNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+end;
+
+procedure TNodeEditorController.BringNodeToFront(ANode: TCustomNode);
+begin
+  if ANode = nil then
+    Exit;
+
+  FGraph.BringNodeToFront(ANode);
+end;
+
+procedure TNodeEditorController.DistributeSelectedNodes(Mode: TDistributeMode);
+begin
+  if FSelection.NodeCount < 3 then
+    Exit;
+
+  FGraph.ExecuteCommand(TDistributeNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+end;
+
+procedure TNodeEditorController.MakeSelectedNodesSameSize(Mode: TMatchSizeMode);
+begin
+  if FSelection.NodeCount < 2 then
+    Exit;
+
+  FGraph.ExecuteCommand(TMakeSameSizeCommand.Create(FGraph, FSelection.Nodes, Mode));
+end;
+
+procedure TNodeEditorController.SendNodeToBack(ANode: TCustomNode);
+begin
+  if ANode = nil then
+    Exit;
+  FGraph.SendNodeToBack(ANode);
+end;
+
 procedure TNodeEditorController.RemoveNode(ANode: TCustomNode);
 begin
   if ANode = nil then
@@ -126,6 +178,7 @@ begin
     Root.AddPair('zoom', AZoom);
     Root.AddPair('offsetX', AOffsetX);
     Root.AddPair('offsetY', AOffsetY);
+    Root.AddPair('alpha', True);
 
     var GraphObj := FGraph.SaveGraphToJSON;
     Root.AddPair('graph', GraphObj);
@@ -136,7 +189,7 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.LoadFromJSONText(const JSON: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
+procedure TNodeEditorController.LoadFromJSONText(const JSON: string; var AZoom, AOffsetX, AOffsetY: Double);
 begin
   AZoom := 1.0;
   AOffsetX := 0;
@@ -182,7 +235,12 @@ begin
   TFile.WriteAllText(AFileName, SaveToJSONText(AZoom, AOffsetX, AOffsetY));
 end;
 
-procedure TNodeEditorController.LoadFromFile(const AFileName: string; out AZoom: Double; out AOffsetX, AOffsetY: Double);
+function TNodeEditorController.LinkExists(FromPin, ToPin: TNodePin): Boolean;
+begin
+  Result := FGraph.LinkExists(FromPin, ToPin);
+end;
+
+procedure TNodeEditorController.LoadFromFile(const AFileName: string; var AZoom, AOffsetX, AOffsetY: Double);
 begin
   LoadFromJSONText(TFile.ReadAllText(AFileName), AZoom, AOffsetX, AOffsetY);
 end;
@@ -226,6 +284,13 @@ begin
   Result := FGraph.AddDynamicInputPin(ANode, AName, ADataType, AKind);
 end;
 
+procedure TNodeEditorController.AddLink(FromPin, ToPin: TNodePin);
+begin
+  if (FromPin = nil) or (ToPin = nil) then
+    Exit;
+  FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
+end;
+
 function TNodeEditorController.AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
 begin
   Result := nil;
@@ -244,6 +309,22 @@ begin
     Exit;
 
   Result := FGraph.RemoveDynamicPin(APin);
+end;
+
+procedure TNodeEditorController.MoveNodes(ANodes: TList<TCustomNode>; const AOldPositions, ANewPositions: TArray<TPointF>);
+begin
+  if ANodes = nil then
+    Exit;
+
+  FGraph.ExecuteCommand(TMoveNodesCommand.Create(FGraph, ANodes, AOldPositions, ANewPositions));
+end;
+
+procedure TNodeEditorController.ResizeNode(ANode: TCustomNode; AOldWidth, AOldHeight, ANewWidth, ANewHeight: Integer);
+begin
+  if ANode = nil then
+    Exit;
+
+  FGraph.ExecuteCommand(TResizeNodeCommand.Create(FGraph, ANode, AOldWidth, AOldHeight, ANewWidth, ANewHeight));
 end;
 
 function TNodeEditorController.CreateCompatibleNodeForPin(APin: TNodePin; const Position: TPointF): TCustomNode;
@@ -316,11 +397,6 @@ end;
 
 function TNodeEditorController.AddCommentNode(const Position: TPointF): TCustomNode;
 begin
-  Result := nil;
-
-  if FGraph = nil then
-    Exit;
-
   Result := FGraph.Registry.CreateNode('comment', Position);
   if Result <> nil then
   begin
@@ -339,9 +415,32 @@ begin
   FGraph.ExecuteCommand(ACmd);
 end;
 
+procedure TNodeEditorController.FrameSelected;
+begin
+  if (FSelection = nil) or (FSelection.NodeCount = 0) then
+    Exit;
+
+  FGraph.ExecuteCommand(TFrameSelectedCommand.Create(FGraph, FSelection.Nodes));
+end;
+
 procedure TNodeEditorController.Undo;
 begin
   FGraph.Undo;
+end;
+
+procedure TNodeEditorController.ReconnectLink(ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
+begin
+  if (ALink = nil) or (AOldPin = nil) or (ANewPin = nil) then
+    Exit;
+  FGraph.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, ALink, AOldPin, ANewPin));
+end;
+
+procedure TNodeEditorController.AutoLayoutSelected;
+begin
+  if (FSelection = nil) or (FSelection.NodeCount < 2) then
+    Exit;
+
+  FGraph.ExecuteCommand(TAutoLayoutSelectedCommand.Create(FGraph, FSelection.Nodes));
 end;
 
 procedure TNodeEditorController.Redo;
@@ -443,6 +542,11 @@ begin
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
 end;
 
+function TNodeEditorController.CanConnect(P1, P2: TNodePin): Boolean;
+begin
+  Result := FGraph.CanConnect(P1, P2);
+end;
+
 function TNodeEditorController.CanConnectSelectedPins: Boolean;
 begin
   Result := False;
@@ -506,7 +610,7 @@ begin
   Selection.ClearPins;
 end;
 
-function TNodeEditorController.NodesToJSONText(ANodes: TObjectList<TCustomNode>): string;
+function TNodeEditorController.NodesToJSONText(ANodes: TList<TCustomNode>): string;
 var
   Root: TJSONObject;
   NodesArr, LinksArr: TJSONArray;

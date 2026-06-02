@@ -13,6 +13,12 @@ type
 
   TPinDirection = (Input, Output);
 
+  TAlignMode = (Left, Right, Top, Bottom, CenterHorizontal, CenterVertical);
+
+  TDistributeMode = (Horizontal, Vertical);
+
+  TMatchSizeMode = (Width, Height, Both);
+
   TNodeValueKind = (
     Null,
     Float,
@@ -79,13 +85,13 @@ function SegmentsIntersect(AX, AY, BX, BY, CX, CY, DX, DY: integer): boolean; in
 
 function LineIntersectsRect(X1, Y1, X2, Y2: integer; const R: TRect): boolean; inline;
 
-function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF; inline;
+function CubicBezierPoint(const P0, P1, P2, P3: TPointF; T: Double): TPointF; inline;
 
 function DistancePointToSegment(const P, A, B: TPointF): Single; inline;
 
-procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single); inline;
+procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); inline;
 
-procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single); inline;
+procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); inline;
 
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single); inline;
 
@@ -446,7 +452,7 @@ begin
     Exit(True);
 end;
 
-function CubicBezierPoint(const P0, P1, P2, P3: TPoint; T: Double): TPointF;
+function CubicBezierPoint(const P0, P1, P2, P3: TPointF; T: Double): TPointF;
 var
   it, t2, t3, it2, it3: double;
 begin
@@ -460,7 +466,7 @@ begin
   Result.Y := it3 * P0.Y + 3 * it2 * T * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
 end;
 
-procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
 var
   t, it, t2, it2, t3, it3, x, y: Double;
 begin
@@ -500,7 +506,7 @@ begin
   Canvas.DrawPath(CachePathObject, Opacity);
 end;
 
-procedure DrawCubicBezier1(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+procedure DrawCubicBezier1(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
 begin
   CachePathObject.Clear;
   CachePathObject.MoveTo(P0);
@@ -508,7 +514,7 @@ begin
   C.DrawPath(CachePathObject, Opacity);
 end;
 
-procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPoint; Opacity: Single);
+procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
 begin
   CachePathObject.Clear;
   CachePathObject.MoveTo(P0);

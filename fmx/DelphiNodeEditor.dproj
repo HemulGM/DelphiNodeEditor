@@ -414,6 +414,8 @@
         <DCCReference Include="..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.FMX.pas"/>
         <DCCReference Include="..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.Types.pas"/>
         <DCCReference Include="..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Parser.ComfyUI.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Parser.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
