@@ -14,13 +14,17 @@ type
   private
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
+    FOnChanged: TNotifyEvent;
     function NodesToJSONText(ANodes: TList<TCustomNode>): string;
     procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF);
+    procedure SetOnChanged(const Value: TNotifyEvent);
+  protected
+    procedure DoChanged; virtual;
   public
     constructor Create(AGraph: TNodeGraph);
     destructor Destroy; override;
 
-    procedure ExecuteCommand(ACmd: TGraphCommand);
+    procedure ExecuteCommand(ACmd: TGraphCommand; Silent: Boolean = False);
     procedure Undo;
     procedure Redo;
     procedure ClearUndoRedo;
@@ -69,6 +73,7 @@ type
 
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
+    property OnChanged: TNotifyEvent read FOnChanged write SetOnChanged;
   end;
 
 implementation
@@ -99,7 +104,7 @@ begin
   if ANode = nil then
     Exit;
 
-  FGraph.ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
+  ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
 end;
 
 procedure TNodeEditorController.AlignSelectedNodes(Mode: TAlignMode);
@@ -107,7 +112,7 @@ begin
   if FSelection.NodeCount < 2 then
     Exit;
 
-  FGraph.ExecuteCommand(TAlignNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+  ExecuteCommand(TAlignNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
 end;
 
 procedure TNodeEditorController.BringNodeToFront(ANode: TCustomNode);
@@ -123,7 +128,13 @@ begin
   if FSelection.NodeCount < 3 then
     Exit;
 
-  FGraph.ExecuteCommand(TDistributeNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+  ExecuteCommand(TDistributeNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+end;
+
+procedure TNodeEditorController.DoChanged;
+begin
+  if Assigned(FOnChanged) then
+    FOnChanged(Self);
 end;
 
 procedure TNodeEditorController.MakeSelectedNodesSameSize(Mode: TMatchSizeMode);
@@ -131,7 +142,7 @@ begin
   if FSelection.NodeCount < 2 then
     Exit;
 
-  FGraph.ExecuteCommand(TMakeSameSizeCommand.Create(FGraph, FSelection.Nodes, Mode));
+  ExecuteCommand(TMakeSameSizeCommand.Create(FGraph, FSelection.Nodes, Mode));
 end;
 
 procedure TNodeEditorController.SendNodeToBack(ANode: TCustomNode);
@@ -141,18 +152,24 @@ begin
   FGraph.SendNodeToBack(ANode);
 end;
 
+procedure TNodeEditorController.SetOnChanged(const Value: TNotifyEvent);
+begin
+  FOnChanged := Value;
+end;
+
 procedure TNodeEditorController.RemoveNode(ANode: TCustomNode);
 begin
   if ANode = nil then
     Exit;
 
   var BeforeJSON := FGraph.CaptureJSONText;
-
   FSelection.RemoveNode(ANode);
   FGraph.RemoveNode(ANode);
-
   var AfterJSON := FGraph.CaptureJSONText;
+
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, 'Remove node');
+
+  DoChanged;
 end;
 
 procedure TNodeEditorController.RemoveLink(ALink: TNodeLink);
@@ -161,13 +178,15 @@ begin
     Exit;
 
   FSelection.RemoveLinkFromSelection(ALink);
-  FGraph.ExecuteCommand(TRemoveLinkCommand.Create(FGraph, ALink));
+  ExecuteCommand(TRemoveLinkCommand.Create(FGraph, ALink));
 end;
 
 procedure TNodeEditorController.Clear;
 begin
   FSelection.Clear;
   FGraph.Clear;
+
+  DoChanged;
 end;
 
 function TNodeEditorController.SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
@@ -288,7 +307,7 @@ procedure TNodeEditorController.AddLink(FromPin, ToPin: TNodePin);
 begin
   if (FromPin = nil) or (ToPin = nil) then
     Exit;
-  FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
+  ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
 end;
 
 function TNodeEditorController.AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
@@ -316,7 +335,7 @@ begin
   if ANodes = nil then
     Exit;
 
-  FGraph.ExecuteCommand(TMoveNodesCommand.Create(FGraph, ANodes, AOldPositions, ANewPositions));
+  ExecuteCommand(TMoveNodesCommand.Create(FGraph, ANodes, AOldPositions, ANewPositions));
 end;
 
 procedure TNodeEditorController.ResizeNode(ANode: TCustomNode; AOldWidth, AOldHeight, ANewWidth, ANewHeight: Integer);
@@ -324,7 +343,7 @@ begin
   if ANode = nil then
     Exit;
 
-  FGraph.ExecuteCommand(TResizeNodeCommand.Create(FGraph, ANode, AOldWidth, AOldHeight, ANewWidth, ANewHeight));
+  ExecuteCommand(TResizeNodeCommand.Create(FGraph, ANode, AOldWidth, AOldHeight, ANewWidth, ANewHeight));
 end;
 
 function TNodeEditorController.CreateCompatibleNodeForPin(APin: TNodePin; const Position: TPointF): TCustomNode;
@@ -393,6 +412,8 @@ begin
   FSelection.Clear;
   if Result <> nil then
     FSelection.SelectNode(Result, False);
+
+  DoChanged;
 end;
 
 function TNodeEditorController.AddCommentNode(const Position: TPointF): TCustomNode;
@@ -407,12 +428,14 @@ begin
   end;
 end;
 
-procedure TNodeEditorController.ExecuteCommand(ACmd: TGraphCommand);
+procedure TNodeEditorController.ExecuteCommand(ACmd: TGraphCommand; Silent: Boolean);
 begin
   if ACmd = nil then
     Exit;
 
-  FGraph.ExecuteCommand(ACmd);
+  FGraph.ExecuteCommand(ACmd, Silent);
+
+  DoChanged;
 end;
 
 procedure TNodeEditorController.FrameSelected;
@@ -420,19 +443,21 @@ begin
   if (FSelection = nil) or (FSelection.NodeCount = 0) then
     Exit;
 
-  FGraph.ExecuteCommand(TFrameSelectedCommand.Create(FGraph, FSelection.Nodes));
+  ExecuteCommand(TFrameSelectedCommand.Create(FGraph, FSelection.Nodes));
 end;
 
 procedure TNodeEditorController.Undo;
 begin
   FGraph.Undo;
+
+  DoChanged;
 end;
 
 procedure TNodeEditorController.ReconnectLink(ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
 begin
   if (ALink = nil) or (AOldPin = nil) or (ANewPin = nil) then
     Exit;
-  FGraph.ExecuteCommand(TReconnectLinkCommand.Create(FGraph, ALink, AOldPin, ANewPin));
+  ExecuteCommand(TReconnectLinkCommand.Create(FGraph, ALink, AOldPin, ANewPin));
 end;
 
 procedure TNodeEditorController.AutoLayoutSelected;
@@ -440,17 +465,21 @@ begin
   if (FSelection = nil) or (FSelection.NodeCount < 2) then
     Exit;
 
-  FGraph.ExecuteCommand(TAutoLayoutSelectedCommand.Create(FGraph, FSelection.Nodes));
+  ExecuteCommand(TAutoLayoutSelectedCommand.Create(FGraph, FSelection.Nodes));
 end;
 
 procedure TNodeEditorController.Redo;
 begin
   FGraph.Redo;
+
+  DoChanged;
 end;
 
 procedure TNodeEditorController.ClearUndoRedo;
 begin
   FGraph.ClearUndoRedo;
+
+  DoChanged;
 end;
 
 procedure TNodeEditorController.DeleteSelection;
@@ -477,10 +506,12 @@ begin
       if NodeToRemove <> nil then
         FGraph.RemoveNode(NodeToRemove);
     end;
-
     FSelection.Clear;
     var AfterJSON := FGraph.CaptureJSONText;
+
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Delete selection'));
+
+    DoChanged;
   finally
     LinksToDelete.Free;
   end;
@@ -523,6 +554,8 @@ begin
     var AfterJSON := FGraph.CaptureJSONText;
 
     FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Paste nodes'));
+
+    DoChanged;
   end;
 end;
 
@@ -540,6 +573,8 @@ begin
   var AfterJSON := FGraph.CaptureJSONText;
 
   FGraph.ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, Translate('Duplicate selection'));
+
+  DoChanged;
 end;
 
 function TNodeEditorController.CanConnect(P1, P2: TNodePin): Boolean;
@@ -602,7 +637,7 @@ begin
     Exit;
 
   if not FGraph.LinkExists(FromPin, ToPin) then
-    FGraph.ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
+    ExecuteCommand(TAddLinkCommand.Create(FGraph, FromPin, ToPin));
 
   //if Assigned(FOnAfterConnectPins) then
   //  FOnAfterConnectPins(Self, FromPin, ToPin);

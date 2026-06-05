@@ -1,12 +1,15 @@
 program DelphiNodeEditor;
 
+{$IFDEF LOG}
+  {$APPTYPE CONSOLE}
+{$ENDIF}
+
 uses
   System.StartUpCopy,
   FMX.Forms,
   {$IF DEFINED(ANDROID) or DEFINED(IOS)}
   FMX.Skia,
   {$ENDIF }
-  FMX.Skia,
   FMX.Types,
   NodeEditor.Main in 'NodeEditor.Main.pas' {FormMain},
   FMX.NodeEditor in '..\src\FMX.NodeEditor.pas',
@@ -45,7 +48,17 @@ uses
   DelphiWindowStyle.Types in '..\DelphiWinUI3\DelphiWindowStyle\DelphiWindowStyle.Types.pas',
   FMX.Windows.Hints in '..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas',
   FMX.NodeEditor.Parser.ComfyUI in '..\src\FMX.NodeEditor.Parser.ComfyUI.pas',
-  FMX.NodeEditor.Parser in '..\src\FMX.NodeEditor.Parser.pas';
+  FMX.NodeEditor.Parser in '..\src\FMX.NodeEditor.Parser.pas',
+  FMX.NodeEditor.VisualLink in '..\src\FMX.NodeEditor.VisualLink.pas',
+  NodeEditor.LegendItem in 'NodeEditor.LegendItem.pas' {FrameLegendItem: TFrame},
+  FMX.NodeEditor.Runtime in '..\src\FMX.NodeEditor.Runtime.pas',
+  FMX.NodeEditor.Debug.Intf in '..\src\FMX.NodeEditor.Debug.Intf.pas',
+  FMX.NodeEditor.ControlFlowNodes in '..\src\FMX.NodeEditor.ControlFlowNodes.pas',
+  FMX.NodeEditor.Debug.Controller in '..\src\FMX.NodeEditor.Debug.Controller.pas',
+  FMX.NodeEditor.Debugger in '..\src\FMX.NodeEditor.Debugger.pas',
+  FMX.NodeEditor.Executor in '..\src\FMX.NodeEditor.Executor.pas',
+  FMX.NodeEditor.Executor.Thread in '..\src\FMX.NodeEditor.Executor.Thread.pas',
+  FMX.NodeEditor.Node.Engineering in '..\src\FMX.NodeEditor.Node.Engineering.pas';
 
 {$R *.res}
 
@@ -87,7 +100,8 @@ begin
         GlobalUseGPUCanvas := False;
         GlobalUseDX := True;
       end;
-    TCanvasType.SkiaOpenGL:
+    {$IF DEFINED(ANDROID) or DEFINED(IOS)}
+      TCanvasType.SkiaOpenGL:
       begin
         GlobalUseSkia := True;
         GlobalUseVulkan := False;
@@ -99,6 +113,7 @@ begin
         GlobalUseVulkan := True;
         GlobalUseSkiaRasterWhenAvailable := True;
       end;
+    {$ENDIF}
   end;
   Application.Initialize;
   Application.CreateForm(TFormMain, FormMain);

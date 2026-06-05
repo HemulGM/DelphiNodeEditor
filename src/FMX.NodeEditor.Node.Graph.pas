@@ -24,16 +24,20 @@ type
 
   TGraphCommand = class
   protected
+    FId: string;
     FGraph: TNodeGraph;
     FDescription: string;
+    FTimeStamp: TDateTime;
   public
-    constructor Create(AGraph: TNodeGraph; const ADescription: string = ''); virtual;
+    constructor Create(AGraph: TNodeGraph; const ADescription: string = ''); reintroduce; virtual;
     destructor Destroy; override;
 
     procedure DoExecute; virtual; abstract;
     procedure Undo; virtual; abstract;
 
     property Description: string read FDescription;
+    property TimeStamp: TDateTime read FTimeStamp;
+    property Id: string read FId;
   end;
 
   TGraphValidationIssue = class
@@ -100,7 +104,7 @@ type
   protected
     function PinHasIncomingLink(APin: TNodePin): boolean;
     function PinHasOutgoingLink(APin: TNodePin): boolean;
-    procedure PushExecutedCommand(ACommand: TGraphCommand);
+    procedure PushExecutedCommand(ACommand: TGraphCommand; Silent: Boolean = False);
 
     function HasLinksBetweenNodes(ANodeA, ANodeB: TCustomNode): boolean;
     class function CompareNodeById(const A, B: TCustomNode): integer; static;
@@ -111,16 +115,17 @@ type
     procedure BeginUpdate;
     procedure EndUpdate;
 
-    procedure AddNode(ANode: TCustomNode);
+    procedure AddNode(ANode: TCustomNode; SkipChecking: Boolean = False);
     function DetachNode(ANode: TCustomNode): boolean;
     procedure RemoveNode(ANode: TCustomNode);
-    procedure AddLink(ALink: TNodeLink);
+    procedure AddLink(ALink: TNodeLink; SkipChecking: Boolean = False);
     procedure RemoveLink(ALink: TNodeLink);
 
     function CheckInvariants(AErrors: TStrings = nil): boolean;
     function IsNodeIdUnique(const AId: string; AExcept: TCustomNode = nil): boolean;
     function IsPinIdUnique(const AId: string; AExcept: TNodePin = nil): boolean;
 
+    function TopologicalSortDataNodes(AList: TList<TCustomNode>): integer;
     function AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
     function AddDynamicOutputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemoveDynamicPin(APin: TNodePin): boolean;
@@ -162,6 +167,8 @@ type
     property OnLinkAdded: TGraphLinkEvent read FOnLinkAdded write FOnLinkAdded;
     property OnLinkRemoved: TGraphLinkEvent read FOnLinkRemoved write FOnLinkRemoved;
     property OnGraphChanged: TGraphChangedEvent read FOnGraphChanged write FOnGraphChanged;
+    property UndoStack: TObjectList<TGraphCommand> read FUndoStack;
+    property RedoStack: TObjectList<TGraphCommand> read FRedoStack;
   end;
 
 procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string; UseAlphaColor: Boolean);
@@ -194,7 +201,9 @@ end;
 constructor TGraphCommand.Create(AGraph: TNodeGraph; const ADescription: string);
 begin
   inherited Create;
+  FId := NewId;
   FGraph := AGraph;
+  FTimeStamp := Now;
   FDescription := ADescription;
 end;
 
@@ -265,13 +274,14 @@ begin
     DoGraphChanged;
 end;
 
-procedure TNodeGraph.AddNode(ANode: TCustomNode);
+procedure TNodeGraph.AddNode(ANode: TCustomNode; SkipChecking: Boolean = False);
 begin
   if ANode = nil then
     Exit;
 
-  if FNodes.Contains(ANode) then
-    Exit;
+  if SkipChecking then
+    if FNodes.Contains(ANode) then
+      Exit;
 
   if ANode.ZOrder = 0 then
     ANode.ZOrder := NextZOrder;
@@ -344,7 +354,7 @@ begin
   end;
 end;
 
-procedure TNodeGraph.AddLink(ALink: TNodeLink);
+procedure TNodeGraph.AddLink(ALink: TNodeLink; SkipChecking: Boolean);
 var
   OutPin, InPin: TNodePin;
   OutNode, InNode: TCustomNode;
@@ -381,27 +391,33 @@ begin
   OutNode := OutPin.OwnerNode;
   InNode := InPin.OwnerNode;
 
-  if LinkExists(OutPin, InPin) then
-  begin
-    ALink.Free;
-    Exit;
-  end;
+  if not SkipChecking then
+    if LinkExists(OutPin, InPin) then
+    begin
+      ALink.Free;
+      Exit;
+    end;
 
   if not InPin.AllowMultipleConnections then
     RemoveLinksToInput(InPin);
 
-  if FNodes.Contains(OutNode) and FNodes.Contains(InNode) then
+  if not SkipChecking then
   begin
-    if not FNodes.HasEdge(OutNode, InNode) then
+    if FNodes.Contains(OutNode) and FNodes.Contains(InNode) then
     begin
-      if FNodes.CanCreateCycle(OutNode, InNode) then
+      if not FNodes.HasEdge(OutNode, InNode) then
       begin
-        ALink.Free;
-        Exit;
+        if FNodes.CanCreateCycle(OutNode, InNode) then
+        begin
+          ALink.Free;
+          Exit;
+        end;
+        FNodes.AddEdge(OutNode, InNode);
       end;
-      FNodes.AddEdge(OutNode, InNode);
     end;
-  end;
+  end
+  else
+    FNodes.AddEdge(OutNode, InNode, True);
 
   FLinks.Add(ALink);
 
@@ -858,12 +874,12 @@ begin
       Exit(True);
 end;
 
-procedure TNodeGraph.PushExecutedCommand(ACommand: TGraphCommand);
+procedure TNodeGraph.PushExecutedCommand(ACommand: TGraphCommand; Silent: Boolean);
 begin
   if ACommand = nil then
     Exit;
 
-  if FUndoLock then
+  if FUndoLock or Silent then
   begin
     ACommand.Free;
     Exit;
@@ -872,8 +888,33 @@ begin
   FUndoStack.Add(ACommand);
   FRedoStack.Clear;
 
-  while FUndoStack.Count > UndoLimit do
-    FUndoStack.Delete(0);
+  TruncateUndo;
+
+  DoGraphChanged;
+end;
+
+procedure TNodeGraph.ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean);
+begin
+  if ACommand = nil then
+    Exit;
+
+  FExecutingCommand := True;
+  try
+    ACommand.DoExecute;
+  finally
+    FExecutingCommand := False;
+  end;
+
+  if FUndoLock or Silent then
+  begin
+    ACommand.Free;
+    Exit;
+  end;
+
+  FUndoStack.Add(ACommand);
+  FRedoStack.Clear;
+
+  TruncateUndo;
 
   DoGraphChanged;
 end;
@@ -889,38 +930,6 @@ procedure TNodeGraph.ClearUndoRedo;
 begin
   FUndoStack.Clear;
   FRedoStack.Clear;
-end;
-
-procedure TNodeGraph.ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean);
-begin
-  if ACommand = nil then
-    Exit;
-
-  if FUndoLock then
-  begin
-    ACommand.DoExecute;
-    ACommand.Free;
-    Exit;
-  end;
-
-  FExecutingCommand := True;
-  try
-    ACommand.DoExecute;
-  finally
-    FExecutingCommand := False;
-  end;
-
-  if not Silent then
-  begin
-    FUndoStack.Add(ACommand);
-    FRedoStack.Clear;
-
-    TruncateUndo;
-  end
-  else
-    ACommand.Free;
-
-  DoGraphChanged;
 end;
 
 procedure TNodeGraph.TruncateUndo;
@@ -1095,6 +1104,95 @@ begin
   finally
     EndUpdate;
     DoGraphChanged;
+  end;
+end;
+
+function TNodeGraph.TopologicalSortDataNodes(AList: TList<TCustomNode>): integer;
+var
+  InDegree: TDictionary<TCustomNode, integer>;
+  Queue: TList<TCustomNode>;
+  i, j, Deg: integer;
+  N, FromNode, ToNode: TCustomNode;
+  L: TNodeLink;
+begin
+  Result := 0;
+  if AList = nil then
+    Exit;
+
+  AList.Clear;
+
+  InDegree := TDictionary<TCustomNode, integer>.Create;
+  Queue := TList<TCustomNode>.Create;
+  try
+    for i := 0 to FNodes.Count - 1 do
+    begin
+      N := FNodes[i];
+      if N <> nil then
+        InDegree.AddOrSetValue(N, 0);
+    end;
+
+    for i := 0 to FLinks.Count - 1 do
+    begin
+      L := FLinks[i];
+      if (L = nil) or (L.FromPin = nil) or (L.ToPin = nil) then
+        Continue;
+
+      if (L.FromPin.Kind <> TPinKind.Data) or (L.ToPin.Kind <> TPinKind.Data) then
+        Continue;
+
+      FromNode := L.FromPin.OwnerNode;
+      ToNode := L.ToPin.OwnerNode;
+      if (FromNode = nil) or (ToNode = nil) then
+        Continue;
+
+      if InDegree.TryGetValue(ToNode, Deg) then
+        InDegree.AddOrSetValue(ToNode, Deg + 1);
+    end;
+
+    for i := 0 to FNodes.Count - 1 do
+    begin
+      N := FNodes[i];
+      if (N <> nil) and InDegree.TryGetValue(N, Deg) and (Deg = 0) then
+        Queue.Add(N);
+    end;
+
+    i := 0;
+    while i < Queue.Count do
+    begin
+      N := Queue[i];
+      Inc(i);
+
+      AList.Add(N);
+
+      for j := 0 to FLinks.Count - 1 do
+      begin
+        L := FLinks[j];
+        if (L = nil) or (L.FromPin = nil) or (L.ToPin = nil) then
+          Continue;
+
+        if (L.FromPin.Kind <> TPinKind.Data) or (L.ToPin.Kind <> TPinKind.Data) then
+          Continue;
+
+        FromNode := L.FromPin.OwnerNode;
+        ToNode := L.ToPin.OwnerNode;
+
+        if (FromNode = N) and (ToNode <> nil) then
+        begin
+          if InDegree.TryGetValue(ToNode, Deg) then
+          begin
+            Dec(Deg);
+            InDegree.AddOrSetValue(ToNode, Deg);
+            if Deg = 0 then
+              Queue.Add(ToNode);
+          end;
+        end;
+      end;
+    end;
+
+    Result := AList.Count;
+  finally
+    Queue.Free;
+    InDegree.Free;
   end;
 end;
 
@@ -1402,6 +1500,7 @@ begin
     Result.X := Position.X;
     Result.Y := Position.Y;
     Result.NodeType := It.NodeType;
+    Result.IconPath := It.IconPath;
     Result.SetupPins;
   end
   else
@@ -1411,6 +1510,7 @@ begin
     Result.X := Position.X;
     Result.Y := Position.Y;
     Result.NodeType := ANodeType;
+    Result.IconPath := '';
     Result.SetupPins;
   end;
 end;

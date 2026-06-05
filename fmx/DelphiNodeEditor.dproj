@@ -416,6 +416,20 @@
         <DCCReference Include="..\DelphiWinUI3\FMXWindowsHint\FMX.Windows.Hints.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Parser.ComfyUI.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Parser.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.VisualLink.pas"/>
+        <DCCReference Include="NodeEditor.LegendItem.pas">
+            <Form>FrameLegendItem</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="..\src\FMX.NodeEditor.Runtime.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Debug.Intf.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.ControlFlowNodes.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Debug.Controller.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Debugger.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Executor.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Executor.Thread.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Node.Engineering.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

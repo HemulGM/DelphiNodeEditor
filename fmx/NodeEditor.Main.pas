@@ -11,7 +11,8 @@ uses
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
-  FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors;
+  FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors,
+  System.ImageList, FMX.ImgList, NodeEditor.LegendItem;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -169,8 +170,6 @@ type
     PathLabel17: TPathLabel;
     PathLabel18: TPathLabel;
     PathLabel19: TPathLabel;
-    LayoutNodeLibrary: TLayout;
-    Panel14: TPanel;
     Layout28: TLayout;
     Layout23: TLayout;
     Layout24: TLayout;
@@ -291,6 +290,110 @@ type
     PathLabel24: TPathLabel;
     CheckBoxLinkGradient: TCheckBox;
     PathLabel25: TPathLabel;
+    LayoutToolPanel: TLayout;
+    Panel1: TPanel;
+    Layout26: TLayout;
+    Layout27: TLayout;
+    PathLabel27: TPathLabel;
+    Label20: TLabel;
+    ButtonCloseWorkHistory: TButton;
+    Panel6: TPanel;
+    ListBoxExecutedCommands: TListBox;
+    ListBoxItem13: TListBoxItem;
+    MenuItemWorkHistory: TMenuItem;
+    TabControlTools: TTabControl;
+    TabItemHistory: TTabItem;
+    TabItemLegend: TTabItem;
+    Layout14: TLayout;
+    Layout22: TLayout;
+    PathLabel35: TPathLabel;
+    Label18: TLabel;
+    Button9: TButton;
+    Panel15: TPanel;
+    Layout25: TLayout;
+    RadioButtonToolsHistory: TRadioButton;
+    PathLabel36: TPathLabel;
+    RadioButtonToolsAlign: TRadioButton;
+    PathLabel37: TPathLabel;
+    RadioButtonToolsLegend: TRadioButton;
+    PathLabel38: TPathLabel;
+    TabItemAlign: TTabItem;
+    Layout29: TLayout;
+    Layout30: TLayout;
+    PathLabel39: TPathLabel;
+    Label19: TLabel;
+    Button10: TButton;
+    Panel17: TPanel;
+    VertScrollBox2: TVertScrollBox;
+    ButtonAlignLeft: TButton;
+    PathLabel40: TPathLabel;
+    ButtonAlignVert: TButton;
+    PathLabel41: TPathLabel;
+    ButtonAlignHorz: TButton;
+    PathLabel42: TPathLabel;
+    ButtonAlignBottom: TButton;
+    PathLabel43: TPathLabel;
+    ButtonAlignRight: TButton;
+    PathLabel44: TPathLabel;
+    ButtonAlignTop: TButton;
+    PathLabel45: TPathLabel;
+    ImageListDummy: TImageList;
+    Label21: TLabel;
+    Label22: TLabel;
+    ButtonMatchHeight: TButton;
+    PathLabel46: TPathLabel;
+    ButtonMatchBoth: TButton;
+    PathLabel47: TPathLabel;
+    Label23: TLabel;
+    ButtonDistrHorz: TButton;
+    PathLabel48: TPathLabel;
+    ButtonDistrVert: TButton;
+    PathLabel49: TPathLabel;
+    ButtonMatchWidth: TButton;
+    PathLabel50: TPathLabel;
+    Label24: TLabel;
+    Label25: TLabel;
+    Label26: TLabel;
+    Label27: TLabel;
+    Label28: TLabel;
+    Label29: TLabel;
+    Label30: TLabel;
+    Label31: TLabel;
+    Label32: TLabel;
+    Label33: TLabel;
+    Label34: TLabel;
+    ButtonUndo: TButton;
+    ButtonRedo: TButton;
+    PathLabel26: TPathLabel;
+    PathLabel28: TPathLabel;
+    Panel18: TPanel;
+    VertScrollBox3: TVertScrollBox;
+    FrameLegendItem1: TFrameLegendItem;
+    FrameLegendItem2: TFrameLegendItem;
+    FrameLegendItem3: TFrameLegendItem;
+    FrameLegendItem4: TFrameLegendItem;
+    FrameLegendItem5: TFrameLegendItem;
+    FrameLegendItem6: TFrameLegendItem;
+    FrameLegendItem7: TFrameLegendItem;
+    Label35: TLabel;
+    FrameLegendItem9: TFrameLegendItem;
+    FrameLegendItem10: TFrameLegendItem;
+    FrameLegendItem11: TFrameLegendItem;
+    FrameLegendItem12: TFrameLegendItem;
+    FrameLegendItem13: TFrameLegendItem;
+    FrameLegendItem14: TFrameLegendItem;
+    FrameLegendItem15: TFrameLegendItem;
+    Label36: TLabel;
+    Panel19: TPanel;
+    Label37: TLabel;
+    Panel20: TPanel;
+    FrameLegendItem8: TFrameLegendItem;
+    Button11: TButton;
+    RadioButtonToolsLibrary: TRadioButton;
+    PathLabel29: TPathLabel;
+    TabItemToolsLibrary: TTabItem;
+    MenuItemAlignment: TMenuItem;
+    MenuItemLegend: TMenuItem;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -338,6 +441,24 @@ type
     procedure ButtonZoomResetClick(Sender: TObject);
     procedure ButtonZoomToSelectClick(Sender: TObject);
     procedure ComboBoxVisualLinkTypeChange(Sender: TObject);
+    procedure ButtonCloseWorkHistoryClick(Sender: TObject);
+    procedure MenuItemWorkHistoryClick(Sender: TObject);
+    procedure ChangeToolsTab(Sender: TObject);
+    procedure ButtonAlignLeftClick(Sender: TObject);
+    procedure ButtonAlignTopClick(Sender: TObject);
+    procedure ButtonAlignRightClick(Sender: TObject);
+    procedure ButtonAlignBottomClick(Sender: TObject);
+    procedure ButtonAlignHorzClick(Sender: TObject);
+    procedure ButtonAlignVertClick(Sender: TObject);
+    procedure ButtonDistrHorzClick(Sender: TObject);
+    procedure ButtonDistrVertClick(Sender: TObject);
+    procedure ButtonMatchHeightClick(Sender: TObject);
+    procedure ButtonMatchWidthClick(Sender: TObject);
+    procedure ButtonMatchBothClick(Sender: TObject);
+    procedure ButtonUndoClick(Sender: TObject);
+    procedure ButtonRedoClick(Sender: TObject);
+    procedure MenuItemAlignmentClick(Sender: TObject);
+    procedure MenuItemLegendClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -364,6 +485,7 @@ type
     procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
     procedure UpdateNodeRegistry;
     procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
+    procedure OnHistoryChanged(Sender: TObject);
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
@@ -380,7 +502,7 @@ implementation
 
 uses
   System.Math, System.JSON, FMX.NodeEditor.Node.Command, System.Messaging,
-  WinUI3.Style;
+  FMX.NodeEditor.Node.Engineering, WinUI3.Style;
 
 {$R *.fmx}
 
@@ -392,7 +514,7 @@ begin
   BeginUpdate;
   ComboColorBoxAccentColor.Color := OverAccentColor;
   EndUpdate;
-  OverTheme := 0;
+  OverTheme := 2;
   SetSystemWindowControls(ButtonWinClose, ButtonWinMax, ButtonWinMin);
   CaptionControls := [LayoutCaption, LayoutHead];
   OffsetControls := [LayoutHead];
@@ -401,6 +523,8 @@ begin
   HideTitleBar := True;
   //
   StringGridNodeValues.AniCalculations.Animation := True;
+  RadioButtonToolsHistory.IsChecked := False;
+  RadioButtonToolsHistory.IsChecked := True;
   //
   ClearAllSections;
 
@@ -428,7 +552,7 @@ begin
   LayoutZoomMobile.Visible := True;
   LayoutLeft.Visible := False;
   LayoutRight.Visible := False;
-  LayoutNodeLibrary.Visible := False;
+  LayoutToolPanel.Visible := False;
   LayoutHead.Visible := False;
   Constraints.MinHeight := 0;
   Constraints.MinWidth := 400;
@@ -514,10 +638,71 @@ begin
   DoOnSettingChange;
 end;
 
+procedure TFormMain.ButtonAlignBottomClick(Sender: TObject);
+begin
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.Bottom);
+end;
+
+procedure TFormMain.ButtonAlignHorzClick(Sender: TObject);
+begin
+
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.CenterHorizontal);
+end;
+
+procedure TFormMain.ButtonAlignLeftClick(Sender: TObject);
+begin
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.Left);
+end;
+
+procedure TFormMain.ButtonAlignRightClick(Sender: TObject);
+begin
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.Right);
+end;
+
+procedure TFormMain.ButtonAlignTopClick(Sender: TObject);
+begin
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.Top);
+end;
+
+procedure TFormMain.ButtonAlignVertClick(Sender: TObject);
+begin
+  FEditor.Controller.AlignSelectedNodes(TAlignMode.CenterVertical);
+end;
+
+procedure TFormMain.ButtonCloseWorkHistoryClick(Sender: TObject);
+begin
+  LayoutToolPanel.Visible := False;
+  PanelMobileOverlay.Visible := False;
+end;
+
+procedure TFormMain.ButtonDistrHorzClick(Sender: TObject);
+begin
+  FEditor.Controller.DistributeSelectedNodes(TDistributeMode.Horizontal);
+end;
+
+procedure TFormMain.ButtonDistrVertClick(Sender: TObject);
+begin
+  FEditor.Controller.DistributeSelectedNodes(TDistributeMode.Vertical);
+end;
+
 procedure TFormMain.ButtonHideNodeLibraryClick(Sender: TObject);
 begin
-  LayoutNodeLibrary.Visible := False;
-  PanelMobileOverlay.Visible := False;
+  LayoutToolPanel.Visible := False;
+end;
+
+procedure TFormMain.ButtonMatchBothClick(Sender: TObject);
+begin
+  FEditor.Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Both);
+end;
+
+procedure TFormMain.ButtonMatchHeightClick(Sender: TObject);
+begin
+  FEditor.Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Height);
+end;
+
+procedure TFormMain.ButtonMatchWidthClick(Sender: TObject);
+begin
+  FEditor.Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Width);
 end;
 
 procedure TFormMain.ButtonNodeApplyClick(Sender: TObject);
@@ -597,10 +782,20 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.ButtonRedoClick(Sender: TObject);
+begin
+  FEditor.Redo;
+end;
+
 procedure TFormMain.ButtonSettingsClick(Sender: TObject);
 begin
   PopupTheme.PlacementTarget := ButtonSettings;
   PopupTheme.Popup;
+end;
+
+procedure TFormMain.ButtonUndoClick(Sender: TObject);
+begin
+  FEditor.Undo;
 end;
 
 procedure TFormMain.ButtonZoomClick(Sender: TObject);
@@ -614,14 +809,14 @@ end;
 procedure TFormMain.ButtonZoomInClick(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
-  FEditor.SetZoom(FEditor.Zoom + 0.25, FEditor.LocalRect.CenterPoint.Round);
+  FEditor.SetZoom(FEditor.Zoom + 0.25, FEditor.LocalRect.CenterPoint);
   UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomOutClick(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
-  FEditor.SetZoom(FEditor.Zoom - 0.25, FEditor.LocalRect.CenterPoint.Round);
+  FEditor.SetZoom(FEditor.Zoom - 0.25, FEditor.LocalRect.CenterPoint);
   UpdateStatus;
 end;
 
@@ -635,14 +830,14 @@ end;
 procedure TFormMain.ButtonZoomTo100Click(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
-  FEditor.SetZoom(1, FEditor.LocalRect.CenterPoint.Round);
+  FEditor.SetZoom(1, FEditor.LocalRect.CenterPoint);
   UpdateStatus;
 end;
 
 procedure TFormMain.ButtonZoomTo200Click(Sender: TObject);
 begin
   PopupZoom.IsOpen := False;
-  FEditor.SetZoom(2, FEditor.LocalRect.CenterPoint.Round);
+  FEditor.SetZoom(2, FEditor.LocalRect.CenterPoint);
   UpdateStatus;
 end;
 
@@ -685,6 +880,8 @@ begin
   FEditor.OnSelectionChanged := OnSelectionChanged;
   FEditor.OnNodeChanged := OnNodeChanged;
   FEditor.OnUpdatedStatus := OnUpdatedStatus;
+
+  FEditor.Controller.OnChanged := OnHistoryChanged;
 
   FJsonNodeEditor := TJsonNodeEditor.Create(Self);
   FJsonNodeEditor.NodeEditor := FEditor;
@@ -733,7 +930,7 @@ begin
     'Flow',
     'Conditional exec branch (if/else).',
     'branch,if,else,exec,flow',
-    'M22 12h-5M2 9h5m-5 6h5M9 5c6 0 8 3.5 8 7s-2 7-8 7H7V5z',
+    'M416 160a64 64 0 1 0-96.27 55.24c-2.29 29.08-20.08 37-75 48.42c-17.76 3.68-35.93 7.45-52.71 13.93v-126.2a64 64 0 1 0-64 0v209.22a64 64 0 1 0 64.42.24c2.39-18 16-24.33 65.26-34.52c27.43-5.67 55.78-11.54 79.78-26.95c29-18.58 44.53-46.78 46.36-83.89A64 64 0 0 0 416 160M160 64a32 32 0 1 1-32 32a32 32 0 0 1 32-32m0 384a32 32 0 1 1 32-32a32 32 0 0 1-32 32m192-256a32 32 0 1 1 32-32a32 32 0 0 1-32 32',
     TBranchNode, $FFC04000);
 
   FEditor.Graph.Registry.RegisterNodeEx(
@@ -744,6 +941,7 @@ begin
     'common,string,print,text',
     'M16 8V5H8v3H6V3h12v5zM4 10h16zm14 2.5q.425 0 .713-.288T19 11.5t-.288-.712T18 10.5t-.712.288T17 11.5t.288.713t.712.287M16 19v-4H8v4zm2 2H6v-4H2v-6q0-1.275.875-2.137T5 8h14q1.275 0 2.138.863T22 11v6h-4zm2-6v-4q0-.425-.288-.712T19 10H5q-.425 0-.712.288T4 11v4h2v-2h12v2z',
     TPrintNode, $FF843482);
+  RegisterEngineeringNodes(FEditor.Graph.Registry);
 end;
 
 procedure TFormMain.SpinBoxSizeChange(Sender: TObject);
@@ -904,6 +1102,12 @@ begin
   Operation := TDragOperation.None;
 end;
 
+procedure TFormMain.MenuItemAlignmentClick(Sender: TObject);
+begin
+  LayoutToolPanel.Visible := True;
+  RadioButtonToolsAlign.IsChecked := True;
+end;
+
 procedure TFormMain.MenuItemEditCopyClick(Sender: TObject);
 begin
   FEditor.CopySelectionToClipboard;
@@ -1024,9 +1228,35 @@ begin
     FJsonNodeEditor.SaveToFile(SaveDialogJSON.FileName);
 end;
 
+procedure TFormMain.MenuItemLegendClick(Sender: TObject);
+begin
+  LayoutToolPanel.Visible := True;
+  RadioButtonToolsLegend.IsChecked := True;
+end;
+
 procedure TFormMain.MenuItemNodeLibraryClick(Sender: TObject);
 begin
-  LayoutNodeLibrary.Visible := True;
+  LayoutToolPanel.Visible := True;
+  RadioButtonToolsLibrary.IsChecked := True;
+end;
+
+procedure TFormMain.MenuItemWorkHistoryClick(Sender: TObject);
+begin
+  LayoutToolPanel.Visible := True;
+  RadioButtonToolsHistory.IsChecked := True;
+end;
+
+procedure TFormMain.ChangeToolsTab(Sender: TObject);
+begin
+  LayoutToolPanel.Visible := True;
+  if RadioButtonToolsHistory.IsChecked then
+    TabControlTools.ActiveTab := TabItemHistory
+  else if RadioButtonToolsLegend.IsChecked then
+    TabControlTools.ActiveTab := TabItemLegend
+  else if RadioButtonToolsAlign.IsChecked then
+    TabControlTools.ActiveTab := TabItemAlign
+  else if RadioButtonToolsLibrary.IsChecked then
+    TabControlTools.ActiveTab := TabItemToolsLibrary;
 end;
 
 procedure TFormMain.CheckBoxCustomAccentChange(Sender: TObject);
@@ -1109,10 +1339,10 @@ procedure TFormMain.CornerButtonMenuAddClick(Sender: TObject);
 begin
   for var Control in LayoutMobileOverlay.Controls do
     Control.Visible := False;
-  LayoutNodeLibrary.Parent := LayoutMobileOverlay;
-  LayoutNodeLibrary.Align := TAlignLayout.Client;
-  LayoutNodeLibrary.Visible := True;
-  LayoutNodeLibrary.Margins.Left := 0;
+  LayoutToolPanel.Parent := LayoutMobileOverlay;
+  LayoutToolPanel.Align := TAlignLayout.Client;
+  LayoutToolPanel.Visible := True;
+  LayoutToolPanel.Margins.Left := 0;
   PanelMobileOverlay.Visible := True;
   PanelMobileOverlay.BringToFront;
 end;
@@ -1234,6 +1464,52 @@ end;
 procedure TFormMain.OnUpdatedStatus(Sender: TObject);
 begin
   UpdateStatus;
+end;
+
+procedure TFormMain.OnHistoryChanged(Sender: TObject);
+begin
+  //UpdateStatus;
+  var SelectedId := '';
+  if Assigned(ListBoxExecutedCommands.Selected) then
+    SelectedId := ListBoxExecutedCommands.Selected.TagString;
+
+  ButtonUndo.Enabled := FEditor.Graph.UndoStack.Count > 0;
+  ButtonRedo.Enabled := FEditor.Graph.RedoStack.Count > 0;
+
+  ListBoxExecutedCommands.BeginUpdate;
+  try
+    ListBoxExecutedCommands.Clear;
+    for var Item in FEditor.Graph.UndoStack do
+    begin
+      var ListItem := TListBoxItem.Create(ListBoxExecutedCommands);
+      ListItem.Text := Item.Description;
+      ListItem.TagString := Item.Id;
+      ListItem.ItemData.Detail := FormatDateTime('hh:nn:ss', Item.TimeStamp);
+      ListBoxExecutedCommands.InsertObject(0, ListItem);
+    end;
+    if ListBoxExecutedCommands.Count > 0 then
+      ListBoxExecutedCommands.ListItems[0].StylesData['current.Visible'] := True;
+    for var i := FEditor.Graph.RedoStack.Count - 1 downto 0 do
+    begin
+      var Item := FEditor.Graph.RedoStack[i];
+      var ListItem := TListBoxItem.Create(ListBoxExecutedCommands);
+      ListItem.Text := Item.Description;
+      ListItem.TagString := Item.Id;
+      ListItem.ItemData.Detail := FormatDateTime('hh:nn:ss', Item.TimeStamp);
+      ListItem.Opacity := 0.5;
+      ListBoxExecutedCommands.InsertObject(0, ListItem);
+    end;
+  finally
+    ListBoxExecutedCommands.EndUpdate;
+  end;
+
+  if not SelectedId.IsEmpty then
+    for var i := 0 to ListBoxExecutedCommands.Count - 1 do
+      if ListBoxExecutedCommands.ListItems[i].TagString = SelectedId then
+      begin
+        ListBoxExecutedCommands.ListItems[i].IsSelected := True;
+        Break;
+      end;
 end;
 
 procedure TFormMain.PaintRects(const UpdateRects: array of TRectF);
@@ -1359,7 +1635,6 @@ begin
   NodeType := 'math_expr';
   HeaderColor := $FF4080FF;
   BodyColor := $FFF0F8FF;
-  IconPath := 'M110 72a6 6 0 0 1-6 6H40a6 6 0 0 1 0-12h64a6 6 0 0 1 6 6m-6 106H78v-26a6 6 0 0 0-12 0v26H40a6 6 0 0 0 0 12h26v26a6 6 0 0 0 12 0v-26h26a6 6 0 0 0 0-12m48-4h64a6 6 0 0 0 0-12h-64a6 6 0 0 0 0 12m64 20h-64a6 6 0 0 0 0 12h64a6 6 0 0 0 0-12m-60.24-93.76a6 6 0 0 0 8.48 0L184 80.49l19.76 19.75a6 6 0 0 0 8.48-8.48L192.49 72l19.75-19.76a6 6 0 0 0-8.48-8.48L184 63.51l-19.76-19.75a6 6 0 0 0-8.48 8.48L175.51 72l-19.75 19.76a6 6 0 0 0 0 8.48';
 
   // Добавляем значения разных типов — чтобы показать все kinds в инспекторе
   var V := AddValue('expression', TNodeValueKind.string);
@@ -1405,7 +1680,6 @@ begin
   inherited;
   NodeType := 'multiply_node';
   HeaderColor := $FF4080FF;
-  IconPath := 'm14 9l3 5.063M4 9l6 6m-6 0l6-6m10 0l-4.8 9';
   Width := 180;
   Height := 130;
 end;
@@ -1427,7 +1701,6 @@ begin
   inherited;
   NodeType := 'string_node';
   HeaderColor := $FF00C080;
-  IconPath := 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm9.5 6h-1A1.5 1.5 0 0 1 10 9.5A1.5 1.5 0 0 1 11.5 8h1A1.5 1.5 0 0 1 14 9.5h2A3.5 3.5 0 0 0 12.5 6h-1A3.5 3.5 0 0 0 8 9.5a3.5 3.5 0 0 0 3.5 3.5h1a1.5 1.5 0 0 1 1.5 1.5a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5H8a3.5 3.5 0 0 0 3.5 3.5h1a3.5 3.5 0 0 0 3.5-3.5a3.5 3.5 0 0 0-3.5-3.5';
   var V := AddValue('text', TNodeValueKind.string);
   V.StringValue := 'Hello, Node!';
   Width := 180;
@@ -1447,7 +1720,6 @@ begin
   inherited;
   NodeType := 'branch_node';
   HeaderColor := $FFC04000;
-  IconPath := 'M22 12h-5M2 9h5m-5 6h5M9 5c6 0 8 3.5 8 7s-2 7-8 7H7V5z';
   Width := 180;
   Height := 140;
 end;
@@ -1468,7 +1740,6 @@ constructor TPrintNode.Create;
 begin
   inherited;
   NodeType := 'print_node';
-  IconPath := 'M16 8V5H8v3H6V3h12v5zM4 10h16zm14 2.5q.425 0 .713-.288T19 11.5t-.288-.712T18 10.5t-.712.288T17 11.5t.288.713t.712.287M16 19v-4H8v4zm2 2H6v-4H2v-6q0-1.275.875-2.137T5 8h14q1.275 0 2.138.863T22 11v6h-4zm2-6v-4q0-.425-.288-.712T19 10H5q-.425 0-.712.288T4 11v4h2v-2h12v2z';
   Width := 180;
   Height := 70;
 end;

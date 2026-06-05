@@ -22,6 +22,7 @@ type
   TAddNodeCommand = class(TGraphCommand)
   private
     FNode: TCustomNode;
+    FNodeId: string;
     FOwnsNode: Boolean;
   public
     constructor Create(AGraph: TNodeGraph; ANode: TCustomNode); reintroduce;
@@ -184,8 +185,8 @@ type
 
   TFrameSelectedCommand = class(TGraphCommand)
   private
-    FCommentId: string;
-    FCommentJSON: string;
+    FNode: TCustomNode;
+    FNodeId: string;
     FSelectedNodeIds: TStringList;
   public
     constructor Create(AGraph: TNodeGraph; ASelectedNodes: TList<TCustomNode>); reintroduce;
@@ -271,6 +272,7 @@ constructor TAddNodeCommand.Create(AGraph: TNodeGraph; ANode: TCustomNode);
 begin
   inherited Create(AGraph, Translate('Add node'));
   FNode := ANode;
+  FNodeId := ANode.Id;
   FOwnsNode := True;
 end;
 
@@ -290,17 +292,17 @@ begin
   if not FGraph.Nodes.Contains(FNode) then
   begin
     FGraph.AddNode(FNode);
+    FNode := nil;
     FOwnsNode := False;
   end;
 end;
 
 procedure TAddNodeCommand.Undo;
 begin
-  if (FGraph = nil) or (FNode = nil) then
-    Exit;
-
-  if FGraph.DetachNode(FNode) then
-    FOwnsNode := True;
+  FNode := FGraph.FindNodeById(FNodeId);
+  if Assigned(FNode) then
+    if FGraph.DetachNode(FNode) then
+      FOwnsNode := True;
 end;
 
 { TRemoveNodeCommand }
@@ -312,14 +314,11 @@ begin
   if ANode <> nil then
     FNodeId := ANode.Id;
 
-  if AGraph <> nil then
-  begin
-    var Obj := AGraph.SaveGraphToJSON;
-    try
-      FGraphBeforeJSON := Obj.ToJSON;
-    finally
-      Obj.Free;
-    end;
+  var Obj := AGraph.SaveGraphToJSON;
+  try
+    FGraphBeforeJSON := Obj.ToJSON;
+  finally
+    Obj.Free;
   end;
 
   FNodeJSON := '';
@@ -327,9 +326,6 @@ end;
 
 procedure TRemoveNodeCommand.DoExecute;
 begin
-  if FGraph = nil then
-    Exit;
-
   if FGraphAfterJSON <> '' then
   begin
     LoadGraphFromJSONText(FGraph, FGraphAfterJSON, True);
@@ -345,7 +341,7 @@ end;
 
 procedure TRemoveNodeCommand.Undo;
 begin
-  if (FGraph = nil) or (FGraphBeforeJSON = '') then
+  if FGraphBeforeJSON = '' then
     Exit;
 
   var Data := TJSONValue.ParseJSONValue(FGraphBeforeJSON);
@@ -1041,29 +1037,23 @@ end;
 { TFrameSelectedCommand }
 
 constructor TFrameSelectedCommand.Create(AGraph: TNodeGraph; ASelectedNodes: TList<TCustomNode>);
-var
-  i: integer;
-  N: TCustomNode;
-  MinX, MinY, MaxX, MaxY: single;
-  Comment: TCommentNode;
-  Obj: TJSONObject;
 begin
   inherited Create(AGraph, 'Frame selected nodes');
 
   FSelectedNodeIds := TStringList.Create;
-  FCommentId := NewId;
+  FNodeId := NewId;
+  FNode := nil;
 
   if (ASelectedNodes = nil) or (ASelectedNodes.Count = 0) then
     Exit;
 
-  MinX := Single.MaxValue;
-  MinY := Single.MaxValue;
-  MaxX := Single.MinValue;
-  MaxY := Single.MinValue;
+  var MinX := Single.MaxValue;
+  var MinY := Single.MaxValue;
+  var MaxX := Single.MinValue;
+  var MaxY := Single.MinValue;
 
-  for i := 0 to ASelectedNodes.Count - 1 do
+  for var N in ASelectedNodes do
   begin
-    N := ASelectedNodes[i];
     FSelectedNodeIds.Add(N.Id);
 
     if N.X < MinX then
@@ -1076,52 +1066,35 @@ begin
       MaxY := N.Y + N.Height;
   end;
 
-  Comment := TCommentNode.Create('Frame', MinX - 20, MinY - 40, Round(MaxX - MinX + 60), Round(MaxY - MinY + 80));
-  try
-    Comment.Id := FCommentId;
-    Comment.CommentText := 'Frame';
-
-    Obj := TJSONObject.Create;
-    try
-      Comment.SaveToJSON(Obj);
-      FCommentJSON := Obj.ToJSON;
-    finally
-      Obj.Free;
-    end;
-  finally
-    Comment.Free;
-  end;
+  FNode := TCommentNode.Create('Grouped', MinX - 20, MinY - 40, Round(MaxX - MinX + 40), Round(MaxY - MinY + 60));
+  FNode.Id := FNodeId;
+  FNode.CommentText := '';
 end;
 
 destructor TFrameSelectedCommand.Destroy;
 begin
+  FNode.Free;
   FSelectedNodeIds.Free;
   inherited Destroy;
 end;
 
 procedure TFrameSelectedCommand.DoExecute;
 begin
-  if FGraph = nil then
+  if FNode = nil then
     Exit;
 
-  var Comment := FGraph.Registry.CreateNode('comment', PointF(0, 0));
-  if Comment <> nil then
+  if not FGraph.Nodes.Contains(FNode) then
   begin
-    Comment.Id := FCommentId;
-    Comment.LoadFromJSONText(FCommentJSON, True);
-
-    FGraph.AddNode(Comment);
+    FGraph.AddNode(FNode);
+    FNode := nil;
   end;
 end;
 
 procedure TFrameSelectedCommand.Undo;
 begin
-  if FGraph = nil then
-    Exit;
-
-  var Comment := FGraph.FindNodeById(FCommentId);
-  if Comment <> nil then
-    FGraph.RemoveNode(Comment);
+  FNode := FGraph.FindNodeById(FNodeId);
+  if Assigned(FNode) then
+    FGraph.DetachNode(FNode);
 end;
 
 { TAutoLayoutSelectedCommand }

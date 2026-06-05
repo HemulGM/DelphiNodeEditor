@@ -7,7 +7,9 @@ uses
   System.Types, FMX.Menus, System.Diagnostics, FMX.Forms, System.UITypes,
   FMX.Types, System.Generics.Collections, FMX.NodeEditor.Node, FMX.StdCtrls,
   FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Types, FMX.NodeEditor.Controller,
-  FMX.Ani, FMX.InertialMovement;
+  FMX.Ani, FMX.NodeEditor.VisualLink, FMX.InertialMovement,
+  FMX.NodeEditor.Runtime, FMX.NodeEditor.Executor.Thread,
+  FMX.NodeEditor.Debugger, FMX.NodeEditor.Debug.Intf;
 
 {$SCOPEDENUMS ON}
 
@@ -38,6 +40,14 @@ type
 
   TEditorPinsConnectedEvent = procedure(Sender: TObject; AFromPin, AToPin: TNodePin) of object;
 
+  { Debugging }
+
+  TEditorExecutionStateEvent = procedure(Sender: TObject) of object;
+
+  TEditorExecutionNodeEvent = procedure(Sender: TObject; ANode: TExecutableNode) of object;
+
+  TEditorExecutionFinishedEvent = procedure(Sender: TObject; Success: boolean; const ErrorMessage: string) of object;
+
   TNodeEditor = class(TControl)
     const
       ZoomMin = 0.01;
@@ -50,10 +60,26 @@ type
     FOnNodeChanged: TNodeChangedEvent;
     FOnSelectionChanged: TNodeSelectionChangedEvent;
 
+    // debug
+    FCurrentDebugNode: TCustomNode;
+    FDebugMode: boolean;
+    FDebugViewMode: boolean;
+    FOnExecutionFinished: TEditorExecutionFinishedEvent;
+    FOnExecutionNodeChanged: TEditorExecutionNodeEvent;
+    FOnExecutionStateChanged: TEditorExecutionStateEvent;
+    FBreakpoints: TList;
+    FDebugger: TGraphDebugger;
+    FExecutionThread: TGraphExecutionThread;
+    FLastRuntimeError: string;
+    FRuntimeRunning: boolean;
+    FRuntimePaused: boolean;
+    //
+
     FZoom: Double;
     FOffsetX, FOffsetY: Double;
     FScreenRect: TRectF;
     FScrollLastZoom: Double;
+    FScrollLastContentSizeScaled: TRectF;
     FScrollLastContentSize: TRectF;
 
     FDraggingNode: Boolean;
@@ -170,6 +196,46 @@ type
     FLastZoomDistance: Single;
     FLinkVisualType: TLinkVisualType;
     FLinkGradient: Boolean;
+  private // debug
+    procedure ExecutionThreadStarted(Sender: TObject);
+    procedure ExecutionThreadNodeExecuted(Sender: TObject; ANode: TExecutableNode);
+    procedure ExecutionThreadFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
+    procedure ExecutionThreadError(Sender: TObject; const ErrorInfo: TThreadErrorInfo);
+    procedure ExecutionThreadDebuggerPaused(Sender: TObject; ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext);
+    function GetExecutionContext: TNodeExecutionContext;
+
+    procedure SyncBreakpointsToDebugger;
+    function FindDefaultStartExecNode: TExecutableNode;
+    function IsExecEntryNode(ANode: TCustomNode): boolean;
+    procedure ClearRuntimeVisualState;
+
+    procedure SetCurrentDebugNode(AValue: TCustomNode);
+    procedure SetDebugMode(AValue: boolean);
+    procedure SetDebugViewMode(AValue: boolean);
+  public
+    procedure ToggleBreakpoint(ANode: TCustomNode);
+    function HasBreakpoint(ANode: TCustomNode): boolean;
+    procedure ClearAllBreakpoints;
+    procedure HighlightNode(ANode: TCustomNode);
+
+    function ExecuteGraph(AStartNode: TExecutableNode = nil): boolean;
+    procedure StopExecution;
+    procedure PauseExecution;
+    procedure ContinueExecution;
+    procedure StepIntoExecution;
+    procedure StepOverExecution;
+
+    function IsExecutionRunning: boolean;
+    function IsExecutionPaused: boolean;
+    function GetLastRuntimeError: string;
+
+    property Debugger: TGraphDebugger read FDebugger;
+    property DebugMode: boolean read FDebugMode write SetDebugMode;
+    property DebugViewMode: boolean read FDebugViewMode write SetDebugViewMode;
+    property CurrentDebugNode: TCustomNode read FCurrentDebugNode write SetCurrentDebugNode;
+    property OnExecutionStateChanged: TEditorExecutionStateEvent read FOnExecutionStateChanged write FOnExecutionStateChanged;
+    property OnExecutionNodeChanged: TEditorExecutionNodeEvent read FOnExecutionNodeChanged write FOnExecutionNodeChanged;
+    property OnExecutionFinished: TEditorExecutionFinishedEvent read FOnExecutionFinished write FOnExecutionFinished;
 
   private // Auto scroll
     FAutoScrollTimer: TTimer;
@@ -182,6 +248,7 @@ type
     procedure AniChanged(Sender: TObject);
     procedure TimerAutoScrollProc(Sender: TObject);
   private
+    FLinkVisualClass: TLinkVisualObjectClass;
 
     // Internal Logic
     function GetPrimarySelectedNode: TCustomNode;
@@ -282,6 +349,9 @@ type
     procedure InternalDraggingBegin(X, Y: Single; Node: TCustomNode);
     procedure InternalAutoScroll(X, Y: Single);
     procedure InternalAutoScrollEnd;
+    procedure SetLinkVisualClass(const Value: TLinkVisualObjectClass);
+    procedure SelectPin(Pin: TNodePin; Toggle: Boolean);
+    procedure MoveScreen(Direction: TMoveDirection);
   protected
     function GetSelectedPin(Index: integer): TNodePin;
 
@@ -294,7 +364,7 @@ type
     procedure NodeGraphChanged(Sender: TObject);
 
     // Hit Testing
-    function WorldToScreen(WX, WY: Single): TPoint;
+    function WorldToScreen(WX, WY: Single): TPointF;
     function ScreenToWorld(const Value: TPointF): TPointF; overload;
     function ScreenToWorld(SX, SY: Double): TPointF; overload;
     function ScreenToWorld(SX, SY: Double; AZoom: Double): TPointF; overload;
@@ -330,13 +400,14 @@ type
 
     procedure AddNode(ANode: TCustomNode);
     procedure RemoveNode(ANode: TCustomNode);
-    procedure BringNodeToFront(ANode: TCustomNode);
-    procedure SendNodeToBack(ANode: TCustomNode);
+    procedure BringNodeToFront(ANode: TCustomNode = nil);
+    procedure SendNodeToBack(ANode: TCustomNode = nil);
     //
     procedure AddLink(APinFrom, APinTo: TNodePin);
     procedure RemoveLink(ALink: TNodeLink);
     //
     procedure Clear;
+    procedure Cancel;
 
     procedure ClearSelection;
     procedure DeleteSelection;
@@ -353,6 +424,7 @@ type
 
     procedure FitSelection;
     procedure Fit;
+    procedure FitSome;
     procedure ResetView;
     procedure SetZoom(Value: Double; const TargetPos: TPointF); overload;
 
@@ -416,6 +488,7 @@ type
     property GridType: TGridType read FGridType write SetGridType;
     property GridColor: TAlphaColor read FGridColor write SetGridColor default $22E0E0E0;
     property LinkVisualType: TLinkVisualType read FLinkVisualType write SetLinkVisualType default TLinkVisualType.Bezier;
+    property LinkVisualClass: TLinkVisualObjectClass read FLinkVisualClass write SetLinkVisualClass;
     property LinkGradient: Boolean read FLinkGradient write SetLinkGradient;
 
     // Events
@@ -471,6 +544,7 @@ begin
   OnDragOver := FOnDragOver;
   OnDragDrop := FOnDragDrop;
   AutoCapture := True;
+  ClipChildren := True;
   CanFocus := True;
   TabStop := True;
   Touch.InteractiveGestures := [
@@ -519,7 +593,8 @@ begin
   FLastPaintTick := 0;
 
   FLinkVisualType := TLinkVisualType.Bezier;
-  TNodeLink.VisualType := TLinkVisualType.Bezier;
+  TNodeLink.VisualClass := TLinkVisualBezier;
+  TCustomNode.DrawIcon := False;
   FLinkGradient := True;
   TNodeLink.UseGradient := True;
 
@@ -584,10 +659,21 @@ begin
 
   FPopupMenu := TPopupMenu.Create(Self);
   BuildContextMenu;
+
+  // execution
+  FDebugger := TGraphDebugger.Create(FGraph);
+  FExecutionThread := nil;
+  FLastRuntimeError := '';
+  FRuntimeRunning := False;
+  FRuntimePaused := False;
 end;
 
 destructor TNodeEditor.Destroy;
 begin
+  StopExecution;
+  FreeAndNil(FDebugger);
+  FreeAndNil(FBreakpoints);
+
   FAni.Free;
   FPaintNodesSorted.Free;
   FPaintNodesSortedNav.Free;
@@ -670,6 +756,388 @@ begin
   end;
 end;
 
+procedure TNodeEditor.SetDebugMode(AValue: boolean);
+begin
+  if FDebugMode = AValue then
+    Exit;
+  FDebugMode := AValue;
+  if not FDebugMode then
+  begin
+    FDebugViewMode := False;
+    FCurrentDebugNode := nil;
+  end;
+  Repaint;
+end;
+
+procedure TNodeEditor.SetDebugViewMode(AValue: boolean);
+begin
+  if FDebugViewMode = AValue then
+    Exit;
+  FDebugViewMode := AValue;
+  Repaint;
+end;
+
+procedure TNodeEditor.SetCurrentDebugNode(AValue: TCustomNode);
+begin
+  if FCurrentDebugNode = AValue then
+    Exit;
+  FCurrentDebugNode := AValue;
+  Repaint;
+end;
+
+procedure TNodeEditor.ToggleBreakpoint(ANode: TCustomNode);
+begin
+  if ANode = nil then
+    Exit;
+
+  if FBreakpoints = nil then
+    FBreakpoints := TList.Create;
+
+  if FBreakpoints.IndexOf(ANode) >= 0 then
+  begin
+    FBreakpoints.Remove(ANode);
+    if FDebugger <> nil then
+      FDebugger.RemoveBreakpoint(ANode);
+  end
+  else
+  begin
+    FBreakpoints.Add(ANode);
+    if FDebugger <> nil then
+      FDebugger.AddBreakpoint(ANode);
+  end;
+
+  Repaint;
+end;
+
+function TNodeEditor.HasBreakpoint(ANode: TCustomNode): boolean;
+begin
+  Result := (FBreakpoints <> nil) and (FBreakpoints.IndexOf(ANode) >= 0);
+end;
+
+procedure TNodeEditor.ClearAllBreakpoints;
+begin
+  if FBreakpoints <> nil then
+    FBreakpoints.Clear;
+
+  if FDebugger <> nil then
+    FDebugger.ClearAllBreakpoints;
+
+  Repaint;
+end;
+
+procedure TNodeEditor.HighlightNode(ANode: TCustomNode);
+begin
+  FCurrentDebugNode := ANode;
+  Repaint;
+end;
+
+function TNodeEditor.IsExecEntryNode(ANode: TCustomNode): boolean;
+var
+  i, j: integer;
+  Pin: TNodePin;
+  Link: TNodeLink;
+begin
+  Result := False;
+  if (ANode = nil) or not (ANode is TExecutableNode) then
+    Exit;
+
+  for i := 0 to ANode.OutputCount - 1 do
+  begin
+    Pin := ANode.GetOutput(i);
+    if (Pin <> nil) and (Pin.Kind = TPinKind.Exec) then
+    begin
+      Result := True;
+      Break;
+    end;
+  end;
+
+  if not Result then
+    Exit(False);
+
+  for i := 0 to ANode.InputCount - 1 do
+  begin
+    Pin := ANode.GetInput(i);
+    if (Pin = nil) or (Pin.Kind <> TPinKind.Exec) then
+      Continue;
+
+    for j := 0 to FGraph.Links.Count - 1 do
+    begin
+      Link := TNodeLink(FGraph.Links[j]);
+      if (Link <> nil) and (Link.ToPin = Pin) then
+        Exit(False);
+    end;
+  end;
+
+  Result := True;
+end;
+
+function TNodeEditor.FindDefaultStartExecNode: TExecutableNode;
+var
+  i: integer;
+  N: TCustomNode;
+begin
+  Result := nil;
+
+  // Если пользователь что-то выделил — это явная точка старта
+  if FController.Selection.NodeCount > 0 then
+  begin
+    N := FController.Selection.GetNode(0);
+    if N is TExecutableNode then
+      Exit(TExecutableNode(N));
+  end;
+
+  // Иначе ищем "входной" узел графа
+  for i := 0 to FGraph.Nodes.Count - 1 do
+  begin
+    N := TCustomNode(FGraph.Nodes[i]);
+    if (N is TExecutableNode) and IsExecEntryNode(N) then
+      Exit(TExecutableNode(N));
+  end;
+
+  // Фоллбек — любой executable node
+  for i := 0 to FGraph.Nodes.Count - 1 do
+  begin
+    N := TCustomNode(FGraph.Nodes[i]);
+    if N is TExecutableNode then
+      Exit(TExecutableNode(N));
+  end;
+end;
+
+procedure TNodeEditor.SyncBreakpointsToDebugger;
+var
+  i: integer;
+  N: TCustomNode;
+begin
+  if FDebugger = nil then
+    Exit;
+
+  FDebugger.ClearAllBreakpoints;
+
+  if FBreakpoints = nil then
+    Exit;
+
+  for i := 0 to FBreakpoints.Count - 1 do
+  begin
+    N := TCustomNode(FBreakpoints[i]);
+    if N <> nil then
+      FDebugger.AddBreakpoint(N);
+  end;
+end;
+
+procedure TNodeEditor.ClearRuntimeVisualState;
+begin
+  FRuntimeRunning := False;
+  FRuntimePaused := False;
+  FCurrentDebugNode := nil;
+  FDebugViewMode := False;
+  Repaint;
+end;
+
+procedure TNodeEditor.ExecutionThreadStarted(Sender: TObject);
+begin
+  FLastRuntimeError := '';
+  FRuntimeRunning := True;
+  FRuntimePaused := False;
+  FDebugMode := True;
+  FDebugViewMode := True;
+  Repaint;
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.ExecutionThreadNodeExecuted(Sender: TObject; ANode: TExecutableNode);
+begin
+  FCurrentDebugNode := ANode;
+  FDebugMode := True;
+  FDebugViewMode := True;
+  //
+  Repaint;
+
+  if Assigned(FOnExecutionNodeChanged) then
+    FOnExecutionNodeChanged(Self, ANode);
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.ExecutionThreadFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
+begin
+  if Success then
+    FLastRuntimeError := ''
+  else
+    FLastRuntimeError := ErrorMessage;
+
+  FExecutionThread := nil;
+  ClearRuntimeVisualState;
+
+  if Assigned(FOnExecutionFinished) then
+    FOnExecutionFinished(Self, Success, ErrorMessage);
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.ExecutionThreadError(Sender: TObject; const ErrorInfo: TThreadErrorInfo);
+begin
+  FLastRuntimeError := ErrorInfo.Message;
+
+  if ErrorInfo.Node <> nil then
+  begin
+    FCurrentDebugNode := ErrorInfo.Node;
+    FDebugMode := True;
+    FDebugViewMode := True;
+  end;
+
+  Repaint;
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.ExecutionThreadDebuggerPaused(Sender: TObject; ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext);
+begin
+  FCurrentDebugNode := ANode;
+  FDebugMode := True;
+  FDebugViewMode := True;
+  FRuntimeRunning := False;
+  FRuntimePaused := True;
+  Repaint;
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+function TNodeEditor.GetExecutionContext: TNodeExecutionContext;
+begin
+  Result := nil;
+  if (FExecutionThread <> nil) and (FExecutionThread.Executor <> nil) then
+    Result := FExecutionThread.Executor.Context;
+end;
+
+function TNodeEditor.ExecuteGraph(AStartNode: TExecutableNode): boolean;
+begin
+  StopExecution;
+
+  if AStartNode = nil then
+    AStartNode := FindDefaultStartExecNode;
+
+  if AStartNode = nil then
+  begin
+    FLastRuntimeError := 'Start execute node not found';
+    Exit(False);
+  end;
+
+  if FDebugger = nil then
+    FDebugger := TGraphDebugger.Create(FGraph);
+
+  SyncBreakpointsToDebugger;
+  FDebugger.ResetSession;
+
+  FExecutionThread := TGraphExecutionThread.Create(FGraph, AStartNode, FDebugger);
+  FExecutionThread.OnStarted := ExecutionThreadStarted;
+  FExecutionThread.OnNodeExecuted := ExecutionThreadNodeExecuted;
+  FExecutionThread.OnFinished := ExecutionThreadFinished;
+  FExecutionThread.OnError := ExecutionThreadError;
+  FExecutionThread.OnDebuggerPaused := ExecutionThreadDebuggerPaused;
+  FExecutionThread.Start;
+
+  Result := True;
+end;
+
+procedure TNodeEditor.StopExecution;
+begin
+  if FExecutionThread <> nil then
+  begin
+    FExecutionThread.Stop;
+    FExecutionThread := nil;
+  end;
+
+  if FDebugger <> nil then
+    FDebugger.Continue;
+
+  ClearRuntimeVisualState;
+
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.PauseExecution;
+begin
+  if FExecutionThread <> nil then
+  begin
+    FExecutionThread.Pause;
+    FRuntimePaused := True;
+    FRuntimeRunning := False;
+  end
+  else if FDebugger <> nil then
+  begin
+    FDebugger.Pause;
+    FRuntimePaused := True;
+    FRuntimeRunning := False;
+  end;
+  Repaint;
+  if Assigned(FOnExecutionStateChanged) then
+    FOnExecutionStateChanged(Self);
+end;
+
+procedure TNodeEditor.ContinueExecution;
+begin
+  if FExecutionThread <> nil then
+  begin
+    FExecutionThread.Continue;
+    FRuntimePaused := False;
+    FRuntimeRunning := True;
+    FDebugViewMode := True;
+    Repaint;
+    if Assigned(FOnExecutionStateChanged) then
+      FOnExecutionStateChanged(Self);
+  end;
+end;
+
+procedure TNodeEditor.StepIntoExecution;
+begin
+  if FExecutionThread <> nil then
+  begin
+    FExecutionThread.StepInto;
+    FRuntimePaused := False;
+    FRuntimeRunning := True;
+    FDebugViewMode := True;
+    Repaint;
+    if Assigned(FOnExecutionStateChanged) then
+      FOnExecutionStateChanged(Self);
+  end;
+end;
+
+procedure TNodeEditor.StepOverExecution;
+begin
+  if FExecutionThread <> nil then
+  begin
+    FExecutionThread.StepOver;
+    FRuntimePaused := False;
+    FRuntimeRunning := True;
+    FDebugViewMode := True;
+    Repaint;
+    if Assigned(FOnExecutionStateChanged) then
+      FOnExecutionStateChanged(Self);
+  end;
+end;
+
+function TNodeEditor.IsExecutionRunning: boolean;
+begin
+  Result := FRuntimeRunning and not FRuntimePaused and (FExecutionThread <> nil);
+end;
+
+function TNodeEditor.IsExecutionPaused: boolean;
+begin
+  Result := FRuntimePaused and (FExecutionThread <> nil);
+end;
+
+function TNodeEditor.GetLastRuntimeError: string;
+begin
+  Result := FLastRuntimeError;
+end;
+
 procedure TNodeEditor.ExecuteNodePropertyChange(ANode: TCustomNode; const AOldJSON, ANewJSON: string);
 begin
   if ANode = nil then
@@ -699,11 +1167,13 @@ begin
   if FGraph = nil then
     Exit;
 
+  var R := FScreenRect;
+  R.Inflate(10 * FZoom, 10 * FZoom); // scale bounds for paint outbounds parts
+
   for var i := 0 to FGraph.Nodes.Count - 1 do
   begin
     var N := FGraph.Nodes[i];
-    var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
-    if FScreenRect.IntersectsWith(R) then
+    if R.IntersectsWith(N.GetScreenBounds(FZoom, FOffsetX, FOffsetY)) then
       FPaintNodesSorted.Add(N);
     FPaintNodesSortedNav.Add(N);
   end;
@@ -957,8 +1427,8 @@ begin
     Canvas.Stroke.Gradient.StartPosition.Point := PointF(0.5, 0);
     Canvas.Stroke.Gradient.StopPosition.Point := PointF(0.5, 1);
 
-    var SX := Round(FGuideSnapX * FZoom + FOffsetX);
-    Canvas.DrawLine(PointF(SX, 0), PointF(SX, Height), 1);
+    var SX := FGuideSnapX * FZoom + FOffsetX;
+    Canvas.DrawLine(PointF(SX, 0).Round, PointF(SX, Height).Round, 1);
   end;
 
   if FGuideSnapYActive then
@@ -966,8 +1436,8 @@ begin
     Canvas.Stroke.Gradient.StartPosition.Point := PointF(0, 0.5);
     Canvas.Stroke.Gradient.StopPosition.Point := PointF(1, 0.5);
 
-    var SY := Round(FGuideSnapY * FZoom + FOffsetY);
-    Canvas.DrawLine(PointF(0, SY), PointF(Width, SY), 1);
+    var SY := FGuideSnapY * FZoom + FOffsetY;
+    Canvas.DrawLine(PointF(0, SY).Round, PointF(Width, SY).Round, 1);
   end;
 
   // Reset
@@ -1109,11 +1579,6 @@ begin
   FController.Selection.SelectNode(ANode, AAppend);
 end;
 
-procedure TNodeEditor.SendNodeToBack(ANode: TCustomNode);
-begin
-  FController.SendNodeToBack(ANode);
-end;
-
 procedure TNodeEditor.SelectLinkInternal(ALink: TNodeLink; AKeepNodes: Boolean);
 begin
   if ALink = nil then
@@ -1122,6 +1587,19 @@ begin
   if not AKeepNodes then
     FController.Selection.Clear;
   FController.Selection.SelectLink(ALink, True);
+end;
+
+procedure TNodeEditor.SendNodeToBack(ANode: TCustomNode);
+begin
+  if ANode <> nil then
+    FController.SendNodeToBack(ANode)
+  else
+  begin
+    if SelectedNodeCount = 0 then
+      Exit;
+    for var i := 0 to SelectedNodeCount - 1 do
+      FController.SendNodeToBack(GetSelectedNode(i));
+  end;
 end;
 
 procedure TNodeEditor.ToggleNodeSelection(ANode: TCustomNode);
@@ -1250,10 +1728,10 @@ begin
   SelectLinkInternal(ALink);
 end;
 
-function TNodeEditor.WorldToScreen(WX, WY: Single): TPoint;
+function TNodeEditor.WorldToScreen(WX, WY: Single): TPointF;
 begin
-  Result.X := Round(WX * FZoom + FOffsetX);
-  Result.Y := Round(WY * FZoom + FOffsetY);
+  Result.X := WX * FZoom + FOffsetX;
+  Result.Y := WY * FZoom + FOffsetY;
 end;
 
 function TNodeEditor.GetVisibleWorldRect: TRectF;
@@ -1267,11 +1745,16 @@ var
   MinX, MaxX: Single;
   MinY, MaxY: Single;
 begin
-  if (Recalc) or (FScrollLastZoom <> FZoom) then
+  if Recalc or (FScrollLastZoom <> FZoom) then
+  begin
     FScrollLastContentSize := GetContentSize;
+    FScrollLastContentSizeScaled := FScrollLastContentSize;
+    FScrollLastContentSizeScaled := RectF(FScrollLastContentSizeScaled.Left * FZoom, FScrollLastContentSizeScaled.Top * FZoom, FScrollLastContentSizeScaled.Right * FZoom, FScrollLastContentSizeScaled.Bottom * FZoom);
+    FScrollLastContentSizeScaled.Inflate(100 * Zoom, 100 * Zoom);
+  end;
 
   FScrollLastZoom := FZoom;
-  B := FScrollLastContentSize;
+  B := FScrollLastContentSizeScaled;
 
   // горизонталь
   MinX := Min(B.Left, B.Right - Width);
@@ -1359,8 +1842,6 @@ end;
 
 procedure TNodeEditor.DrawNode(ANode: TCustomNode; const NodeBounds: TRectF);
 begin
-  ANode.OnScreen := True;
-
   // Override drawing
   var Handled := False;
   if Assigned(FOnDrawNode) then
@@ -1414,8 +1895,11 @@ begin
   Result := False;
   Node := nil;
   Pin := nil;
+  if FZoom < TCustomNode.ZoomDetailLimitExt then
+    Exit;
 
   W := ScreenToWorld(SX, SY);
+  var S := PointF(SX, SY);
   EnsureSortedNodes;
 
   for i := FPaintNodesSorted.Count - 1 downto 0 do
@@ -1428,16 +1912,22 @@ begin
     else
       HitRadiusWorld := FPinRadius + 2;
 
+    var R := N.GetScreenBounds(FZoom, FOffsetX, FOffsetY);
+    R.Inflate(HitRadiusWorld * FZoom, HitRadiusWorld * FZoom);
+    if not R.Contains(S) then
+      Continue;
+
     var SkipInput := False;
     if N.VisualKind = TNodeVisualKind.Reroute then
     begin
       if N.OutputsIsBusy and N.InputsIsBusy then
         Continue;
-      SkipInput := not N.OutputsIsBusy;
       if FReconnectFixedPin <> nil then
         SkipInput := FReconnectFixedPin.Direction = TPinDirection.Input
       else if FTempFromPin <> nil then
-        SkipInput := FTempFromPin.Direction = TPinDirection.Input;
+        SkipInput := FTempFromPin.Direction = TPinDirection.Input
+      else
+        SkipInput := not N.OutputsIsBusy;
     end;
 
     if not SkipInput then
@@ -1477,6 +1967,8 @@ function TNodeEditor.GetLinkUnderMouse(SX, SY: Single; out Link: TNodeLink): Boo
 begin
   Result := False;
   Link := nil;
+  if FZoom < TCustomNode.ZoomDetailLimitExt then
+    Exit;
 
   for var i := FGraph.Links.Count - 1 downto 0 do
   begin
@@ -1504,7 +1996,7 @@ procedure TNodeEditor.DrawMiniGrid(ACanvas: TCanvas; const ARect: TRectF; AOffse
   function MiniGetVisibleWorldRect: TRectF;
   begin
     var P0 := MiniScreenToWorld(0, 0);
-    var P1 := MiniScreenToWorld(Round(ARect.Width), Round(ARect.Height));
+    var P1 := MiniScreenToWorld(ARect.Width, ARect.Height);
     Result := TRectF.Create(P0, P1, True);
   end;
 
@@ -1615,12 +2107,17 @@ end;
 
 procedure TNodeEditor.DrawLinks;
 begin
+  var R := FScreenRect;
+  //R.Inflate(20 * FZoom, 20 * FZoom);
   for var Link in FGraph.Links do
   begin
     if (Link.FromPin = nil) or (Link.ToPin = nil) then
       Continue;
 
-    if not FScreenRect.IntersectsWith(Link.BoundsRect(FZoom, FOffsetX, FOffsetY)) then
+    //Debug rect
+    //Canvas.DrawRect(Link.GetScreenBounds(FZoom, FOffsetX, FOffsetY), 0, 0, [], 1);
+
+    if not R.IntersectsWith(Link.GetScreenBounds(FZoom, FOffsetX, FOffsetY)) then
       Continue;
 
     var IsSelected := FController.Selection.ContainsLink(Link);
@@ -1637,7 +2134,7 @@ end;
 
 procedure TNodeEditor.DrawTempLink;
 var
-  P0, P1, P2, P3: TPoint;
+  P0, P1, P2, P3: TPointF;
   W0, W1, W2, W3: TPointF;
   StartPin: TNodePin;
   FixedPosW: TPointF;
@@ -1699,7 +2196,8 @@ begin
   Canvas.Stroke.Thickness := 3;
   Canvas.Stroke.Dash := TStrokeDash.Dot;
 
-  DrawCubicBezier(Canvas, P0, P1, P2, P3, 1);
+  TNodeLink.VisualClass.DrawLink(Canvas, W0, W3, FZoom, FOffsetX, FOffsetY, 1);
+  //DrawCubicBezier(Canvas, P0, P1, P2, P3, 1);
 
   Canvas.Stroke.Thickness := 1;
   Canvas.Stroke.Dash := TStrokeDash.Solid;
@@ -1734,13 +2232,13 @@ begin
 
   var ArrowSize := 8;
   var Pos := WorldToScreen(CX, CY);
-  Pos.Offset(Round(GetPrimarySelectedNode.Width * Zoom / 2), 0);
+  Pos.Offset(GetPrimarySelectedNode.Width * Zoom / 2, 0);
 
   // Bounds position
   var OldPos := Pos;
-  Pos.SetLocation(PointF(
-      EnsureRange(Pos.X, TextW / 2, Width - TextW / 2),
-      EnsureRange(Pos.Y, TextH + ArrowSize, Height)).Round);
+  Pos := PointF(
+    EnsureRange(Pos.X, TextW / 2, Width - TextW / 2),
+    EnsureRange(Pos.Y, TextH + ArrowSize, Height));
 
   // Bounds
   var R := RectF(Pos.X - TextW * 0.5, Pos.Y, Pos.X + TextW * 0.5, Pos.Y + TextH);
@@ -1836,7 +2334,7 @@ begin
   Canvas.Stroke.Cap := TStrokeCap.Round;
   Canvas.Stroke.Join := TStrokeJoin.Round;
   Canvas.Fill.Kind := TBrushKind.Solid;
-  Canvas.Clear(TAlphaColors.Null);
+  //Canvas.Clear(TAlphaColors.Null);
   Canvas.Fill.Color := $FF222222;
   Canvas.FillRect(LocalRect, 7, 7, AllCorners, 1);
   EnsureSortedNodes;
@@ -1846,7 +2344,15 @@ end;
 
 procedure TNodeEditor.BringNodeToFront(ANode: TCustomNode);
 begin
-  FController.BringNodeToFront(ANode);
+  if ANode <> nil then
+    FController.BringNodeToFront(ANode)
+  else
+  begin
+    if SelectedNodeCount = 0 then
+      Exit;
+    for var i := 0 to SelectedNodeCount - 1 do
+      FController.BringNodeToFront(GetSelectedNode(i));
+  end;
 end;
 
 procedure TNodeEditor.EndPaint;
@@ -1856,11 +2362,13 @@ end;
 
 procedure TNodeEditor.DrawFrameTime;
 begin
+  var TimeMS := FFrameTimeWatch.ElapsedMilliseconds;
   Canvas.Font.Size := 12;
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.FillText(
     RectF(20, 20, 500, 500),
-    FFrameTimeWatch.ElapsedMilliseconds.ToString + 'ms'#13#10 +
+    TimeMS.ToString + 'ms, ' +
+    '~fps ' + Trunc(1000 / Max(1, TimeMS)).ToString + #13#10 +
     'Canvas: ' + Canvas.ClassName + #13#10 +
     'Context: ' + TContextManager.DefaultContextClass.ClassName + #13#10 +
     Format('X: %f, Y: %f', [FOffsetX, FOffsetY]) + #13#10 +
@@ -2153,86 +2661,93 @@ begin
   ACanvas.Fill.Kind := TBrushKind.Solid;
   ACanvas.Clear(TAlphaColors.Null);
   ACanvas.Fill.Color := $FF222222;
-  ACanvas.FillRect(ARect, 4, 4, AllCorners, 1);
+  ACanvas.FillRect(ARect, 0, 0, AllCorners, 1);
 
   var CameraCenter := ScreenToWorld(Width * 0.5, Height * 0.5);
   var WorldRect := TRectF.Create(ScreenToWorld(0, 0), ScreenToWorld(Width, Height));
-  var ViewRect: TRectF;
-  var MiniOffsetX: Single;
-  var MiniOffsetY: Single;
 
-  // Optimal mini zoom
-  var MiniZoom := 0.045;
-  repeat
-    MiniZoom := MiniZoom - 0.001;
-    MiniOffsetX := ARect.CenterPoint.X - CameraCenter.X * MiniZoom;
-    MiniOffsetY := ARect.CenterPoint.Y - CameraCenter.Y * MiniZoom;
+  // Optimal mini zoom and view
+  var DX := Max(Abs(WorldRect.Left - CameraCenter.X), Abs(WorldRect.Right - CameraCenter.X));
+  var DY := Max(Abs(WorldRect.Top - CameraCenter.Y), Abs(WorldRect.Bottom - CameraCenter.Y));
+  var MiniZoom := Min(0.045, Floor(Min(ARect.Width * 0.5 / DX, ARect.Height * 0.5 / DY) * 1000) / 1000);
 
-    ViewRect := WorldToMini(WorldRect, MiniZoom, MiniOffsetX, MiniOffsetY);
-  until ARect.Contains(ViewRect);
+  var MiniOffsetX := ARect.CenterPoint.X - CameraCenter.X * MiniZoom;
+  var MiniOffsetY := ARect.CenterPoint.Y - CameraCenter.Y * MiniZoom;
+  var ViewRect := WorldToMini(WorldRect, MiniZoom, MiniOffsetX, MiniOffsetY);
 
   // Center dot
   ACanvas.Fill.Color := TAlphaColors.Cornflowerblue;
   ACanvas.FillEllipse(TRectF.Create(PointF(MiniOffsetX, MiniOffsetY), 4, 4), 0.8);
   DrawMiniGrid(ACanvas, ARect, MiniOffsetX, MiniOffsetY, MiniZoom);
 
+  if FZoom > 0.05 then
+  begin
   // Draw nodes
-  EnsureSortedNodes;
+    EnsureSortedNodes;
 
-  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
-  begin
-    var N := FPaintNodesSortedNav[i];
-    if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
+    for var i := 0 to FPaintNodesSortedNav.Count - 1 do
     begin
-      var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
-      if ARect.IntersectsWith(R) then
+      var N := FPaintNodesSortedNav[i];
+      if (N.VisualKind = TNodeVisualKind.Comment) and not N.Selected then
       begin
-        ACanvas.Fill.Color := N.HeaderColor;
-        ACanvas.FillRect(R, 1);
+        var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
+        if ARect.IntersectsWith(R) then
+        begin
+          ACanvas.Fill.Color := N.HeaderColor;
+          ACanvas.FillRect(R, 1);
+        end;
       end;
     end;
-  end;
 
-  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
-  begin
-    var N := FPaintNodesSortedNav[i];
-    if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
+    for var i := 0 to FPaintNodesSortedNav.Count - 1 do
     begin
-      var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
-      if ARect.IntersectsWith(R) then
+      var N := FPaintNodesSortedNav[i];
+      if (N.VisualKind = TNodeVisualKind.Comment) and N.Selected then
       begin
-        ACanvas.Fill.Color := N.HeaderColor;
-        ACanvas.FillRect(R, 1);
+        var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
+        if ARect.IntersectsWith(R) then
+        begin
+          ACanvas.Fill.Color := N.HeaderColor;
+          ACanvas.FillRect(R, 1);
+        end;
       end;
     end;
-  end;
 
-  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
-  begin
-    var N := FPaintNodesSortedNav[i];
-    if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
+    for var i := 0 to FPaintNodesSortedNav.Count - 1 do
     begin
-      var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
-      if ARect.IntersectsWith(R) then
+      var N := FPaintNodesSortedNav[i];
+      if (N.VisualKind <> TNodeVisualKind.Comment) and not N.Selected then
       begin
-        ACanvas.Fill.Color := N.HeaderColor;
-        ACanvas.FillRect(R, 1);
+        var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
+        if ARect.IntersectsWith(R) then
+        begin
+          ACanvas.Fill.Color := N.HeaderColor;
+          ACanvas.FillRect(R, 1);
+        end;
       end;
     end;
-  end;
 
-  for var i := 0 to FPaintNodesSortedNav.Count - 1 do
-  begin
-    var N := FPaintNodesSortedNav[i];
-    if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
+    for var i := 0 to FPaintNodesSortedNav.Count - 1 do
     begin
-      var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
-      if ARect.IntersectsWith(R) then
+      var N := FPaintNodesSortedNav[i];
+      if (N.VisualKind <> TNodeVisualKind.Comment) and N.Selected then
       begin
-        ACanvas.Fill.Color := N.HeaderColor;
-        ACanvas.FillRect(R, 1);
+        var R := N.GetScreenBounds(MiniZoom, MiniOffsetX, MiniOffsetY);
+        if ARect.IntersectsWith(R) then
+        begin
+          ACanvas.Fill.Color := N.HeaderColor;
+          ACanvas.FillRect(R, 1);
+        end;
       end;
     end;
+  end
+  else
+  begin
+    var R := FScrollLastContentSize;
+    R := RectF(R.Left * MiniZoom, R.Top * MiniZoom, R.Right * MiniZoom, R.Bottom * MiniZoom);
+    R.Offset(MiniOffsetX, MiniOffsetY);
+    ACanvas.Fill.Color := TAlphaColors.White;
+    ACanvas.FillRect(R, 0, 0, [], 0.2);
   end;
 
   // Viewport frame
@@ -2241,7 +2756,7 @@ begin
   ACanvas.Stroke.Thickness := 1;
   ViewRect := ViewRect.Truncate;
   ViewRect := ACanvas.AlignToPixel(ViewRect);
-  ACanvas.DrawRect(ViewRect, 0, 0, [], 1);
+  ACanvas.DrawRect(ViewRect, 2, 2, AllCorners, 1);
 
   // Box selecting
   if FBoxSelecting then
@@ -2285,13 +2800,6 @@ end;
 
 procedure TNodeEditor.ResetStateAfterGraphReload;
 begin
-  var OldHandler := FController.Selection.OnChanged;
-  FController.Selection.OnChanged := nil;
-  try
-    FController.Selection.Clear;
-  finally
-    FController.Selection.OnChanged := OldHandler;
-  end;
 
   FHoveredNode := nil;
   FHoveredPin := nil;
@@ -2317,8 +2825,7 @@ begin
   ClearSnapGuides;
   ClearHoverStates;
 
-  SyncNodeSelectedFlags;
-  NotifySelectionChanged;
+  FController.Selection.Clear;
   Repaint;
 end;
 
@@ -2326,6 +2833,7 @@ procedure TNodeEditor.Resize;
 begin
   inherited;
   FScreenRect := LocalRect;
+  InternalWorldChanged;
 end;
 
 procedure TNodeEditor.ClearHoverStates;
@@ -2416,11 +2924,11 @@ begin
     Exit;
 
   var First := True;
-  var R: TRect;
+  var R: TRectF;
   for var i := 0 to FController.Selection.NodeCount - 1 do
   begin
     var N := FController.Selection.GetNode(i);
-    var NR := Rect(Round(N.X), Round(N.Y), Round(N.X + N.Width), Round(N.Y + N.Height));
+    var NR := RectF(N.X, N.Y, N.X + N.Width, N.Y + N.Height);
 
     if First then
     begin
@@ -2438,8 +2946,8 @@ begin
   FZoom := Min((Width - Margin * 2) / W, (Height - Margin * 2) / H);
   FZoom := EnsureRange(FZoom, ZoomMin, ZoomMax);
 
-  FOffsetX := Margin - Round(R.Left * FZoom);
-  FOffsetY := Margin - Round(R.Top * FZoom);
+  FOffsetX := Margin - (R.Left * FZoom);
+  FOffsetY := Margin - (R.Top * FZoom);
 
   InternalWorldChanged;
 end;
@@ -2483,9 +2991,7 @@ begin
       MaxY := Max(MaxY, N.Y + N.Height);
     end;
   end;
-
-  Result := RectF(MinX * FZoom, MinY * FZoom, MaxX * FZoom, MaxY * FZoom);
-  Result.Inflate(100 * Zoom, 100 * Zoom);
+  Result := RectF(MinX, MinY, MaxX, MaxY);
 end;
 
 procedure TNodeEditor.Fit;
@@ -2544,8 +3050,8 @@ begin
   Cx := (MinX + MaxX) * 0.5;
   Cy := (MinY + MaxY) * 0.5;
 
-  FOffsetX := Round(Width * 0.5 - Cx * FZoom);
-  FOffsetY := Round(Height * 0.5 - Cy * FZoom);
+  FOffsetX := Width * 0.5 - Cx * FZoom;
+  FOffsetY := Height * 0.5 - Cy * FZoom;
 
   InternalWorldChanged;
 end;
@@ -2604,8 +3110,10 @@ begin
     end
     else if Button = TMouseButton.mbMiddle then
     begin
-      //InternalAutoScrollBegin(X, Y);
-      InternalPanningBegin(X, Y);
+      if ssShift in Shift then
+        InternalAutoScrollBegin(X, Y)
+      else
+        InternalPanningBegin(X, Y);
     end;
   finally
     Repaint;
@@ -2696,6 +3204,19 @@ end;
 
 procedure TNodeEditor.AniChanged(Sender: TObject);
 begin
+  if (FOffsetX = -FAni.ViewportPositionF.X) or
+    (FOffsetY = -FAni.ViewportPositionF.Y)
+    then
+  begin
+    FOffsetX := -FAni.ViewportPositionF.X;
+    FOffsetY := -FAni.ViewportPositionF.Y;
+    FAni.ViewportPosition := PointF(-FOffsetX, -FOffsetY);
+    UpdateScrollBars(False);
+    UpdatedStatus;
+    Repaint;
+    Exit;
+  end;
+
   FOffsetX := -FAni.ViewportPositionF.X;
   FOffsetY := -FAni.ViewportPositionF.Y;
 
@@ -2837,6 +3358,14 @@ begin
   end;
 end;
 
+procedure TNodeEditor.SelectPin(Pin: TNodePin; Toggle: Boolean);
+begin
+  if Toggle then
+    FController.Selection.TogglePin(Pin)
+  else
+    FController.Selection.SelectPin(Pin, True);
+end;
+
 function TNodeEditor.InternalPinClick(X, Y: Single; Shift: TShiftState; NodeUnderMouse: TCustomNode): Boolean;
 begin
   Result := False;
@@ -2852,19 +3381,18 @@ begin
   if Assigned(FOnPinClick) then
     FOnPinClick(Self, Pin);
 
-  if ssCtrl in Shift then
-    FController.Selection.TogglePin(Pin)
-  else if ssShift in Shift then
-    FController.Selection.SelectPin(Pin, True)
-  else if not Pin.CanAcceptMoreConnections then
-    FController.Selection.ClearPins
+  if (ssCtrl in Shift) or (ssShift in Shift) then
+    SelectPin(Pin, ssCtrl in Shift)
   else
   begin
     FController.Selection.ClearPins;
-    FTempFromPin := Pin;
-    FTempMousePos := PointF(X, Y);
-    FTempStartMousePos := PointF(X, Y);
-    FDraggingLink := False;
+    if Pin.CanAcceptMoreConnections then
+    begin
+      FTempFromPin := Pin;
+      FTempMousePos := PointF(X, Y);
+      FTempStartMousePos := PointF(X, Y);
+      FDraggingLink := False;
+    end;
   end;
   Result := True;
 end;
@@ -2967,6 +3495,7 @@ begin
                 FOnAfterConnectPins(Self, FTempFromPin, TargetPin);
               Result := True;
             end;
+            TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
             Break;
           end;
         end;
@@ -2988,6 +3517,7 @@ begin
                 FOnAfterConnectPins(Self, TargetPin, FTempFromPin);
               Result := True;
             end;
+            TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
             Break;
           end;
         end;
@@ -3058,8 +3588,8 @@ end;
 
 procedure TNodeEditor.InternalResizing(X, Y: Single);
 begin
-  FResizeNode.Width := Max(FResizeNode.MinWidth, FResizeStartWidth + Round((X - FResizeStartMouseX) / FZoom));
-  FResizeNode.Height := Max(FResizeNode.MinHeight, FResizeStartHeight + Round((Y - FResizeStartMouseY) / FZoom));
+  FResizeNode.Width := Round(Max(FResizeNode.MinWidth, FResizeStartWidth + (X - FResizeStartMouseX) / FZoom));
+  FResizeNode.Height := Round(Max(FResizeNode.MinHeight, FResizeStartHeight + (Y - FResizeStartMouseY) / FZoom));
 end;
 
 procedure TNodeEditor.InternalResizingEnd;
@@ -3252,7 +3782,7 @@ begin
       Exit;
     end;
 
-    var MPos := Screen.MousePos.Round;
+    var MPos := Screen.MousePos;
     FPopupMenu.PopupComponent := Self;
     FPopupMenu.Popup(MPos.X, MPos.Y);
   end;
@@ -3344,10 +3874,26 @@ begin
   Repaint;
 end;
 
+procedure TNodeEditor.SetLinkVisualClass(const Value: TLinkVisualObjectClass);
+begin
+  FLinkVisualClass := Value;
+  TNodeLink.VisualClass := FLinkVisualClass;
+  Repaint;
+end;
+
 procedure TNodeEditor.SetLinkVisualType(const Value: TLinkVisualType);
 begin
   FLinkVisualType := Value;
-  TNodeLink.VisualType := FLinkVisualType;
+  case Value of
+    TLinkVisualType.Bezier:
+      TNodeLink.VisualClass := TLinkVisualBezier;
+    TLinkVisualType.Line:
+      TNodeLink.VisualClass := TLinkVisualLine;
+    TLinkVisualType.PolyLine:
+      TNodeLink.VisualClass := TLinkVisualPolyLine;
+    TLinkVisualType.Rect:
+      TNodeLink.VisualClass := TLinkVisualRect;
+  end;
   Repaint;
 end;
 
@@ -3389,8 +3935,8 @@ begin
 
   if Abs(FZoom - NewZoom) > 0.0001 then
   begin
-    FOffsetX := TargetPos.X - Round((TargetPos.X - FOffsetX) * (NewZoom / FZoom));
-    FOffsetY := TargetPos.Y - Round((TargetPos.Y - FOffsetY) * (NewZoom / FZoom));
+    FOffsetX := TargetPos.X - (TargetPos.X - FOffsetX) * (NewZoom / FZoom);
+    FOffsetY := TargetPos.Y - (TargetPos.Y - FOffsetY) * (NewZoom / FZoom);
   end;
   FZoom := NewZoom;
 
@@ -3498,83 +4044,112 @@ begin
   FController.Selection.EndUpdate;
 end;
 
+procedure TNodeEditor.Cancel;
+begin
+  if FController.Selection.SelectedCount > 0 then
+    ClearSelection
+  else
+    CancelMouseOperations(False);
+end;
+
+procedure TNodeEditor.FitSome;
+begin
+  if FController.Selection.NodeCount > 0 then
+    FitSelection
+  else
+    Fit;
+end;
+
+procedure TNodeEditor.MoveScreen(Direction: TMoveDirection);
+begin
+  case Direction of
+    TMoveDirection.Left:
+      FOffsetX := FOffsetX + 40;
+    TMoveDirection.Up:
+      FOffsetY := FOffsetY + 40;
+    TMoveDirection.Right:
+      FOffsetX := FOffsetX - 40;
+    TMoveDirection.Down:
+      FOffsetY := FOffsetY - 40;
+  end;
+  InternalWorldChanged;
+end;
+
 procedure TNodeEditor.KeyDown(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);
 begin
   inherited;
+  if (Key = vkLeft) and (Shift = []) then
+    MoveScreen(TMoveDirection.Left);
+  if (Key = vkUp) and (Shift = []) then
+    MoveScreen(TMoveDirection.Up);
+  if (Key = vkRight) and (Shift = []) then
+    MoveScreen(TMoveDirection.Right);
+  if (Key = vkDown) and (Shift = []) then
+    MoveScreen(TMoveDirection.Down);
+  if (Key = vkAdd) and (Shift = []) then
+    SetZoom(FZoom * FZoomStep, LocalRect.CenterPoint);
+  if (Key = vkSubtract) and (Shift = []) then
+    SetZoom(FZoom / FZoomStep, LocalRect.CenterPoint);
+
   if (Key = vkA) and (Shift = [ssCtrl]) then
-    SelectAll;
-  if (Key = vkA) and (Shift = [ssCtrl, ssShift]) then
-    SelectAllNodes;
-  if (Key = vkA) and (Shift = [ssShift]) then
-    SelectAllLinks;
-  if (Key = vkC) and (Shift = [ssCtrl]) then
-    CopySelectionToClipboard;
-  if (Key = vkD) and (Shift = [ssCtrl]) then
-    DuplicateSelection;
-  if (Key = vkF) and (Shift = []) then
-  begin
-    if FController.Selection.NodeCount > 0 then
-      FitSelection
-    else
-      Fit;
-  end;
-  if (Key = vkL) and (Shift = [ssCtrl]) then
-    FController.ConnectSelectedPins;
-  if (Key = vkV) and (Shift = [ssCtrl]) then
-    PasteFromClipboard;
-  if (Key = vkX) and (Shift = [ssCtrl]) then
-    CutSelectionToClipboard;
-  if (Key = vkY) and (Shift = [ssCtrl]) then
-    Redo;
-  if (Key = vkZ) and (Shift = [ssCtrl]) then
-    Undo;
-  if (Key = vkZ) and (Shift = [ssCtrl, ssShift]) then
-    Redo;
-  if (Key = vkDelete) and (Shift = []) then
-    DeleteSelection;
-  if (Key = vkEscape) and (Shift = []) then
-  begin
-    if FController.Selection.SelectedCount > 0 then
-    begin
-      ClearSelection;
-    end
-    else
-    begin
-      CancelMouseOperations(False);
-    end;
-  end;
-
-  if (Key = vkL) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.Left);
-  if (Key = vkR) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.Right);
-  if (Key = vkT) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.Top);
-  if (Key = vkB) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.Bottom);
-  if (Key = vkH) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.CenterHorizontal);
-  if (Key = vkV) and (Shift = [ssCtrl, ssShift]) then
-    Controller.AlignSelectedNodes(TAlignMode.CenterVertical);
-
-  if (Key = vkH) and (Shift = [ssCtrl, ssAlt]) then
-    Controller.DistributeSelectedNodes(TDistributeMode.Horizontal);
-  if (Key = vkV) and (Shift = [ssCtrl, ssAlt]) then
-    Controller.DistributeSelectedNodes(TDistributeMode.Vertical);
-
-  if (Key = vkW) and (Shift = [ssCtrl, ssShift]) then
-    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Width);
-  if (Key = vkH) and (Shift = [ssCtrl, ssShift]) then
-    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Height);
-  if (Key = vkS) and (Shift = [ssCtrl, ssShift]) then
-    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Both);
-
-  if (Key = vkF) and (Shift = [ssCtrl, ssShift]) then
-    FController.FrameSelected;
-  if (Key = vkA) and (Shift = [ssCtrl, ssShift]) then
+    SelectAll
+  else if (Key = vkA) and (Shift = [ssCtrl, ssShift]) then
+    SelectAllNodes
+  else if (Key = vkA) and (Shift = [ssShift]) then
+    SelectAllLinks
+  else if (Key = vkC) and (Shift = [ssCtrl]) then
+    CopySelectionToClipboard
+  else if (Key = vkD) and (Shift = [ssCtrl]) then
+    DuplicateSelection
+  else if (Key = vkF) and (Shift = [ssShift]) then
+    FitSome
+  else if (Key = vkR) and (Shift = [ssShift]) then
+    ResetView
+  else if (Key = vkL) and (Shift = [ssCtrl]) then
+    FController.ConnectSelectedPins
+  else if (Key = vkV) and (Shift = [ssCtrl]) then
+    PasteFromClipboard
+  else if (Key = vkX) and (Shift = [ssCtrl]) then
+    CutSelectionToClipboard
+  else if (Key = vkY) and (Shift = [ssCtrl]) then
+    Redo
+  else if (Key = vkZ) and (Shift = [ssCtrl]) then
+    Undo
+  else if (Key = vkZ) and (Shift = [ssCtrl, ssShift]) then
+    Redo
+  else if (Key = vkDelete) and (Shift = []) then
+    DeleteSelection
+  else if (Key = vkEscape) and (Shift = []) then
+    Cancel
+  else if (Key = vkL) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Left)
+  else if (Key = vkR) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Right)
+  else if (Key = vkT) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Top)
+  else if (Key = vkB) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.Bottom)
+  else if (Key = vkH) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.CenterHorizontal)
+  else if (Key = vkV) and (Shift = [ssCtrl, ssShift]) then
+    Controller.AlignSelectedNodes(TAlignMode.CenterVertical)
+  else if (Key = vkH) and (Shift = [ssCtrl, ssAlt]) then
+    Controller.DistributeSelectedNodes(TDistributeMode.Horizontal)
+  else if (Key = vkV) and (Shift = [ssCtrl, ssAlt]) then
+    Controller.DistributeSelectedNodes(TDistributeMode.Vertical)
+  else if (Key = vkW) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Width)
+  else if (Key = vkE) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Height)
+  else if (Key = vkS) and (Shift = [ssCtrl, ssShift]) then
+    Controller.MakeSelectedNodesSameSize(TMatchSizeMode.Both)
+  else if (Key = vkF) and (Shift = [ssCtrl, ssShift]) then
+    FController.FrameSelected
+  else if (Key = vkA) and (Shift = [ssCtrl, ssAlt]) then
     FController.AutoLayoutSelected;
 
   Key := 0;
+  KeyChar := #0;
 end;
 
 procedure TNodeEditor.KeyUp(var Key: Word; var KeyChar: WideChar; Shift: TShiftState);

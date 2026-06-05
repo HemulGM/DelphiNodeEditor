@@ -1,0 +1,77 @@
+object FrameLegendItem: TFrameLegendItem
+  Size.Width = 305.000000000000000000
+  Size.Height = 48.000000000000000000
+  Size.PlatformDefault = False
+  object Layout1: TLayout
+    Align = VertCenter
+    Position.Y = 8.000000000000000000
+    Size.Width = 305.000000000000000000
+    Size.Height = 32.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object Button1: TButton
+      Align = Left
+      Size.Width = 50.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Ctrl'
+    end
+    object Button2: TButton
+      Align = Left
+      Position.X = 62.000000000000000000
+      Size.Width = 50.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Shift'
+    end
+    object Button3: TButton
+      Align = Left
+      Position.X = 124.000000000000000000
+      Size.Width = 32.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'F'
+    end
+    object Label1: TLabel
+      Align = Left
+      StyledSettings = [Family, Style, FontColor]
+      Position.X = 112.000000000000000000
+      Size.Width = 12.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.Font.Size = 16.000000000000000000
+      TextSettings.HorzAlign = Center
+      TextSettings.WordWrap = False
+      Text = '+'
+      TabOrder = 5
+    end
+    object Label2: TLabel
+      Align = Left
+      StyledSettings = [Family, Style, FontColor]
+      Position.X = 50.000000000000000000
+      Size.Width = 12.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.Font.Size = 16.000000000000000000
+      TextSettings.HorzAlign = Center
+      TextSettings.WordWrap = False
+      Text = '+'
+      TabOrder = 3
+    end
+    object Label3: TLabel
+      Align = Client
+      StyledSettings = [Family, Style, FontColor]
+      Margins.Left = 10.000000000000000000
+      Size.Width = 139.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.Font.Size = 16.000000000000000000
+      TextSettings.WordWrap = False
+      Text = 'Align left'
+      TabOrder = 4
+    end
+  end
+end

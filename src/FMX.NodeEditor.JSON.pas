@@ -83,7 +83,7 @@ type
     procedure RegisterJsonNodes;
 
     function JsonKindToNodeType(AData: TJSONValue): string;
-    function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer): TJsonNode;
+    function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer; Direct: Boolean): TJsonNode;
 
     procedure BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
 
@@ -464,7 +464,7 @@ begin
   end;
 end;
 
-function TJsonNodeEditor.CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer): TJsonNode;
+function TJsonNodeEditor.CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer; Direct: Boolean): TJsonNode;
 var
   NodeType: string;
   V: TNodeValue;
@@ -518,8 +518,12 @@ begin
     jnkNull:
       Result.Title := TitleText + ': Null';
   end;
+  Result.ZOrder := FNodeEditor.Graph.Nodes.Count + 1;
 
-  FNodeEditor.Controller.AddNode(Result, True);
+  if Direct then
+    FNodeEditor.Graph.AddNode(Result, True)
+  else
+    FNodeEditor.Controller.AddNode(Result, True);
 end;
 
 procedure TJsonNodeEditor.BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
@@ -550,12 +554,12 @@ begin
       Y := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I);
+      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I, True);
 
       ParentOut := AParent.AddJsonChildOutput(FieldName);
       ChildIn := ChildNode.GetInput(0);
 
-      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn));
+      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), True);
 
       BuildGraphFromJSONData(ChildNode, ChildData, ADepth + 1, ARow);
     end;
@@ -573,14 +577,14 @@ begin
       Y := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I);
+      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I, True);
 
       ParentOut := AParent.AddJsonChildOutput(FieldName);
       ParentOut.DisplayName := '[Item ' + I.ToString + ']';
 
       ChildIn := ChildNode.GetInput(0);
 
-      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn));
+      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), True);
 
       BuildGraphFromJSONData(ChildNode, ChildData, ADepth + 1, ARow);
     end;
@@ -603,7 +607,7 @@ begin
   try
     Row := 0;
 
-    RootNode := CreateNodeFromJSONData('root', Data, PointF(40, 60), 0, 0);
+    RootNode := CreateNodeFromJSONData('root', Data, PointF(40, 60), 0, 0, True);
     FNodeEditor.Graph.BeginUpdate;
     try
       BuildGraphFromJSONData(RootNode, Data, 1, Row);

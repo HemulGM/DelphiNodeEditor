@@ -19,6 +19,8 @@ type
 
   TMatchSizeMode = (Width, Height, Both);
 
+  TMoveDirection = (Left, Up, Right, Down);
+
   TNodeValueKind = (
     Null,
     Float,
@@ -48,7 +50,7 @@ type
 
   TNodeVisualKind = (Normal, Reroute, Comment);
 
-  TLinkVisualType = (Bezier, Direct, Rect);
+  TLinkVisualType = (Bezier, Line, PolyLine, Rect);
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 
@@ -68,38 +70,15 @@ function PinDirectionToStr(ADir: TPinDirection): string;
 
 function StrToPinDirection(const S: string): TPinDirection;
 
-
 //
 
 function NewId: string;
 
 //
 
-function PointInRectInclusive(const R: TRect; X, Y: integer): boolean; inline;
-
-function Cross(const AX, AY, BX, BY, CX, CY: integer): Int64; inline;
-
-function OnSegment(const AX, AY, BX, BY, PX, PY: integer): boolean; inline;
-
-function SegmentsIntersect(AX, AY, BX, BY, CX, CY, DX, DY: integer): boolean; inline;
-
-function LineIntersectsRect(X1, Y1, X2, Y2: integer; const R: TRect): boolean; inline;
-
-function CubicBezierPoint(const P0, P1, P2, P3: TPointF; T: Double): TPointF; inline;
-
-function DistancePointToSegment(const P, A, B: TPointF): Single; inline;
-
-procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); inline;
-
-procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); inline;
-
 procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single); inline;
 
 procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor); inline;
-
-function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline;
-
-function PointNearPathDirect(const P, P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline;
 
 function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF; inline;
 
@@ -111,11 +90,17 @@ function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColo
 
 function ColorToAlphaColor(Color: TColor): TAlphaColor; inline;
 
-function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean; inline;
-
-function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF; inline;
-
 function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor; inline;
+
+procedure Log(const Text: string); inline;
+
+function ScreenToWorld(X, Y: Double; Zoom, OffsetX, OffsetY: Double): TPointF; inline;
+
+function WorldToScreen(X, Y: Single; Zoom, OffsetX, OffsetY: Double): TPointF; inline; overload;
+
+function WorldToScreen(const Point: TPointF; Zoom, OffsetX, OffsetY: Double): TPointF; inline; overload;
+
+function WorldToScreen(const Rect: TRectF; Zoom, OffsetX, OffsetY: Double): TRectF; inline; overload;
 
 var
   CachePathObject: TPathData;
@@ -124,6 +109,13 @@ implementation
 
 uses
   FMX.Types, System.Math.Vectors;
+
+procedure Log(const Text: string);
+begin
+  {$IFDEF LOG}
+  Writeln(Text);
+  {$ENDIF}
+end;
 
 function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;
 begin
@@ -268,260 +260,35 @@ begin
   Result := RectF(C.X - W, C.Y - H, C.X + W, C.Y + H);
 end;
 
-function RectIntersects(const A, B: TRect): boolean;
-begin
-  Result := not ((A.Right < B.Left) or (A.Left > B.Right) or
-    (A.Bottom < B.Top) or (A.Top > B.Bottom));
-end;
-
-function PointInRectInclusive(const R: TRect; X, Y: integer): boolean;
-begin
-  Result := (X >= R.Left) and (X <= R.Right) and (Y >= R.Top) and (Y <= R.Bottom);
-end;
-
-function Cross(const AX, AY, BX, BY, CX, CY: integer): Int64;
-begin
-  Result := Int64(BX - AX) * Int64(CY - AY) - Int64(BY - AY) * Int64(CX - AX);
-end;
-
-function OnSegment(const AX, AY, BX, BY, PX, PY: integer): boolean;
-begin
-  Result :=
-    (Min(AX, BX) <= PX) and (PX <= Max(AX, BX)) and
-    (Min(AY, BY) <= PY) and (PY <= Max(AY, BY));
-end;
-
-function SegmentsIntersect(AX, AY, BX, BY, CX, CY, DX, DY: integer): boolean;
-var
-  C1, C2, C3, C4: Int64;
-begin
-  C1 := Cross(AX, AY, BX, BY, CX, CY);
-  C2 := Cross(AX, AY, BX, BY, DX, DY);
-  C3 := Cross(CX, CY, DX, DY, AX, AY);
-  C4 := Cross(CX, CY, DX, DY, BX, BY);
-
-  if (((C1 > 0) and (C2 < 0)) or ((C1 < 0) and (C2 > 0))) and
-    (((C3 > 0) and (C4 < 0)) or ((C3 < 0) and (C4 > 0))) then
-    Exit(True);
-
-  if (C1 = 0) and OnSegment(AX, AY, BX, BY, CX, CY) then
-    Exit(True);
-  if (C2 = 0) and OnSegment(AX, AY, BX, BY, DX, DY) then
-    Exit(True);
-  if (C3 = 0) and OnSegment(CX, CY, DX, DY, AX, AY) then
-    Exit(True);
-  if (C4 = 0) and OnSegment(CX, CY, DX, DY, BX, BY) then
-    Exit(True);
-
-  Result := False;
-end;
-
-function LineIntersectsRect(X1, Y1, X2, Y2: integer; const R: TRect): boolean;
-begin
-  if PointInRectInclusive(R, X1, Y1) or PointInRectInclusive(R, X2, Y2) then
-    Exit(True);
-
-  Result :=
-    SegmentsIntersect(X1, Y1, X2, Y2, R.Left, R.Top, R.Right, R.Top) or
-    SegmentsIntersect(X1, Y1, X2, Y2, R.Right, R.Top, R.Right, R.Bottom) or
-    SegmentsIntersect(X1, Y1, X2, Y2, R.Right, R.Bottom, R.Left, R.Bottom) or
-    SegmentsIntersect(X1, Y1, X2, Y2, R.Left, R.Bottom, R.Left, R.Top);
-end;
-
 function NewId: string;
 begin
   Result := TGUID.NewGuid.ToString;
 end;
 
-function LengthSquared(const V: TPointF): Single; inline;
+function WorldToScreen(X, Y: Single; Zoom, OffsetX, OffsetY: Double): TPointF;
 begin
-  Result := V.X * V.X + V.Y * V.Y;
+  Result.X := X * Zoom + OffsetX;
+  Result.Y := Y * Zoom + OffsetY;
 end;
 
-function DistancePointToSegment(const P, A, B: TPointF): Single;
-var
-  AB, AP: TPointF;
-  T: Single;
-  Closest: TPointF;
+function WorldToScreen(const Point: TPointF; Zoom, OffsetX, OffsetY: Double): TPointF;
 begin
-  AB := B - A;
-  AP := P - A;
-
-  T := AP.DotProduct(AB) / LengthSquared(AB);
-
-  T := EnsureRange(T, 0, 1);
-
-  Closest := A + AB * T;
-
-  Result := P.Distance(Closest);
+  Result.X := Point.X * Zoom + OffsetX;
+  Result.Y := Point.Y * Zoom + OffsetY;
 end;
 
-function CubicBezierPointF(const P0, P1, P2, P3: TPointF; T: single): TPointF;
-var
-  U, TT, UU, UUU, TTT: single;
+function WorldToScreen(const Rect: TRectF; Zoom, OffsetX, OffsetY: Double): TRectF;
 begin
-  U := 1 - T;
-  TT := T * T;
-  UU := U * U;
-  UUU := UU * U;
-  TTT := TT * T;
-
-  Result.X := UUU * P0.X +
-    3 * UU * T * P1.X +
-    3 * U * TT * P2.X +
-    TTT * P3.X;
-
-  Result.Y := UUU * P0.Y +
-    3 * UU * T * P1.Y +
-    3 * U * TT * P2.Y +
-    TTT * P3.Y;
+  Result.Left := Rect.Left * Zoom + OffsetX;
+  Result.Top := Rect.Top * Zoom + OffsetY;
+  Result.Right := Rect.Right * Zoom + OffsetX;
+  Result.Bottom := Rect.Bottom * Zoom + OffsetY;
 end;
 
-function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean;
-var
-  N: TRectF;
-  Dx, Dy: Single;
-  T0, T1: Single;
-
-  function ClipTest(P, Q: Single; var T0, T1: Single): Boolean; inline;
-  var
-    Rr: Single;
-  begin
-    if Abs(P) < 1e-6 then
-      Exit(Q >= 0);
-
-    Rr := Q / P;
-    if P < 0 then
-    begin
-      if Rr > T1 then
-        Exit(False);
-      if Rr > T0 then
-        T0 := Rr;
-    end
-    else
-    begin
-      if Rr < T0 then
-        Exit(False);
-      if Rr < T1 then
-        T1 := Rr;
-    end;
-    Result := True;
-  end;
-
+function ScreenToWorld(X, Y: Double; Zoom, OffsetX, OffsetY: Double): TPointF;
 begin
-  N := R;
-  N.NormalizeRect;
-
-  if N.Contains(P1) or N.Contains(P2) then
-    Exit(True);
-
-  Dx := P2.X - P1.X;
-  Dy := P2.Y - P1.Y;
-  T0 := 0.0;
-  T1 := 1.0;
-
-  Result :=
-    ClipTest(-Dx, P1.X - N.Left, T0, T1) and
-    ClipTest(Dx, N.Right - P1.X, T0, T1) and
-    ClipTest(-Dy, P1.Y - N.Top, T0, T1) and
-    ClipTest(Dy, N.Bottom - P1.Y, T0, T1);
-end;
-
-function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
-begin
-  Result := False;
-
-  var Prev := P0;
-  for var k := 1 to 20 do
-  begin
-    var Cur := CubicBezierPointF(P0, P1, P2, P3, k / 20);
-    if DistancePointToSegment(P, Prev, Cur) <= Tolerance then
-      Exit(True);
-    Prev := Cur;
-  end;
-end;
-
-function PointNearPathDirect(const P, P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
-begin
-  Result := False;
-  if DistancePointToSegment(P, P0, P1) <= Tolerance then
-    Exit(True);
-  if DistancePointToSegment(P, P1, P2) <= Tolerance then
-    Exit(True);
-  if DistancePointToSegment(P, P2, P3) <= Tolerance then
-    Exit(True);
-end;
-
-function CubicBezierPoint(const P0, P1, P2, P3: TPointF; T: Double): TPointF;
-var
-  it, t2, t3, it2, it3: double;
-begin
-  it := 1 - T;
-  t2 := T * T;
-  t3 := t2 * T;
-  it2 := it * it;
-  it3 := it2 * it;
-
-  Result.X := it3 * P0.X + 3 * it2 * T * P1.X + 3 * it * t2 * P2.X + t3 * P3.X;
-  Result.Y := it3 * P0.Y + 3 * it2 * T * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
-end;
-
-procedure DrawCubicBezier(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
-var
-  t, it, t2, it2, t3, it3, x, y: Double;
-begin
-  //var Steps := 32;
-  var Len := P0.Distance(P1) + P1.Distance(P2) + P2.Distance(P3);
-
-  var Steps := EnsureRange(Round(Len / 20), 10, 64);
-  var Bounds := TRectF.Create(0, 0, Canvas.Width, Canvas.Height);
-  Bounds.Inflate(100, 100);
-
-  CachePathObject.Clear;
-
-  var Prev := TPointF.Create(P0.X, P0.Y);
-  CachePathObject.MoveTo(Prev);
-  for var i := 1 to Steps do
-  begin
-    t := i / Steps;
-    it := 1 - t;
-    t2 := t * t;
-    it2 := it * it;
-    t3 := t2 * t;
-    it3 := it2 * it;
-
-    x := it3 * P0.X + 3 * it2 * t * P1.X + 3 * it * t2 * P2.X + t3 * P3.X;
-    y := it3 * P0.Y + 3 * it2 * t * P1.Y + 3 * it * t2 * P2.Y + t3 * P3.Y;
-
-    var Cur := TPointF.Create(x, y);
-    if (not Bounds.Contains(Prev)) and (not Bounds.Contains(Cur)) and (i <> Steps) then
-    begin
-      Prev := Cur;
-      Continue;
-    end;
-
-    CachePathObject.LineTo(Cur);
-    Prev := Cur;
-  end;
-  Canvas.DrawPath(CachePathObject, Opacity);
-end;
-
-procedure DrawCubicBezier1(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
-begin
-  CachePathObject.Clear;
-  CachePathObject.MoveTo(P0);
-  CachePathObject.CurveTo(P1, P2, P3);
-  C.DrawPath(CachePathObject, Opacity);
-end;
-
-procedure DrawDirectLine(C: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
-begin
-  CachePathObject.Clear;
-  CachePathObject.MoveTo(P0);
-  CachePathObject.LineTo(P1);
-  CachePathObject.LineTo(P2);
-  CachePathObject.LineTo(P3);
-  C.DrawPath(CachePathObject, Opacity);
+  Result.X := (X - OffsetX) / Zoom;
+  Result.Y := (Y - OffsetY) / Zoom;
 end;
 
 function AddGradientPoint(Gradient: TGradient; Offset: Single; Color: TAlphaColor): TGradientPoint;

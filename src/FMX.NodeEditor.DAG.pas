@@ -103,8 +103,8 @@ type
     procedure Sort(AComparer: TCompareFunc); overload; inline;
     procedure Assign(const ASource: TDAG<T>); inline;
     procedure CopyTo(var ADest: array of T);
-    procedure AddEdge(const AFromValue, AToValue: T); inline;
-    procedure AddEdgeByIndex(AFrom, ATo: integer); inline;
+    procedure AddEdge(const AFromValue, AToValue: T; SkipChecking: Boolean = False); inline;
+    procedure AddEdgeByIndex(AFrom, ATo: integer; SkipChecking: Boolean = False); inline;
     function RemoveEdge(const AFromValue, AToValue: T): boolean; inline;
     function RemoveEdgeByIndex(AFrom, ATo: integer): boolean; inline;
     function HasEdge(const AFromValue, AToValue: T): boolean; inline;
@@ -125,7 +125,7 @@ type
     constructor Create(AOwnsObjects: boolean = False);
     destructor Destroy; override;
     procedure Clear; override;
-    function Remove(const AValue: T): integer; reintroduce;
+    function Remove(const AValue: T): integer; reintroduce; inline;
   end;
 
 implementation
@@ -700,7 +700,7 @@ begin
     ADest[I] := FItems[I];
 end;
 
-procedure TDAG<T>.AddEdge(const AFromValue, AToValue: T);
+procedure TDAG<T>.AddEdge(const AFromValue, AToValue: T; SkipChecking: Boolean);
 var
   A, B: integer;
 begin
@@ -708,19 +708,22 @@ begin
     raise EListError.Create('Source vertex not found');
   if not TryFindIndex(AToValue, B) then
     raise EListError.Create('Target vertex not found');
-  AddEdgeByIndex(A, B);
+  AddEdgeByIndex(A, B, SkipChecking);
 end;
 
-procedure TDAG<T>.AddEdgeByIndex(AFrom, ATo: integer);
+procedure TDAG<T>.AddEdgeByIndex(AFrom, ATo: integer; SkipChecking: Boolean);
 begin
-  CheckIndex(AFrom);
-  CheckIndex(ATo);
-  if AFrom = ATo then
-    raise EListError.Create('Self-loop is not allowed in DAG');
-  if HasEdgeByIndex(AFrom, ATo) then
-    Exit;
-  if WouldCreateCycle(AFrom, ATo) then
-    raise EListError.Create('Edge would create a cycle');
+  if not SkipChecking then
+  begin
+    CheckIndex(AFrom);
+    CheckIndex(ATo);
+    if AFrom = ATo then
+      raise EListError.Create('Self-loop is not allowed in DAG');
+    if HasEdgeByIndex(AFrom, ATo) then
+      Exit;
+    if WouldCreateCycle(AFrom, ATo) then
+      raise EListError.Create('Edge would create a cycle');
+  end;
   FEdges[AFrom].AddSortedUnique(ATo);
 end;
 
