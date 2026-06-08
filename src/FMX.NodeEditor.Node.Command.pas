@@ -1005,8 +1005,7 @@ begin
 
   var Data := TJSONValue.ParseJSONValue(FNewJSON);
   try
-    if Data is TJSONObject then
-      N.ApplyPropertiesFromJSON(TJSONObject(Data));
+    N.LoadFromJSON(Data, True, True);
   finally
     Data.Free;
   end;
@@ -1025,8 +1024,7 @@ begin
 
   var Data := TJSONValue.ParseJSONValue(FOldJSON);
   try
-    if Data is TJSONObject then
-      N.ApplyPropertiesFromJSON(TJSONObject(Data));
+    N.LoadFromJSON(Data, True, True);
   finally
     Data.Free;
   end;

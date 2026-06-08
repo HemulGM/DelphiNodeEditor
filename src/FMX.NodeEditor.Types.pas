@@ -4,7 +4,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Math, System.Types, System.UITypes,
-  FMX.Graphics;
+  FMX.Graphics, System.Math.Vectors;
 
 {$SCOPEDENUMS ON}
 
@@ -102,19 +102,32 @@ function WorldToScreen(const Point: TPointF; Zoom, OffsetX, OffsetY: Double): TP
 
 function WorldToScreen(const Rect: TRectF; Zoom, OffsetX, OffsetY: Double): TRectF; inline; overload;
 
+function BuildTriangle(const Center: TPointF; Radius: Single; StartAngle: Single): TPolygon;
+
 var
   CachePathObject: TPathData;
 
 implementation
 
 uses
-  FMX.Types, System.Math.Vectors;
+  FMX.Types;
 
 procedure Log(const Text: string);
 begin
   {$IFDEF LOG}
   Writeln(Text);
   {$ENDIF}
+end;
+
+function BuildTriangle(const Center: TPointF; Radius: Single; StartAngle: Single): TPolygon;
+begin
+  SetLength(Result, 3);
+
+  for var i := 0 to 2 do
+  begin
+    var Angle := DegToRad(StartAngle + i * 120);
+    Result[i] := PointF(Center.X + Radius * Cos(Angle), Center.Y + Radius * Sin(Angle));
+  end;
 end;
 
 function ChangeAlpha(Color: TAlphaColor; Alpha: Byte): TAlphaColor;

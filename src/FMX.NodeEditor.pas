@@ -219,6 +219,7 @@ type
     procedure HighlightNode(ANode: TCustomNode);
 
     function ExecuteGraph(AStartNode: TExecutableNode = nil): boolean;
+    property ExecutionContext: TNodeExecutionContext read GetExecutionContext;
     procedure StopExecution;
     procedure PauseExecution;
     procedure ContinueExecution;
@@ -1646,6 +1647,15 @@ begin
     var N := FGraph.Nodes[i];
     if N <> nil then
       N.Selected := FController.Selection.ContainsNode(N);
+    for var j := 0 to N.InputCount - 1 do
+        N.GetInput(j).Highlight := False;
+    for var j := 0 to N.OutputCount - 1 do
+        N.GetOutput(j).Highlight := False;
+  end;
+  for var L in FController.Selection.Links do
+  begin
+    L.FromPin.Highlight := True;
+    L.ToPin.Highlight := True;
   end;
 end;
 
@@ -3204,19 +3214,6 @@ end;
 
 procedure TNodeEditor.AniChanged(Sender: TObject);
 begin
-  if (FOffsetX = -FAni.ViewportPositionF.X) or
-    (FOffsetY = -FAni.ViewportPositionF.Y)
-    then
-  begin
-    FOffsetX := -FAni.ViewportPositionF.X;
-    FOffsetY := -FAni.ViewportPositionF.Y;
-    FAni.ViewportPosition := PointF(-FOffsetX, -FOffsetY);
-    UpdateScrollBars(False);
-    UpdatedStatus;
-    Repaint;
-    Exit;
-  end;
-
   FOffsetX := -FAni.ViewportPositionF.X;
   FOffsetY := -FAni.ViewportPositionF.Y;
 

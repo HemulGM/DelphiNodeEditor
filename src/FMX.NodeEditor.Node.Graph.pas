@@ -1078,7 +1078,7 @@ begin
         var NodeType := NodeObj.GetValue('type', 'default');
 
         var N := FRegistry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
-        N.LoadFromJSON(NodeObj, UseAlphaColor);
+        N.LoadFromJSON(NodeObj, False, UseAlphaColor);
         FNodes.Add(N);
       end;
     end;

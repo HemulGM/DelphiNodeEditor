@@ -177,12 +177,10 @@ begin
   begin
     FSelectedNodes.Clear;
     FSelectedLinks.Clear;
+    ClearPins(False);
   end;
 
-  if FSelectedLinks.IndexOf(ALink) < 0 then
-    FSelectedLinks.Add(ALink);
-
-  NotifyChanged;
+  AddLinkToSelection(ALink);
 end;
 
 procedure TNodeSelectionModel.ToggleLink(ALink: TNodeLink);

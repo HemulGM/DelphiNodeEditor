@@ -4,8 +4,8 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.UITypes, System.Types, System.JSON,
-  System.Math, System.Generics.Collections, FMX.Types, FMX.Graphics,
-  FMX.NodeEditor.Types, FMX.TextLayout, FMX.NodeEditor.VisualLink;
+  System.Math, System.Generics.Collections, System.Generics.Defaults, FMX.Types,
+  FMX.Graphics, FMX.NodeEditor.Types, FMX.TextLayout, FMX.NodeEditor.VisualLink;
 
 type
   TCustomNode = class;
@@ -43,7 +43,7 @@ type
     constructor Create(const AName: string = ''; AKind: TNodeValueKind = TNodeValueKind.Null);
 
     procedure SaveToJSON(AObj: TJSONObject);
-    procedure LoadFromJSON(AObj: TJSONObject);
+    procedure LoadFromJSON(AObj: TJSONValue);
   end;
 
   TNodePin = class
@@ -74,6 +74,7 @@ type
     AllowMultipleConnections: Boolean;
     SortIndex: Integer;
     Connected: Boolean;
+    Highlight: Boolean;
 
     constructor Create(AName: string; ADir: TPinDirection; AKind: TPinKind; ALocalY: integer);
     destructor Destroy; override;
@@ -157,6 +158,7 @@ type
 
     constructor Create; overload; virtual;
     constructor Create(const ATitle: string; AX, AY: Single; AWidth, AHeight: integer); overload; virtual;
+    constructor Create(const ATitle: string; AX, AY: Single); overload; virtual;
     destructor Destroy; override;
 
     procedure SetupPins; virtual;
@@ -166,7 +168,7 @@ type
     function AddOutputPin(const AName, ADataType: string; AKind: TPinKind = TPinKind.Data; ALocalY: integer = -1): TNodePin;
     function RemovePin(APin: TNodePin): Boolean; inline;
     procedure ReindexPins; inline;
-    procedure AutoLayoutPins;
+    procedure AutoLayoutPins; virtual;
 
     function InputCount: integer;
     function OutputCount: integer;
@@ -194,11 +196,19 @@ type
     property Height: Integer read GetHeight write SetHeight;
 
     procedure SaveToJSON(AObj: TJSONObject); virtual;
-    procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean); virtual;
+    procedure LoadFromJSON(AObj: TJSONValue; DataOnly: Boolean; UseAlphaColor: Boolean); virtual;
   protected
     function GetPinLocalPosition(APin: TNodePin): TPoint; virtual;
     function TextHeight(Canvas: TCanvas; const AText: string): Single;
     function TextWidth(Canvas: TCanvas; const AText: string): Single;
+    procedure SortPinsBySortIndex;
+
+    function FindExistingPinForLoad(AObj: TJSONValue): TNodePin; virtual;
+    function FindPinBySignature(const AName: string; ADirection: TPinDirection; AKind: TPinKind): TNodePin; virtual;
+    procedure AssignPinFromJSON(APin: TNodePin; AObj: TJSONValue); virtual;
+    procedure LoadPinsFromJSON(APinsArr: TJSONArray); virtual;
+    procedure LoadValuesFromJSON(AValuesArr: TJSONArray); virtual;
+    procedure RebindPins; virtual;
   private
     procedure DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single = 1.0);
     procedure SetIconPath(const Value: string);
@@ -208,7 +218,6 @@ type
     procedure DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
     procedure MeasureText(Canvas: TCanvas; var ARect: TRectF; const AText: string; const WordWrap: Boolean; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
   public
-    procedure ApplyPropertiesFromJSON(AObj: TJSONObject); virtual;
     procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); virtual;
     property IconPath: string read FIconPath write SetIconPath;
   end;
@@ -224,6 +233,7 @@ type
     function GetPinLocalPosition(APin: TNodePin): TPoint; override;
     constructor Create; override;
     procedure SetupPins; override;
+    procedure AutoLayoutPins; override;
   public
     procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
@@ -232,14 +242,24 @@ type
   public
     constructor Create; override;
     procedure SetupPins; override;
+    procedure AutoLayoutPins; override;
   public
     procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
   end;
+
+function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
 
 implementation
 
 uses
   System.Math.Vectors;
+
+function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
+begin
+  Result := Item1.SortIndex - Item2.SortIndex;
+end;
+
+{ TCustomNode }
 
 constructor TCustomNode.Create;
 begin
@@ -283,6 +303,15 @@ begin
   FHeight := AHeight;
 end;
 
+constructor TCustomNode.Create(const ATitle: string; AX, AY: Single);
+begin
+  Create;
+
+  Title := ATitle;
+  X := AX;
+  Y := AY;
+end;
+
 destructor TCustomNode.Destroy;
 begin
   Log('Destroy: ' + Id);
@@ -295,6 +324,134 @@ begin
   FTextLayout.Free;
   FTextLayoutComment.Free;
   inherited Destroy;
+end;
+
+procedure TCustomNode.SortPinsBySortIndex;
+begin
+  FInputs.Sort(TComparer<TNodePin>.Construct(ComparePinsBySortIndex));
+  FOutputs.Sort(TComparer<TNodePin>.Construct(ComparePinsBySortIndex));
+end;
+
+function TCustomNode.FindPinBySignature(const AName: string; ADirection: TPinDirection; AKind: TPinKind): TNodePin;
+begin
+  Result := nil;
+
+  if ADirection = TPinDirection.Input then
+    for var P in FInputs do
+    begin
+      if SameText(P.Name, AName) and (P.Kind = AKind) then
+        Exit(P);
+    end
+  else
+    for var P in FOutputs do
+    begin
+      if SameText(P.Name, AName) and (P.Kind = AKind) then
+        Exit(P);
+    end;
+end;
+
+function TCustomNode.FindExistingPinForLoad(AObj: TJSONValue): TNodePin;
+begin
+  Result := nil;
+
+  if AObj = nil then
+    Exit;
+
+  var PinId := AObj.GetValue('id', '');
+  if PinId <> '' then
+  begin
+    Result := FindPinById(PinId);
+    if Result <> nil then
+      Exit;
+  end;
+
+  var PinName := AObj.GetValue('name', '');
+  var Dir := StrToPinDirection(AObj.GetValue('direction', 'input'));
+  var Kind := StrToPinKind(AObj.GetValue('kind', 'data'));
+
+  Result := FindPinBySignature(PinName, Dir, Kind);
+end;
+
+procedure TCustomNode.AssignPinFromJSON(APin: TNodePin; AObj: TJSONValue);
+begin
+  if (APin = nil) or (AObj = nil) then
+    Exit;
+
+  APin.Id := AObj.GetValue('id', APin.Id);
+  APin.Name := AObj.GetValue('name', APin.Name);
+  APin.DisplayName := AObj.GetValue('displayName', APin.DisplayName);
+  //APin.Side := TPinSide(AObj.GetValue('side', Ord(APin.Side)));
+  APin.LocalY := AObj.GetValue('localY', APin.LocalY);
+  APin.IsRequired := AObj.GetValue('isRequired', APin.IsRequired);
+  APin.DefaultValue := AObj.GetValue('defaultValue', APin.DefaultValue);
+  APin.Tooltip := AObj.GetValue('tooltip', APin.Tooltip);
+  APin.Hidden := AObj.GetValue('hidden', APin.Hidden);
+  APin.Advanced := AObj.GetValue('advanced', APin.Advanced);
+  APin.AllowMultipleConnections := AObj.GetValue('allowMultipleConnections', APin.AllowMultipleConnections);
+  APin.SortIndex := AObj.GetValue('sortIndex', APin.SortIndex);
+
+  APin.SetTypeId(AObj.GetValue('dataType', APin.DataType));
+
+  var PinTypeObj := AObj.GetValue<TJSONObject>('pinType', nil);
+  if PinTypeObj <> nil then
+  begin
+    if APin.PinType = nil then
+      APin.PinType := TNodePinType.Create(APin.DataType);
+    APin.PinType.LoadFromJSON(PinTypeObj, True);
+    APin.DataType := APin.PinType.TypeId;
+  end;
+end;
+
+procedure TCustomNode.LoadPinsFromJSON(APinsArr: TJSONArray);
+begin
+  if APinsArr = nil then
+    Exit;
+
+  for var PinObj in APinsArr do
+  begin
+    var P := FindExistingPinForLoad(PinObj);
+
+    if P = nil then
+    begin
+      var Dir := StrToPinDirection(PinObj.GetValue('direction', 'input'));
+      var Kind := StrToPinKind(PinObj.GetValue('kind', 'data'));
+      var Name := PinObj.GetValue('name', '');
+      var DataType := PinObj.GetValue('dataType', '');
+      var LocalY := PinObj.GetValue<Integer>('localY', 40);
+
+      if Dir = TPinDirection.Input then
+        P := AddInputPin(Name, DataType, Kind, LocalY)
+      else
+        P := AddOutputPin(Name, DataType, Kind, LocalY);
+    end;
+
+    AssignPinFromJSON(P, PinObj);
+    P.OwnerNode := Self;
+  end;
+
+  SortPinsBySortIndex;
+  AutoLayoutPins;
+end;
+
+procedure TCustomNode.LoadValuesFromJSON(AValuesArr: TJSONArray);
+begin
+  for var Item in AValuesArr do
+  begin
+    var V := FindValue(Item.GetValue('name', ''));
+    if V = nil then
+    begin
+      V := TNodeValue.Create;
+      FValues.Add(V);
+    end;
+
+    V.LoadFromJSON(Item);
+  end;
+end;
+
+procedure TCustomNode.RebindPins;
+begin
+  // Descendants can override to update
+  // specific fields like FExecIn, FValueOut, etc.
 end;
 
 function TCustomNode.GetDefaultHeaderColor: TAlphaColor;
@@ -365,11 +522,11 @@ begin
     ALocalY := (HeaderHeight + 16) + FInputs.Count * 26;
 
   Result := TNodePin.Create(AName, TPinDirection.Input, AKind, ALocalY);
+  FInputs.Add(Result);
   Result.OwnerNode := Self;
   Result.SetTypeId(ADataType);
   Result.AllowMultipleConnections := False;
   Result.SortIndex := FInputs.Count;
-  FInputs.Add(Result);
 
   ReindexPins;
   AutoLayoutPins;
@@ -381,11 +538,11 @@ begin
     ALocalY := (HeaderHeight + 16) + FOutputs.Count * 26;
 
   Result := TNodePin.Create(AName, TPinDirection.Output, AKind, ALocalY);
+  FOutputs.Add(Result);
   Result.OwnerNode := Self;
   Result.SetTypeId(ADataType);
   Result.AllowMultipleConnections := True;
   Result.SortIndex := FOutputs.Count;
-  FOutputs.Add(Result);
 
   ReindexPins;
   AutoLayoutPins;
@@ -435,31 +592,49 @@ end;
 
 procedure TCustomNode.AutoLayoutPins;
 begin
-  if VisualKind = TNodeVisualKind.Reroute then
-  begin
-    for var i := 0 to FInputs.Count - 1 do
-      FInputs[i].LocalY := Height div 2;
-
-    for var i := 0 to FOutputs.Count - 1 do
-      FOutputs[i].LocalY := Height div 2;
-
-    Exit;
-  end;
-
-  if VisualKind = TNodeVisualKind.Comment then
-    Exit;
-
   var MaxCount := Max(FInputs.Count, FOutputs.Count);
   if MaxCount <= 0 then
     Exit;
 
-  var WorkH := Height - HeaderHeight - BottomPad;
+  var CntInExec := 0;
+  var CntOutExec := 0;
+  var Top := HeaderHeight;
+  var TopData := Top;
+  var ItemH := 26;
 
   for var i := 0 to FInputs.Count - 1 do
-    FInputs[i].LocalY := HeaderHeight + (i + 1) * WorkH div (FInputs.Count + 1);
+    if FInputs[i].Kind = TPinKind.Exec then
+    begin
+      FInputs[i].LocalY := Top + CntInExec * ItemH + 16;
+      TopData := Max(TopData, FInputs[i].LocalY);
+      Inc(CntInExec);
+    end;
 
   for var i := 0 to FOutputs.Count - 1 do
-    FOutputs[i].LocalY := HeaderHeight + (i + 1) * WorkH div (FOutputs.Count + 1);
+    if FOutputs[i].Kind = TPinKind.Exec then
+    begin
+      FOutputs[i].LocalY := Top + CntOutExec * ItemH + 16;
+      TopData := Max(TopData, FOutputs[i].LocalY);
+      Inc(CntOutExec);
+    end;
+
+  var WorkH := Height - TopData - BottomPad;
+
+  var c := 0;
+  for var i := 0 to FInputs.Count - 1 do
+    if FInputs[i].Kind = TPinKind.Data then
+    begin
+      FInputs[i].LocalY := TopData + (c + 1) * WorkH div (FInputs.Count + 1 - CntInExec);
+      Inc(c);
+    end;
+
+  c := 0;
+  for var i := 0 to FOutputs.Count - 1 do
+    if FOutputs[i].Kind = TPinKind.Data then
+    begin
+      FOutputs[i].LocalY := TopData + (c + 1) * WorkH div (FOutputs.Count + 1 - CntOutExec);
+      Inc(c);
+    end;
 end;
 
 function TCustomNode.InputCount: integer;
@@ -944,9 +1119,6 @@ procedure TCustomNode.SaveToJSON(AObj: TJSONObject);
 var
   PinsArr, ValuesArr: TJSONArray;
   PinObj, ValueObj, PinTypeObj: TJSONObject;
-  i: integer;
-  P: TNodePin;
-  V: TNodeValue;
 begin
   if AObj = nil then
     Exit;
@@ -968,16 +1140,18 @@ begin
 
   // Pins
   PinsArr := TJSONArray.Create;
-  for i := 0 to InputCount - 1 do
+  AObj.AddPair('pins', PinsArr);
+  for var P in FInputs do
   begin
-    P := GetInput(i);
     PinObj := TJSONObject.Create;
+    PinsArr.Add(PinObj);
 
     PinObj.AddPair('id', P.Id);
     PinObj.AddPair('name', P.Name);
     PinObj.AddPair('displayName', P.DisplayName);
     PinObj.AddPair('kind', PinKindToStr(P.Kind));
     PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
+    //PinObj.AddPair('side', Ord(P.Side));
     PinObj.AddPair('dataType', P.DataType);
     PinObj.AddPair('localY', P.LocalY);
 
@@ -992,66 +1166,66 @@ begin
     if P.PinType <> nil then
     begin
       PinTypeObj := TJSONObject.Create;
-      P.PinType.SaveToJSON(PinTypeObj);
       PinObj.AddPair('pinType', PinTypeObj);
+      P.PinType.SaveToJSON(PinTypeObj);
     end;
-
-    PinsArr.Add(PinObj);
   end;
 
-  for i := 0 to OutputCount - 1 do
+  for var P in FOutputs do
   begin
-    P := GetOutput(i);
     PinObj := TJSONObject.Create;
+    PinsArr.Add(PinObj);
 
     PinObj.AddPair('id', P.Id);
     PinObj.AddPair('name', P.Name);
     PinObj.AddPair('displayName', P.DisplayName);
     PinObj.AddPair('kind', PinKindToStr(P.Kind));
     PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
+    //PinObj.AddPair('side', Ord(P.Side));
     PinObj.AddPair('dataType', P.DataType);
     PinObj.AddPair('localY', P.LocalY);
+
+    PinObj.AddPair('isRequired', P.IsRequired);
+    PinObj.AddPair('defaultValue', P.DefaultValue);
+    PinObj.AddPair('tooltip', P.Tooltip);
+    PinObj.AddPair('hidden', P.Hidden);
+    PinObj.AddPair('advanced', P.Advanced);
     PinObj.AddPair('allowMultipleConnections', P.AllowMultipleConnections);
     PinObj.AddPair('sortIndex', P.SortIndex);
 
     if P.PinType <> nil then
     begin
       PinTypeObj := TJSONObject.Create;
-      P.PinType.SaveToJSON(PinTypeObj);
       PinObj.AddPair('pinType', PinTypeObj);
+      P.PinType.SaveToJSON(PinTypeObj);
     end;
-
-    PinsArr.Add(PinObj);
   end;
-
-  AObj.AddPair('pins', PinsArr);
 
   // Values
   ValuesArr := TJSONArray.Create;
-  for i := 0 to ValueCount - 1 do
-  begin
-    V := GetValue(i);
-    ValueObj := TJSONObject.Create;
-    V.SaveToJSON(ValueObj);
-    ValuesArr.Add(ValueObj);
-  end;
   AObj.AddPair('values', ValuesArr);
+  for var V in FValues do
+  begin
+    ValueObj := TJSONObject.Create;
+    ValuesArr.Add(ValueObj);
+    V.SaveToJSON(ValueObj);
+  end;
 end;
 
-procedure TCustomNode.LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
+procedure TCustomNode.LoadFromJSON(AObj: TJSONValue; DataOnly: Boolean; UseAlphaColor: Boolean);
 var
   PinsArr, ValuesArr: TJSONArray;
-  PinObj, PinTypeObj, ValueObj: TJSONValue;
-  P: TNodePin;
-  V: TNodeValue;
-  Dir: TPinDirection;
-  Kind: TPinKind;
 begin
   if AObj = nil then
     Exit;
 
-  Id := AObj.GetValue('id', Id);
-  NodeType := AObj.GetValue('type', NodeType);
+  if not DataOnly then
+  begin
+    Id := AObj.GetValue('id', Id);
+    NodeType := AObj.GetValue('type', NodeType);
+    VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(VisualKind)));
+    ZOrder := AObj.GetValue('zOrder', ZOrder);
+  end;
 
   Title := AObj.GetValue('title', Title);
   IconPath := AObj.GetValue('icon', IconPath);
@@ -1069,108 +1243,31 @@ begin
     HeaderColor := ColorToAlphaColor(TColor(AObj.GetValue('headerColor', Integer(HeaderColor))));
     BodyColor := ColorToAlphaColor(TColor(AObj.GetValue('bodyColor', Integer(BodyColor))));
   end;
-  Collapsed := AObj.GetValue('collapsed', False);
+  Collapsed := AObj.GetValue('collapsed', Collapsed);
   CommentText := AObj.GetValue('commentText', CommentText);
 
-  VisualKind := TNodeVisualKind(AObj.GetValue('visualKind', Ord(TNodeVisualKind.Normal)));
-  ZOrder := AObj.GetValue<Integer>('zOrder', 0);
-
   // Pins
-  ClearPins;
-  PinsArr := AObj.GetValue<TJSONArray>('pins', nil);
-  if PinsArr <> nil then
+  //ClearPins;
+  if not DataOnly then
   begin
-    for var i := 0 to PinsArr.Count - 1 do
+    PinsArr := AObj.GetValue<TJSONArray>('pins', nil);
+    if PinsArr <> nil then
     begin
-      PinObj := PinsArr.Items[i];
-
-      Dir := StrToPinDirection(PinObj.GetValue('direction', 'input'));
-      Kind := StrToPinKind(PinObj.GetValue('kind', 'data'));
-
-      P := TNodePin.Create(PinObj.GetValue('name', ''), Dir, Kind, PinObj.GetValue<Integer>('localY', 40));
-
-      P.Id := PinObj.GetValue('id', P.Id);
-      P.DisplayName := PinObj.GetValue('displayName', P.Name);
-      P.DataType := PinObj.GetValue('dataType', '');
-      P.SetTypeId(P.DataType);
-
-      PinTypeObj := PinObj.GetValue<TJSONObject>('pinType', nil);
-      if PinTypeObj <> nil then
-        P.PinType.LoadFromJSON(TJSONObject(PinTypeObj), UseAlphaColor);
-
-      P.IsRequired := PinObj.GetValue('isRequired', False);
-      P.DefaultValue := PinObj.GetValue('defaultValue', '');
-      P.Tooltip := PinObj.GetValue('tooltip', '');
-      P.Hidden := PinObj.GetValue('hidden', False);
-      P.Advanced := PinObj.GetValue('advanced', False);
-      P.AllowMultipleConnections := PinObj.GetValue('allowMultipleConnections', Dir = TPinDirection.Output);
-      P.SortIndex := PinObj.GetValue<Integer>('sortIndex', 0);
-
-      P.OwnerNode := Self;
-
-      if Dir = TPinDirection.Input then
-        FInputs.Add(P)
-      else
-        FOutputs.Add(P);
+      LoadPinsFromJSON(PinsArr);
+    end
+    else if (InputCount = 0) and (OutputCount = 0) then
+    begin
+      SetupPins;
+      SortPinsBySortIndex;
     end;
-    AutoLayoutPins;
-  end
-  else
-    SetupPins;
+    RebindPins;
+  end;
 
   // Values
-  ClearValues;
+  //ClearValues;
   ValuesArr := AObj.GetValue<TJSONArray>('values', nil);
   if ValuesArr <> nil then
-    for var i := 0 to ValuesArr.Count - 1 do
-    begin
-      ValueObj := ValuesArr.Items[i];
-      V := TNodeValue.Create;
-      V.LoadFromJSON(TJSONObject(ValueObj));
-      FValues.Add(V);
-    end;
-end;
-
-procedure TCustomNode.ApplyPropertiesFromJSON(AObj: TJSONObject);
-begin
-  if AObj = nil then
-    Exit;
-
-  Title := AObj.GetValue('title', Title);
-  IconPath := AObj.GetValue('icon', IconPath);
-  X := AObj.GetValue('x', X);
-  Y := AObj.GetValue('y', Y);
-  Width := AObj.GetValue('width', Width);
-  Height := AObj.GetValue('height', Height);
-  HeaderColor := TAlphaColor(AObj.GetValue('headerColor', Cardinal(HeaderColor)));
-  BodyColor := TAlphaColor(AObj.GetValue('bodyColor', Cardinal(BodyColor)));
-  Collapsed := AObj.GetValue('collapsed', Collapsed);
-  CommentText := AObj.GetValue('comment', CommentText);
-
-  var ValuesArr := AObj.GetValue<TJSONArray>('values', nil);
-  if ValuesArr <> nil then
-  begin
-    for var i := 0 to Min(ValueCount, ValuesArr.Count) - 1 do
-    begin
-      var V := GetValue(i);
-      var VObj := ValuesArr.Items[i] as TJSONObject;
-      if (V = nil) or (VObj = nil) then
-        Continue;
-
-      case V.Kind of
-        TNodeValueKind.Float:
-          V.FloatValue := VObj.GetValue('value', V.FloatValue);
-        TNodeValueKind.Integer:
-          V.IntegerValue := VObj.GetValue('value', V.IntegerValue);
-        TNodeValueKind.string:
-          V.StringValue := VObj.GetValue('value', V.StringValue);
-        TNodeValueKind.Boolean:
-          V.BooleanValue := VObj.GetValue('value', V.BooleanValue);
-        TNodeValueKind.JSON:
-          V.JSONValue := VObj.GetValue('value', V.JSONValue);
-      end;
-    end;
-  end;
+    LoadValuesFromJSON(ValuesArr);
 end;
 
 { TNodePinType }
@@ -1299,7 +1396,7 @@ begin
   end;
 end;
 
-procedure TNodeValue.LoadFromJSON(AObj: TJSONObject);
+procedure TNodeValue.LoadFromJSON(AObj: TJSONValue);
 begin
   if AObj = nil then
     Exit;
@@ -1406,17 +1503,15 @@ begin
       TPinCompatible.False:
         Canvas.Fill.Color := $FFCF5600;
     end;
-  if Connected then
-  begin
-    //
-  end;
 
   var SRadius: Single := Radius;
-  if (Id = OwnerNode.HoveredPinId) or Selected then
+  if (Id = OwnerNode.HoveredPinId) or Selected or Highlight then
   begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := $FFFFD740;
     Canvas.Stroke.Thickness := 2 * Zoom;
+    if not ((Id = OwnerNode.HoveredPinId) or Selected) then
+      SRadius := SRadius * 0.8;
                 {
     if Id = OwnerNode.HoveredPinId then
       case OwnerNode.HoveredPinCompatible of
@@ -1439,14 +1534,24 @@ begin
   // Highlight frame
   Canvas.Fill.Kind := TBrushKind.Solid;
   var RE := RectF(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
-  Canvas.DrawEllipse(RE, 1);
+  case Kind of
+    TPinKind.Data:
+      Canvas.DrawEllipse(RE, 1);
+    TPinKind.Exec:
+      Canvas.DrawRect(RE, 1);
+  end;
 
   // Body
   if not Connected then
     RE.Inflate(-SRadius * 0.4, -SRadius * 0.4)
   else
     RE.Inflate(-SRadius * 0.2, -SRadius * 0.2);
-  Canvas.FillEllipse(RE, 1);
+  case Kind of
+    TPinKind.Data:
+      Canvas.FillEllipse(RE, 1);
+    TPinKind.Exec:
+      Canvas.FillRect(RE, 1);
+  end;
 
   if Id = OwnerNode.HoveredPinId then
     case OwnerNode.HoveredPinCompatible of
@@ -1469,6 +1574,25 @@ begin
           Canvas.FillPath(CachePathObject, 1);
         end;
     end;
+
+  if Highlight then
+  begin
+    var C := Center;
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := $FFFFD740;
+    case Direction of
+      TPinDirection.Input:
+        begin
+          C.Offset(-SRadius * 2, 0);
+          Canvas.FillPolygon(BuildTriangle(C, SRadius, 0), 1);
+        end;
+      TPinDirection.Output:
+        begin
+          C.Offset(+SRadius * 2, 0);
+          Canvas.FillPolygon(BuildTriangle(C, SRadius, 180), 1);
+        end;
+    end;
+  end;
 end;
 
 function TNodePin.GetPinWorldPosition: TPointF;
@@ -1714,6 +1838,15 @@ begin
   Canvas.FillEllipse(BodyRect, 1);
 end;
 
+procedure TRerouteNode.AutoLayoutPins;
+begin
+  for var i := 0 to FInputs.Count - 1 do
+    FInputs[i].LocalY := Height div 2;
+
+  for var i := 0 to FOutputs.Count - 1 do
+    FOutputs[i].LocalY := Height div 2;
+end;
+
 constructor TRerouteNode.Create;
 begin
   inherited;
@@ -1743,6 +1876,11 @@ begin
 end;
 
 { TCommentNode }
+
+procedure TCommentNode.AutoLayoutPins;
+begin
+  // do nothing
+end;
 
 constructor TCommentNode.Create;
 begin

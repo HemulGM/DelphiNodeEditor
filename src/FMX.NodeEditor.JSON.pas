@@ -32,7 +32,7 @@ type
     function GetMainOutput: TNodePin;
 
     procedure SaveToJSON(AObj: TJSONObject); override;
-    procedure LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean); override;
+    procedure LoadFromJSON(AObj: TJSONValue; DataOnly: Boolean; UseAlphaColor: Boolean); override;
 
     property JsonKind: TJSONNodeKind read FJsonKind write FJsonKind;
   end;
@@ -221,7 +221,7 @@ begin
   AObj.AddPair('jsonKind', JsonKindToStr(FJsonKind));
 end;
 
-procedure TJsonNode.LoadFromJSON(AObj: TJSONObject; UseAlphaColor: Boolean);
+procedure TJsonNode.LoadFromJSON(AObj: TJSONValue; DataOnly: Boolean; UseAlphaColor: Boolean);
 begin
   inherited;
   JsonName := AObj.GetValue('jsonName', '');

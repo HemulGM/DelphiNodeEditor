@@ -12,7 +12,7 @@ uses
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
   FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors,
-  System.ImageList, FMX.ImgList, NodeEditor.LegendItem;
+  System.ImageList, FMX.ImgList, NodeEditor.LegendItem, FMX.NodeEditor.Runtime;
 
 type
   { TMathExprNode — кастомная нода с exec-пинами и values }
@@ -37,7 +37,7 @@ type
   end;
 
   { TBranchNode — нода с exec-пинами }
-  TBranchNode = class(TCustomNode)
+  TBranchSimpleNode = class(TCustomNode)
   public
     constructor Create; override;
     procedure SetupPins; override;
@@ -264,11 +264,6 @@ type
     CheckBoxCustomAccent: TCheckBox;
     MenuItemNodeLibrary: TMenuItem;
     SearchBox1: TSearchBox;
-    Layout1: TLayout;
-    Layout21: TLayout;
-    PathLabel22: TPathLabel;
-    Label12: TLabel;
-    Label15: TLabel;
     LayoutMobileMenu: TLayout;
     RadioButtonMenuProjects: TRadioButton;
     RadioButtonMenuSettings: TRadioButton;
@@ -394,6 +389,31 @@ type
     TabItemToolsLibrary: TTabItem;
     MenuItemAlignment: TMenuItem;
     MenuItemLegend: TMenuItem;
+    MemoLog: TMemo;
+    MenuItem4: TMenuItem;
+    MenuItemDemoSimple: TMenuItem;
+    MenuItemDemoExec: TMenuItem;
+    Layout1: TLayout;
+    ButtonRun: TButton;
+    PathLabel22: TPathLabel;
+    ButtonDebugToggleBreak: TButton;
+    PathLabel30: TPathLabel;
+    ButtonDebugContinue: TButton;
+    PathLabel31: TPathLabel;
+    ButtonDebugStepOver: TButton;
+    PathLabel32: TPathLabel;
+    ButtonDebugStepInto: TButton;
+    PathLabel33: TPathLabel;
+    ButtonDebugStop: TButton;
+    PathLabel34: TPathLabel;
+    ButtonDebugPause: TButton;
+    PathLabel51: TPathLabel;
+    ButtonDebugClearBreaks: TButton;
+    PathLabel52: TPathLabel;
+    Panel14: TPanel;
+    Panel21: TPanel;
+    Panel22: TPanel;
+    Panel23: TPanel;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -459,6 +479,18 @@ type
     procedure ButtonRedoClick(Sender: TObject);
     procedure MenuItemAlignmentClick(Sender: TObject);
     procedure MenuItemLegendClick(Sender: TObject);
+    procedure MenuItemDemoExecClick(Sender: TObject);
+    procedure MenuItemDemoSimpleClick(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+    procedure ButtonRunClick(Sender: TObject);
+    procedure ButtonDebugToggleBreakClick(Sender: TObject);
+    procedure ButtonDebugContinueClick(Sender: TObject);
+    procedure ButtonDebugStepOverClick(Sender: TObject);
+    procedure ButtonDebugStepIntoClick(Sender: TObject);
+    procedure ButtonDebugStopClick(Sender: TObject);
+    procedure ButtonDebugPauseClick(Sender: TObject);
+    procedure ButtonDebugClearBreaksClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -486,11 +518,17 @@ type
     procedure UpdateNodeRegistry;
     procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
     procedure OnHistoryChanged(Sender: TObject);
+    procedure OnEditorExecutionStateChanged(Sender: TObject);
+    procedure OnEditorExecutionNodeChanged(Sender: TObject; ANode: TExecutableNode);
+    procedure OnEditorExecutionFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
+    function GetNodeRuntimeInfo(ANode: TExecutableNode): string;
+    procedure InitDemoGraphExec;
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
     procedure MobileMode;
     procedure DoOnSettingChange; override;
+    procedure Log(const Text: string);
   public
     { Public declarations }
   end;
@@ -502,11 +540,23 @@ implementation
 
 uses
   System.Math, System.JSON, FMX.NodeEditor.Node.Command, System.Messaging,
-  FMX.NodeEditor.Node.Engineering, WinUI3.Style;
+  WinUI3.Dialogs, FMX.NodeEditor.Node.Engineering,
+  FMX.NodeEditor.ControlFlowNodes, WinUI3.Style;
 
 {$R *.fmx}
 
 { TFormMain }
+
+procedure TFormMain.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  if Assigned(FEditor) and FEditor.IsExecutionRunning then
+  begin
+    if TWinUIDialog.Show(Self, 'Warning', 'Execution is running. Stop it?', ['Yes', 'No', 'Cancel'], 2, 2, True) = 0 then
+      FEditor.StopExecution
+    else
+      CanClose := False;
+  end;
+end;
 
 procedure TFormMain.FormCreate(Sender: TObject);
 begin
@@ -543,6 +593,21 @@ begin
   //
 
   UpdateStatus;
+end;
+
+procedure TFormMain.FormDestroy(Sender: TObject);
+begin
+  FEditor.OnPaint := nil;
+
+  FEditor.OnSelectionChanged := nil;
+  FEditor.OnNodeChanged := nil;
+  FEditor.OnUpdatedStatus := nil;
+
+  FEditor.OnExecutionStateChanged := nil;
+  FEditor.OnExecutionNodeChanged := nil;
+  FEditor.OnExecutionFinished := nil;
+
+  FEditor.Controller.OnChanged := nil;
 end;
 
 procedure TFormMain.MobileMode;
@@ -630,6 +695,49 @@ begin
   end;
 end;
 
+function TFormMain.GetNodeRuntimeInfo(ANode: TExecutableNode): string;
+begin
+  Result := ANode.Title;
+
+  if (ANode = nil) or (FEditor = nil) or (FEditor.Debugger = nil) then
+    Exit;
+
+  with FEditor.ExecutionContext do
+  begin
+    if ANode is TForLoopNode then
+    begin
+      var Idx := NodeValueToIntDef(GetVariableValue('last_for_index_' + ANode.Id), -1);
+      if Idx >= 0 then
+        Result := ANode.Title + ' [i=' + IntToStr(Idx) + ']';
+    end
+    else if ANode is TIsPrimeFlagNode then
+    begin
+      var Idx := NodeValueToIntDef(GetVariableValue('last_prime_check_index'), -1);
+      var B := GetVariableBool('last_prime_check_value', False);
+      Result := Format('%s [index=%d, isPrime=%s]', [ANode.Title, Idx,
+          BoolToStr(B, True)]);
+    end
+    else if ANode is TSetPrimeFlagNode then
+    begin
+      var Idx := NodeValueToIntDef(GetVariableValue('last_set_prime_index'), -1);
+      var B := GetVariableBool('last_set_prime_value', False);
+      Result := Format('%s [index=%d, value=%s]', [ANode.Title, Idx,
+          BoolToStr(B, True)]);
+    end
+    else if ANode is TCollectPrimeNode then
+    begin
+      var Idx := NodeValueToIntDef(GetVariableValue('last_collected_prime'), -1);
+      var S := GetVariableStr('primes', '');
+      Result := Format('%s [prime=%d, list=%s]', [ANode.Title, Idx, S]);
+    end
+    else if ANode is TBranchNode then
+    begin
+      var B := GetVariableBool('BranchResult_' + ANode.Id, False);
+      Result := Format('%s [condition=%s]', [ANode.Title, BoolToStr(B, True)]);
+    end;
+  end;
+end;
+
 procedure TFormMain.Button309Click(Sender: TObject);
 begin
   Inc(OverTheme);
@@ -673,6 +781,63 @@ procedure TFormMain.ButtonCloseWorkHistoryClick(Sender: TObject);
 begin
   LayoutToolPanel.Visible := False;
   PanelMobileOverlay.Visible := False;
+end;
+
+procedure TFormMain.ButtonDebugClearBreaksClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+  begin
+    FEditor.ClearAllBreakpoints;
+    Log('All breakpoints cleared');
+  end;
+end;
+
+procedure TFormMain.ButtonDebugContinueClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+    FEditor.ContinueExecution;
+end;
+
+procedure TFormMain.ButtonDebugPauseClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+  begin
+    FEditor.PauseExecution;
+    Log('Execution paused');
+  end;
+end;
+
+procedure TFormMain.ButtonDebugStepIntoClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+    FEditor.StepIntoExecution;
+end;
+
+procedure TFormMain.ButtonDebugStepOverClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+    FEditor.StepOverExecution;
+end;
+
+procedure TFormMain.ButtonDebugStopClick(Sender: TObject);
+begin
+  if Assigned(FEditor) then
+  begin
+    FEditor.StopExecution;
+    Log('Execution stopped');
+    FEditor.DebugViewMode := False;
+    FEditor.CurrentDebugNode := nil;
+  end;
+end;
+
+procedure TFormMain.ButtonDebugToggleBreakClick(Sender: TObject);
+begin
+  if Assigned(FEditor) and (FEditor.SelectedNodeCount > 0) then
+  begin
+    var Node := FEditor.GetSelectedNode(0);
+    FEditor.ToggleBreakpoint(Node);
+    Log('Breakpoint toggled on node: ' + Node.Title);
+  end;
 end;
 
 procedure TFormMain.ButtonDistrHorzClick(Sender: TObject);
@@ -787,6 +952,17 @@ begin
   FEditor.Redo;
 end;
 
+procedure TFormMain.ButtonRunClick(Sender: TObject);
+begin
+  if FEditor.ExecuteGraph then
+  begin
+    Log('Graph execution started...');
+    FEditor.DebugViewMode := True;
+  end
+  else
+    Log('Failed to start: ' + FEditor.GetLastRuntimeError);
+end;
+
 procedure TFormMain.ButtonSettingsClick(Sender: TObject);
 begin
   PopupTheme.PlacementTarget := ButtonSettings;
@@ -875,11 +1051,17 @@ begin
   FEditor := TNodeEditor.Create(LayoutRender);
   FEditor.Parent := LayoutRender;
   FEditor.Align := TAlignLayout.Client;
+  FEditor.DebugMode := True;              // Enable debug visualization
+  FEditor.DebugViewMode := False;
   FEditor.OnPaint := FOnEditorPaint;
 
   FEditor.OnSelectionChanged := OnSelectionChanged;
   FEditor.OnNodeChanged := OnNodeChanged;
   FEditor.OnUpdatedStatus := OnUpdatedStatus;
+
+  FEditor.OnExecutionStateChanged := OnEditorExecutionStateChanged;
+  FEditor.OnExecutionNodeChanged := OnEditorExecutionNodeChanged;
+  FEditor.OnExecutionFinished := OnEditorExecutionFinished;
 
   FEditor.Controller.OnChanged := OnHistoryChanged;
 
@@ -931,7 +1113,7 @@ begin
     'Conditional exec branch (if/else).',
     'branch,if,else,exec,flow',
     'M416 160a64 64 0 1 0-96.27 55.24c-2.29 29.08-20.08 37-75 48.42c-17.76 3.68-35.93 7.45-52.71 13.93v-126.2a64 64 0 1 0-64 0v209.22a64 64 0 1 0 64.42.24c2.39-18 16-24.33 65.26-34.52c27.43-5.67 55.78-11.54 79.78-26.95c29-18.58 44.53-46.78 46.36-83.89A64 64 0 0 0 416 160M160 64a32 32 0 1 1-32 32a32 32 0 0 1 32-32m0 384a32 32 0 1 1 32-32a32 32 0 0 1-32 32m192-256a32 32 0 1 1 32-32a32 32 0 0 1-32 32',
-    TBranchNode, $FFC04000);
+    TBranchSimpleNode, $FFC04000);
 
   FEditor.Graph.Registry.RegisterNodeEx(
     'print_node',
@@ -942,6 +1124,7 @@ begin
     'M16 8V5H8v3H6V3h12v5zM4 10h16zm14 2.5q.425 0 .713-.288T19 11.5t-.288-.712T18 10.5t-.712.288T17 11.5t.288.713t.712.287M16 19v-4H8v4zm2 2H6v-4H2v-6q0-1.275.875-2.137T5 8h14q1.275 0 2.138.863T22 11v6h-4zm2-6v-4q0-.425-.288-.712T19 10H5q-.425 0-.712.288T4 11v4h2v-2h12v2z',
     TPrintNode, $FF843482);
   RegisterEngineeringNodes(FEditor.Graph.Registry);
+  RegisterControlFlowNodes(FEditor.Graph.Registry);
 end;
 
 procedure TFormMain.SpinBoxSizeChange(Sender: TObject);
@@ -974,119 +1157,303 @@ var
   NDefault: TCustomNode;
   V: TNodeValue;
 begin
+  FEditor.BeginUpdate;
+  try
+    FEditor.Clear;
   // ── Float sources ──────────────────────────────────────────────
-  NFloat1 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 120));
-  NFloat1.Title := 'Value A';
-  TFloatNode(NFloat1).SetupPins;
-  V := NFloat1.FindValue('value');
-  if V <> nil then
-    V.FloatValue := 3.14;
-  FEditor.AddNode(NFloat1);
+    NFloat1 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 120));
+    NFloat1.Title := 'Value A';
+    TFloatNode(NFloat1).SetupPins;
+    V := NFloat1.FindValue('value');
+    if V <> nil then
+      V.FloatValue := 3.14;
+    FEditor.AddNode(NFloat1);
 
-  NFloat2 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 240));
-  NFloat2.Title := 'Value B';
-  TFloatNode(NFloat2).SetupPins;
-  V := NFloat2.FindValue('value');
-  if V <> nil then
-    V.FloatValue := 2.71;
-  FEditor.AddNode(NFloat2);
+    NFloat2 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 240));
+    NFloat2.Title := 'Value B';
+    TFloatNode(NFloat2).SetupPins;
+    V := NFloat2.FindValue('value');
+    if V <> nil then
+      V.FloatValue := 2.71;
+    FEditor.AddNode(NFloat2);
 
-  NFloat3 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 360));
-  NFloat3.Title := 'Value C';
-  TFloatNode(NFloat3).SetupPins;
-  V := NFloat3.FindValue('value');
-  if V <> nil then
-    V.FloatValue := 10.0;
-  FEditor.AddNode(NFloat3);
+    NFloat3 := FEditor.Graph.Registry.CreateNode('float', PointF(40, 360));
+    NFloat3.Title := 'Value C';
+    TFloatNode(NFloat3).SetupPins;
+    V := NFloat3.FindValue('value');
+    if V <> nil then
+      V.FloatValue := 10.0;
+    FEditor.AddNode(NFloat3);
 
   // ── Add node ───────────────────────────────────────────────────
-  NAdd := FEditor.Graph.Registry.CreateNode('add', PointF(280, 160));
-  NAdd.Title := 'A + B';
-  FEditor.AddNode(NAdd);
+    NAdd := FEditor.Graph.Registry.CreateNode('add', PointF(280, 160));
+    NAdd.Title := 'A + B';
+    FEditor.AddNode(NAdd);
 
   // ── Multiply node (custom) ─────────────────────────────────────
-  NMul := FEditor.Graph.Registry.CreateNode('multiply_node', PointF(280, 310));
-  NMul.Title := '(A+B) × C';
-  FEditor.AddNode(NMul);
+    NMul := FEditor.Graph.Registry.CreateNode('multiply_node', PointF(280, 310));
+    NMul.Title := '(A+B) × C';
+    FEditor.AddNode(NMul);
 
   // ── Math Expression (exec + values) ───────────────────────────
-  NMath := FEditor.Graph.Registry.CreateNode('math_expr', PointF(520, 180));
-  NMath.Title := 'Math Expr';
-  NMath.FixedSize := True;
-  FEditor.AddNode(NMath);
+    NMath := FEditor.Graph.Registry.CreateNode('math_expr', PointF(520, 180));
+    NMath.Title := 'Math Expr';
+    NMath.FixedSize := True;
+    FEditor.AddNode(NMath);
 
   // ── String node ────────────────────────────────────────────────
-  NStr := FEditor.Graph.Registry.CreateNode('string_node', PointF(520, 420));
-  NStr.Title := 'Label';
-  FEditor.AddNode(NStr);
+    NStr := FEditor.Graph.Registry.CreateNode('string_node', PointF(520, 420));
+    NStr.Title := 'Label';
+    FEditor.AddNode(NStr);
 
   // ── Branch node (exec flow) ───────────────────────────────────
-  NBranch := FEditor.Graph.Registry.CreateNode('branch_node', PointF(760, 160));
-  NBranch.Title := 'If Enabled?';
-  FEditor.AddNode(NBranch);
+    NBranch := FEditor.Graph.Registry.CreateNode('branch_node', PointF(760, 160));
+    NBranch.Title := 'If Enabled?';
+    FEditor.AddNode(NBranch);
 
   // ── Reroute ────────────────────────────────────────────────────
-  NReroute := FEditor.Graph.Registry.CreateNode('reroute', PointF(240, 470));
-  FEditor.AddNode(NReroute);
+    NReroute := FEditor.Graph.Registry.CreateNode('reroute', PointF(240, 470));
+    FEditor.AddNode(NReroute);
 
   // ── Default node ───────────────────────────────────────────────
-  NDefault := FEditor.Graph.Registry.CreateNode('default', PointF(760, 360));
-  NDefault.Title := 'Default Node';
-  FEditor.AddNode(NDefault);
+    NDefault := FEditor.Graph.Registry.CreateNode('default', PointF(760, 360));
+    NDefault.Title := 'Default Node';
+    FEditor.AddNode(NDefault);
 
   // ── Comment / Frame 1 (Math block) ────────────────────────────
-  NComment1 := FEditor.Graph.Registry.CreateNode('comment', PointF(20, 80));
-  NComment1.Title := 'Math Block';
-  NComment1.Width := 460;
-  NComment1.Height := 360;
-  NComment1.CommentText := 'Arithmetic: A+B then ×C';
-  NComment1.HeaderColor := $FF60A060;
-  NComment1.BodyColor := $FFEEFFEE;
-  FEditor.AddNode(NComment1);
+    NComment1 := FEditor.Graph.Registry.CreateNode('comment', PointF(20, 80));
+    NComment1.Title := 'Math Block';
+    NComment1.Width := 460;
+    NComment1.Height := 360;
+    NComment1.CommentText := 'Arithmetic: A+B then ×C';
+    NComment1.HeaderColor := $FF60A060;
+    NComment1.BodyColor := $FFEEFFEE;
+    FEditor.AddNode(NComment1);
 
   // ── Comment / Frame 2 (Flow block) ────────────────────────────
-  NComment2 := FEditor.Graph.Registry.CreateNode('comment', PointF(500, 120));
-  NComment2.Title := 'Flow Block';
-  NComment2.Width := 320;
-  NComment2.Height := 200;
-  NComment2.CommentText := 'Exec pipeline: Expr → Branch';
-  NComment2.HeaderColor := $FF804000;
-  NComment2.BodyColor := $FFFFF8E8;
-  FEditor.AddNode(NComment2);
+    NComment2 := FEditor.Graph.Registry.CreateNode('comment', PointF(500, 120));
+    NComment2.Title := 'Flow Block';
+    NComment2.Width := 320;
+    NComment2.Height := 200;
+    NComment2.CommentText := 'Exec pipeline: Expr → Branch';
+    NComment2.HeaderColor := $FF804000;
+    NComment2.BodyColor := $FFFFF8E8;
+    FEditor.AddNode(NComment2);
 
   // ── Links: Float → Add ─────────────────────────────────────────
-  FEditor.AddLink(NFloat1.GetOutput(0), NAdd.GetInput(0));
-  FEditor.AddLink(NFloat2.GetOutput(0), NAdd.GetInput(1));
+    FEditor.AddLink(NFloat1.GetOutput(0), NAdd.GetInput(0));
+    FEditor.AddLink(NFloat2.GetOutput(0), NAdd.GetInput(1));
 
   // ── Links: Add+Float3 → Mul ────────────────────────────────────
-  FEditor.AddLink(NAdd.GetOutput(0), NMul.GetInput(0));
+    FEditor.AddLink(NAdd.GetOutput(0), NMul.GetInput(0));
 
   // Float3 → Reroute → Mul.B
-  if (NReroute.InputCount > 0) and (NReroute.OutputCount > 0) then
-  begin
-    FEditor.AddLink(NFloat3.GetOutput(0), NReroute.GetInput(0));
-    FEditor.AddLink(NReroute.GetOutput(0), NMul.GetInput(1));
-  end;
+    if (NReroute.InputCount > 0) and (NReroute.OutputCount > 0) then
+    begin
+      FEditor.AddLink(NFloat3.GetOutput(0), NReroute.GetInput(0));
+      FEditor.AddLink(NReroute.GetOutput(0), NMul.GetInput(1));
+    end;
 
   // ── Links: Mul → Math A, Float1 → Math B, Float2 → Math C ─────
-  if NMath.InputCount >= 4 then // exec + A + B + C
-  begin
-    FEditor.AddLink(NMul.GetOutput(0), NMath.GetInput(1));
-    FEditor.AddLink(NFloat1.GetOutput(0), NMath.GetInput(2));
-    FEditor.AddLink(NFloat2.GetOutput(0), NMath.GetInput(3));
-  end;
+    if NMath.InputCount >= 4 then // exec + A + B + C
+    begin
+      FEditor.AddLink(NMul.GetOutput(0), NMath.GetInput(1));
+      FEditor.AddLink(NFloat1.GetOutput(0), NMath.GetInput(2));
+      FEditor.AddLink(NFloat2.GetOutput(0), NMath.GetInput(3));
+    end;
 
   // ── Links: Math Exec Out → Branch Exec In ──────────────────────
-  if (NMath.OutputCount >= 1) and (NBranch.InputCount >= 1) then
-    FEditor.AddLink(NMath.GetOutput(0), NBranch.GetInput(0));
+    if (NMath.OutputCount >= 1) and (NBranch.InputCount >= 1) then
+      FEditor.AddLink(NMath.GetOutput(0), NBranch.GetInput(0));
 
   // ── Links: Branch True → Default In ───────────────────────────
-  if (NBranch.OutputCount >= 1) and (NDefault.InputCount >= 1) then
-    FEditor.AddLink(NBranch.GetOutput(0), NDefault.GetInput(0));
+    if (NBranch.OutputCount >= 1) and (NDefault.InputCount >= 1) then
+      FEditor.AddLink(NBranch.GetOutput(0), NDefault.GetInput(0));
 
   // ── Select Math node — демонстрируем все его values в инспекторе
-  FEditor.SelectNode(NMath, False);
+    FEditor.SelectNode(NMath, False);
+  finally
+    FEditor.EndUpdate;
+  end;
   RefreshFromSelection;
+end;
+
+procedure TFormMain.InitDemoGraphExec;
+var
+  Seq: TSequenceNode;
+  NConst, TwoConst: TIntConstNode;
+  BoolTrue, BoolFalse: TBoolConstNode;
+  PrimesNameConst, EmptyStrConst: TStringConstNode;
+  ClearPrimes: TSetVariableNode;
+  InitLoop, OuterLoop, InnerLoop, CollectLoop: TForLoopNode;
+  SetPrimeInit: TSetPrimeFlagNode;
+  ReadPrimeOuter, ReadPrimeCollect: TIsPrimeFlagNode;
+  OuterBranch, CollectBranch: TBranchNode;
+  MulP2: TMulExecNode;
+  SetComposite: TSetPrimeFlagNode;
+  CollectPrime: TCollectPrimeNode;
+  Comment: TCommentNode;
+begin
+  FEditor.BeginUpdate;
+  try
+    FEditor.Clear;
+
+    NConst := TIntConstNode.Create('N = 50', 80, 80);
+    NConst.SetupPins;
+    NConst.FindValue('value').IntegerValue := 50;
+    FEditor.AddNode(NConst);
+
+    TwoConst := TIntConstNode.Create('2', 80, 200);
+    TwoConst.SetupPins;
+    TwoConst.FindValue('value').IntegerValue := 2;
+    FEditor.AddNode(TwoConst);
+
+    BoolTrue := TBoolConstNode.Create('True', 80, 320);
+    BoolTrue.SetupPins;
+    BoolTrue.FindValue('value').BooleanValue := True;
+    FEditor.AddNode(BoolTrue);
+
+    BoolFalse := TBoolConstNode.Create('False', 80, 440);
+    BoolFalse.SetupPins;
+    BoolFalse.FindValue('value').BooleanValue := False;
+    FEditor.AddNode(BoolFalse);
+
+    PrimesNameConst := TStringConstNode.Create('"primes"', 80, 560);
+    PrimesNameConst.SetupPins;
+    PrimesNameConst.FindValue('value').StringValue := 'primes';
+    FEditor.AddNode(PrimesNameConst);
+
+    EmptyStrConst := TStringConstNode.Create('""', 80, 680);
+    EmptyStrConst.SetupPins;
+    EmptyStrConst.FindValue('value').StringValue := '';
+    FEditor.AddNode(EmptyStrConst);
+
+    Seq := TSequenceNode.Create('Start / Main Sequence', 320, 80);
+    Seq.SetupPins;
+    while Seq.StepCount < 3 do
+      Seq.AddStep;
+    FEditor.AddNode(Seq);
+
+    ClearPrimes := TSetVariableNode.Create('Set primes = ""', 600, 80);
+    ClearPrimes.SetupPins;
+    FEditor.AddNode(ClearPrimes);
+
+    InitLoop := TForLoopNode.Create('Init i = 2..N', 600, 260);
+    InitLoop.SetupPins;
+    FEditor.AddNode(InitLoop);
+
+    SetPrimeInit := TSetPrimeFlagNode.Create('Set prime_i = True', 880, 260);
+    SetPrimeInit.SetupPins;
+    FEditor.AddNode(SetPrimeInit);
+
+    OuterLoop := TForLoopNode.Create('For p = 2..N', 600, 480);
+    OuterLoop.SetupPins;
+    FEditor.AddNode(OuterLoop);
+
+    ReadPrimeOuter := TIsPrimeFlagNode.Create('Read prime_p', 880, 480);
+    ReadPrimeOuter.SetupPins;
+    FEditor.AddNode(ReadPrimeOuter);
+
+    OuterBranch := TBranchNode.Create('If prime_p', 1140, 480);
+    OuterBranch.SetupPins;
+    FEditor.AddNode(OuterBranch);
+
+    MulP2 := TMulExecNode.Create('p * 2', 1400, 440);
+    MulP2.SetupPins;
+    FEditor.AddNode(MulP2);
+
+    InnerLoop := TForLoopNode.Create('For m = p*2 .. N step p', 1680, 440);
+    InnerLoop.SetupPins;
+    FEditor.AddNode(InnerLoop);
+
+    SetComposite := TSetPrimeFlagNode.Create('Set prime_m = False', 1960, 440);
+    SetComposite.SetupPins;
+    FEditor.AddNode(SetComposite);
+
+    CollectLoop := TForLoopNode.Create('Collect p = 2..N', 600, 760);
+    CollectLoop.SetupPins;
+    FEditor.AddNode(CollectLoop);
+
+    ReadPrimeCollect := TIsPrimeFlagNode.Create('Read prime_p', 880, 760);
+    ReadPrimeCollect.SetupPins;
+    FEditor.AddNode(ReadPrimeCollect);
+
+    CollectBranch := TBranchNode.Create('If prime_p', 1140, 760);
+    CollectBranch.SetupPins;
+    FEditor.AddNode(CollectBranch);
+
+    CollectPrime := TCollectPrimeNode.Create('Collect prime', 1400, 760);
+    CollectPrime.SetupPins;
+    FEditor.AddNode(CollectPrime);
+
+    Comment := TCommentNode.Create('Runtime-compatible sieve demo', 20, 10);
+    Comment.CommentText :=
+      'Полный exec-flow:' + sLineBreak +
+      '1) очистка строки primes' + sLineBreak +
+      '2) инициализация prime_i=True для i=2..N' + sLineBreak +
+      '3) внешний цикл по p' + sLineBreak +
+      '4) если prime_p=True, то mark multiples' + sLineBreak +
+      '5) сбор результата в переменную primes';
+    Comment.Width := 520;
+    Comment.Height := 170;
+    FEditor.AddNode(Comment);
+
+    // DATA
+    FEditor.Graph.AddLink(TNodeLink.Create(PrimesNameConst.GetOutput(1), ClearPrimes.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(EmptyStrConst.GetOutput(1), ClearPrimes.GetInput(2)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(TwoConst.GetOutput(1), InitLoop.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(NConst.GetOutput(1), InitLoop.GetInput(2)));
+    FEditor.Graph.AddLink(TNodeLink.Create(InitLoop.GetOutput(2), SetPrimeInit.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(BoolTrue.GetOutput(1), SetPrimeInit.GetInput(2)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(TwoConst.GetOutput(1), OuterLoop.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(NConst.GetOutput(1), OuterLoop.GetInput(2)));
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterLoop.GetOutput(2), ReadPrimeOuter.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(ReadPrimeOuter.GetOutput(1), OuterBranch.GetInput(1)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterLoop.GetOutput(2), MulP2.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(TwoConst.GetOutput(1), MulP2.GetInput(2)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(MulP2.GetOutput(1), InnerLoop.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(NConst.GetOutput(1), InnerLoop.GetInput(2)));
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterLoop.GetOutput(2), InnerLoop.GetInput(3)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(InnerLoop.GetOutput(2), SetComposite.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(BoolFalse.GetOutput(1), SetComposite.GetInput(2)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(TwoConst.GetOutput(1), CollectLoop.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(NConst.GetOutput(1), CollectLoop.GetInput(2)));
+    FEditor.Graph.AddLink(TNodeLink.Create(CollectLoop.GetOutput(2), ReadPrimeCollect.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(ReadPrimeCollect.GetOutput(1), CollectBranch.GetInput(1)));
+    FEditor.Graph.AddLink(TNodeLink.Create(CollectLoop.GetOutput(2), CollectPrime.GetInput(1)));
+
+    // EXEC
+    FEditor.Graph.AddLink(TNodeLink.Create(Seq.GetOutput(0), ClearPrimes.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(Seq.GetOutput(1), InitLoop.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(Seq.GetOutput(2), OuterLoop.GetInput(0)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(InitLoop.GetOutput(0), SetPrimeInit.GetInput(0)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterLoop.GetOutput(0), ReadPrimeOuter.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(ReadPrimeOuter.GetOutput(0), OuterBranch.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterBranch.GetOutput(0), MulP2.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(MulP2.GetOutput(0), InnerLoop.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(InnerLoop.GetOutput(0), SetComposite.GetInput(0)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(OuterLoop.GetOutput(1), CollectLoop.GetInput(0)));
+
+    FEditor.Graph.AddLink(TNodeLink.Create(CollectLoop.GetOutput(0), ReadPrimeCollect.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(ReadPrimeCollect.GetOutput(0), CollectBranch.GetInput(0)));
+    FEditor.Graph.AddLink(TNodeLink.Create(CollectBranch.GetOutput(0), CollectPrime.GetInput(0)));
+
+    FEditor.SelectNode(Seq, False);
+  finally
+    FEditor.EndUpdate;
+  end;
+
+  FEditor.FitSome;
+  Log('Полный exec-граф решета загружен.');
 end;
 
 procedure TFormMain.LayoutMobileMenuResize(Sender: TObject);
@@ -1102,10 +1469,31 @@ begin
   Operation := TDragOperation.None;
 end;
 
+procedure TFormMain.Log(const Text: string);
+begin
+  var TimeStamp := FormatDateTime('hh:nn:ss', Now);
+  LabelStat2.Text := Text;                    // старый вывод в статусбар
+
+  MemoLog.Lines.Add(Format('[%s] %s', [TimeStamp, Text]));
+    // Автоскролл вниз
+  MemoLog.SelStart := Length(MemoLog.Text);
+  MemoLog.SelLength := 0;
+end;
+
 procedure TFormMain.MenuItemAlignmentClick(Sender: TObject);
 begin
   LayoutToolPanel.Visible := True;
   RadioButtonToolsAlign.IsChecked := True;
+end;
+
+procedure TFormMain.MenuItemDemoExecClick(Sender: TObject);
+begin
+  InitDemoGraphExec;
+end;
+
+procedure TFormMain.MenuItemDemoSimpleClick(Sender: TObject);
+begin
+  InitDemoGraph;
 end;
 
 procedure TFormMain.MenuItemEditCopyClick(Sender: TObject);
@@ -1466,6 +1854,37 @@ begin
   UpdateStatus;
 end;
 
+procedure TFormMain.OnEditorExecutionFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
+begin
+  UpdateStatus;
+
+  if Success then
+  begin
+    var S := '';
+    if Assigned(FEditor.Debugger) and Assigned(FEditor.ExecutionContext) then
+      S := FEditor.ExecutionContext.GetVariableStr('primes', '');
+
+    if S <> '' then
+      Log('Execution finished. Collected: ' + S)
+    else
+      Log('Execution finished successfully');
+  end
+  else
+    Log('Execution failed: ' + ErrorMessage);
+end;
+
+procedure TFormMain.OnEditorExecutionNodeChanged(Sender: TObject; ANode: TExecutableNode);
+begin
+  UpdateStatus;
+  if ANode <> nil then
+    Log('Executing: ' + GetNodeRuntimeInfo(ANode));
+end;
+
+procedure TFormMain.OnEditorExecutionStateChanged(Sender: TObject);
+begin
+  UpdateStatus;
+end;
+
 procedure TFormMain.OnHistoryChanged(Sender: TObject);
 begin
   //UpdateStatus;
@@ -1600,6 +2019,20 @@ begin
   else
     SelStr := 'No selection';
 
+  var IsRunning := FEditor.IsExecutionRunning;
+  var IsPaused := FEditor.IsExecutionPaused;
+                          {
+  actRun.Enabled := not IsRunning or IsPaused;
+  actPause.Enabled := IsRunning and not IsPaused;
+  actStop.Enabled := IsRunning or IsPaused;
+  actStepInto.Enabled := IsPaused;
+  actStepOver.Enabled := IsPaused;
+  actContinue.Enabled := IsPaused;
+
+  actToggleBreakpoint.Enabled := FEditor.SelectedNodeCount > 0;
+  actClearBreakpoints.Enabled := True; }
+  LabelStat1.Text := if IsRunning then 'RUNNING' else if IsPaused then 'PAUSED' else 'STOPPED';
+
   LabelStat1.Text := SelStr;
   LabelStat2.Text := Format('Nodes: %d | Links: %d', [FEditor.Graph.Nodes.Count, FEditor.Graph.Links.Count]);
   LabelStat3.Text := Format('Zoom: %.0f%%', [FEditor.Zoom * 100]);
@@ -1713,9 +2146,9 @@ begin
   AddOutputPin('Text', 'string', TPinKind.Data, 45);
 end;
 
-{ TBranchNode }
+{ TBranchSimpleNode }
 
-constructor TBranchNode.Create;
+constructor TBranchSimpleNode.Create;
 begin
   inherited;
   NodeType := 'branch_node';
@@ -1724,7 +2157,7 @@ begin
   Height := 140;
 end;
 
-procedure TBranchNode.SetupPins;
+procedure TBranchSimpleNode.SetupPins;
 begin
   ClearPins;
   AddInputPin('▶ Exec', 'exec', TPinKind.Exec, 35);

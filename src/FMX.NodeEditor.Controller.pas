@@ -756,7 +756,7 @@ begin
           OldNodeId := NodeObj.GetValue('id', '');
 
           N := FGraph.Registry.CreateNode(NodeType, PointF(NodeObj.GetValue<Single>('x', 0.0), NodeObj.GetValue<Single>('y', 0.0)));
-          N.LoadFromJSON(NodeObj, True);
+          N.LoadFromJSON(NodeObj, False, True);
           NewNodeId := NewId;
           N.Id := NewNodeId;
           N.X := Position.X + (N.X - MinX);
