@@ -1,11 +1,14 @@
 program DelphiNodeEditor;
 
+{.$DEFINE LOG}
+
 {$IFDEF LOG}
   {$APPTYPE CONSOLE}
 {$ENDIF}
 
 uses
   System.StartUpCopy,
+  System.SysUtils,
   FMX.Forms,
   {$IF DEFINED(ANDROID) or DEFINED(IOS)}
   FMX.Skia,

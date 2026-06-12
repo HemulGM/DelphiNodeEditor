@@ -1,4 +1,4 @@
-{
+п»ї{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,15 +29,12 @@ uses
   FMX.NodeEditor.Node.Graph;
 
 type
-  { executable math node }
   TExecMathNode = class(TExecutableNode)
   protected
     FExecIn: TNodePin;
     FExecOut: TNodePin;
     procedure AddExecPins;
   end;
-
-  { Константы / переменные }
 
   TIntConstNode = class(TExecutableNode)
   private
@@ -94,8 +91,6 @@ type
     constructor Create; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
-
-  { Арифметика }
 
   TAddExecNode = class(TExecMathNode)
   private
@@ -157,8 +152,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { Тригонометрия }
-
   TSinExecNode = class(TExecMathNode)
   private
     FValuePin, FResult: TNodePin;
@@ -188,8 +181,6 @@ type
     constructor Create; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
-
-  { Инженерные функции }
 
   TSqrtExecNode = class(TExecMathNode)
   private
@@ -261,8 +252,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { Сравнения }
-
   TGreaterNode = class(TExecMathNode)
   private
     FA, FB, FResult: TNodePin;
@@ -292,8 +281,6 @@ type
     constructor Create; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
-
-  { Узлы под решето }
 
   TIsPrimeFlagNode = class(TExecutableNode)
   private
@@ -334,6 +321,8 @@ procedure RegisterEngineeringNodes(ARegistry: TNodeRegistry);
 
 implementation
 
+{ TExecMathNode }
+
 procedure TExecMathNode.AddExecPins;
 begin
   FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
@@ -348,7 +337,7 @@ begin
   Width := 180;
   Height := 110;
   NodeType := 'intconst';
-  HeaderColor := $FFC8E6C9;
+  HeaderColor := $FF398A3C;
 end;
 
 procedure TIntConstNode.SetupPins;
@@ -387,7 +376,7 @@ begin
   Width := 180;
   Height := 110;
   NodeType := 'boolconst';
-  HeaderColor := $FFFFF59D;
+  HeaderColor := $FF760E0E;
 end;
 
 procedure TBoolConstNode.SetupPins;
@@ -426,7 +415,7 @@ begin
   Width := 200;
   Height := 110;
   NodeType := 'stringconst';
-  HeaderColor := $FFB3E5FC;
+  HeaderColor := $FF9F4707;
 end;
 
 procedure TStringConstNode.SetupPins;
@@ -465,7 +454,7 @@ begin
   Width := 220;
   Height := 130;
   NodeType := 'setvar';
-  HeaderColor := $FFD1C4E9;
+  HeaderColor := $FF5E28C1;
 end;
 
 procedure TSetVariableNode.SetupPins;
@@ -497,7 +486,7 @@ begin
   Width := 220;
   Height := 130;
   NodeType := 'getvar';
-  HeaderColor := $FFD1C4E9;
+  HeaderColor := $FF5E28C1;
 end;
 
 procedure TGetVariableNode.SetupPins;
@@ -518,7 +507,7 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
-{ Арифметика }
+{ TAddExecNode }
 
 constructor TAddExecNode.Create;
 begin
@@ -526,7 +515,7 @@ begin
   Width := 190;
   Height := 140;
   NodeType := 'addexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TAddExecNode.SetupPins;
@@ -547,13 +536,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TSubExecNode }
+
 constructor TSubExecNode.Create;
 begin
   inherited;
   Width := 190;
   Height := 140;
   NodeType := 'subexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TSubExecNode.SetupPins;
@@ -574,13 +565,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TMulExecNode }
+
 constructor TMulExecNode.Create;
 begin
   inherited;
   Width := 190;
   Height := 140;
   NodeType := 'mulexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TMulExecNode.SetupPins;
@@ -601,13 +594,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TDivExecNode }
+
 constructor TDivExecNode.Create;
 begin
   inherited;
   Width := 190;
   Height := 140;
   NodeType := 'divexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TDivExecNode.SetupPins;
@@ -632,13 +627,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TModExecNode }
+
 constructor TModExecNode.Create;
 begin
   inherited;
   Width := 190;
   Height := 140;
   NodeType := 'modexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TModExecNode.SetupPins;
@@ -662,13 +659,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TPowExecNode }
+
 constructor TPowExecNode.Create;
 begin
   inherited;
   Width := 200;
   Height := 140;
   NodeType := 'powexec';
-  HeaderColor := $FFD0A0FF;
+  HeaderColor := $FF342C8F;
 end;
 
 procedure TPowExecNode.SetupPins;
@@ -691,7 +690,7 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
-{ trig }
+{ TSinExecNode }
 
 constructor TSinExecNode.Create;
 begin
@@ -718,6 +717,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TCosExecNode }
+
 constructor TCosExecNode.Create;
 begin
   inherited;
@@ -742,6 +743,8 @@ begin
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
+
+{ TTanExecNode }
 
 constructor TTanExecNode.Create;
 begin
@@ -768,7 +771,7 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
-{ engineering }
+{ TSqrtExecNode }
 
 constructor TSqrtExecNode.Create;
 begin
@@ -798,6 +801,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TAbsExecNode }
+
 constructor TAbsExecNode.Create;
 begin
   inherited;
@@ -822,6 +827,8 @@ begin
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
+
+{ TLogExecNode }
 
 constructor TLogExecNode.Create;
 begin
@@ -851,6 +858,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TLnExecNode }
+
 constructor TLnExecNode.Create;
 begin
   inherited;
@@ -879,6 +888,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TFloorExecNode }
+
 constructor TFloorExecNode.Create;
 begin
   inherited;
@@ -903,6 +914,8 @@ begin
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
+
+{ TCeilExecNode }
 
 constructor TCeilExecNode.Create;
 begin
@@ -929,6 +942,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TRoundExecNode }
+
 constructor TRoundExecNode.Create;
 begin
   inherited;
@@ -954,7 +969,7 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
-{ compare }
+{ TGreaterNode }
 
 constructor TGreaterNode.Create;
 begin
@@ -983,6 +998,8 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TLessNode }
+
 constructor TLessNode.Create;
 begin
   inherited;
@@ -1009,6 +1026,8 @@ begin
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
+
+{ TEqualNode }
 
 constructor TEqualNode.Create;
 begin
@@ -1040,7 +1059,7 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
-{ решето }
+{ TIsPrimeFlagNode }
 
 constructor TIsPrimeFlagNode.Create;
 begin
@@ -1048,7 +1067,7 @@ begin
   Width := 220;
   Height := 130;
   NodeType := 'isprimeflag';
-  HeaderColor := $FFB2DFDB;
+  HeaderColor := $FF3A8982;
 end;
 
 procedure TIsPrimeFlagNode.SetupPins;
@@ -1075,13 +1094,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TSetPrimeFlagNode }
+
 constructor TSetPrimeFlagNode.Create;
 begin
   inherited;
   Width := 220;
   Height := 140;
   NodeType := 'setprimeflag';
-  HeaderColor := $FFB2DFDB;
+  HeaderColor := $FF3A8982;
 end;
 
 procedure TSetPrimeFlagNode.SetupPins;
@@ -1108,13 +1129,15 @@ begin
   AContext.SelectExecOutput(FExecOut);
 end;
 
+{ TCollectPrimeNode }
+
 constructor TCollectPrimeNode.Create;
 begin
   inherited;
   Width := 230;
   Height := 140;
   NodeType := 'collectprime';
-  HeaderColor := $FFB39DDB;
+  HeaderColor := $FF4F3B73;
 end;
 
 procedure TCollectPrimeNode.SetupPins;
@@ -1151,29 +1174,29 @@ begin
     Exit;
 
   ARegistry.RegisterNodeEx('intconst', 'Int Constant', 'Engineering',
-    'Integer constant node', 'int,constant,number', '', TIntConstNode, $FFC8E6C9);
+    'Integer constant node', 'int,constant,number', '', TIntConstNode, $FF398A3C);
   ARegistry.RegisterNodeEx('boolconst', 'Bool Constant', 'Engineering',
-    'Boolean constant node', 'bool,constant,logic', '', TBoolConstNode, $FFFFF59D);
+    'Boolean constant node', 'bool,constant,logic', '', TBoolConstNode, $FF760E0E);
   ARegistry.RegisterNodeEx('stringconst', 'String Constant', 'Engineering',
-    'String constant node', 'string,text,constant', '', TStringConstNode, $FFB3E5FC);
+    'String constant node', 'string,text,constant', '', TStringConstNode, $FF9F4707);
 
   ARegistry.RegisterNodeEx('setvar', 'Set Variable', 'Engineering',
-    'Set runtime variable', 'variable,set,assign', '', TSetVariableNode, $FFD1C4E9);
+    'Set runtime variable', 'variable,set,assign', '', TSetVariableNode, $FF5E28C1);
   ARegistry.RegisterNodeEx('getvar', 'Get Variable', 'Engineering',
-    'Get runtime variable', 'variable,get,read', '', TGetVariableNode, $FFD1C4E9);
+    'Get runtime variable', 'variable,get,read', '', TGetVariableNode, $FF5E28C1);
 
   ARegistry.RegisterNodeEx('addexec', 'Add', 'Engineering',
-    'A + B', 'math,add,sum', '', TAddExecNode, $FFD0A0FF);
+    'A + B', 'math,add,sum', '', TAddExecNode, $FF342C8F);
   ARegistry.RegisterNodeEx('subexec', 'Subtract', 'Engineering',
-    'A - B', 'math,sub', '', TSubExecNode, $FFD0A0FF);
+    'A - B', 'math,sub', '', TSubExecNode, $FF342C8F);
   ARegistry.RegisterNodeEx('mulexec', 'Multiply', 'Engineering',
-    'A * B', 'math,mul', '', TMulExecNode, $FFD0A0FF);
+    'A * B', 'math,mul', '', TMulExecNode, $FF342C8F);
   ARegistry.RegisterNodeEx('divexec', 'Divide', 'Engineering',
-    'A / B', 'math,div', '', TDivExecNode, $FFD0A0FF);
+    'A / B', 'math,div', '', TDivExecNode, $FF342C8F);
   ARegistry.RegisterNodeEx('modexec', 'Modulo', 'Engineering',
-    'A mod B', 'math,mod', '', TModExecNode, $FFD0A0FF);
+    'A mod B', 'math,mod', '', TModExecNode, $FF342C8F);
   ARegistry.RegisterNodeEx('powexec', 'Power', 'Engineering',
-    'Base ^ Exponent', 'math,pow', '', TPowExecNode, $FFD0A0FF);
+    'Base ^ Exponent', 'math,pow', '', TPowExecNode, $FF342C8F);
 
   ARegistry.RegisterNodeEx('sinexec', 'Sin', 'Engineering',
     'sin(x)', 'math,trig,sin', '', TSinExecNode, $FFFFCC80);
@@ -1205,11 +1228,11 @@ begin
     'A = B', 'compare,equal', '', TEqualNode, $FFEF9A9A);
 
   ARegistry.RegisterNodeEx('isprimeflag', 'Is Prime Flag', 'Engineering',
-    'Read prime_i variable', 'prime,sieve,bool', '', TIsPrimeFlagNode, $FFB2DFDB);
+    'Read prime_i variable', 'prime,sieve,bool', '', TIsPrimeFlagNode, $FF3A8982);
   ARegistry.RegisterNodeEx('setprimeflag', 'Set Prime Flag', 'Engineering',
-    'Write prime_i variable', 'prime,sieve,set', '', TSetPrimeFlagNode, $FFB2DFDB);
+    'Write prime_i variable', 'prime,sieve,set', '', TSetPrimeFlagNode, $FF3A8982);
   ARegistry.RegisterNodeEx('collectprime', 'Collect Prime', 'Engineering',
-    'Append prime to list', 'prime,sieve,collect', '', TCollectPrimeNode, $FFB39DDB);
+    'Append prime to list', 'prime,sieve,collect', '', TCollectPrimeNode, $FF4F3B73);
 end;
 
 end.

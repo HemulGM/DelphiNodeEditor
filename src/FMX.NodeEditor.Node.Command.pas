@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Node.Command;
+﻿unit FMX.NodeEditor.Node.Command;
 
 interface
 
@@ -199,11 +199,22 @@ type
   TAutoLayoutSelectedCommand = class(TGraphCommand)
   private
     FNodeIds: TStringList;
-    FOldX, FOldY: array of single;
-    FNewX, FNewY: array of single;
+    FOldX, FOldY: TArray<Single>;
+    FNewX, FNewY: TArray<Single>;
   public
     constructor Create(AGraph: TNodeGraph; ANodes: TList<TCustomNode>); reintroduce;
     destructor Destroy; override;
+    procedure DoExecute; override;
+    procedure Undo; override;
+  end;
+
+  TReorderSelectedCommand = class(TGraphCommand)
+  private
+    FNodeIds: TArray<string>;
+    FOldZ: TArray<Integer>;
+    FNewZ: TArray<Integer>;
+  public
+    constructor Create(AGraph: TNodeGraph; ANodes: TList<TCustomNode>; ToFront: Boolean); reintroduce;
     procedure DoExecute; override;
     procedure Undo; override;
   end;
@@ -1117,7 +1128,7 @@ begin
 
   for i := 0 to ANodes.Count - 1 do
   begin
-    N := TCustomNode(ANodes[i]);
+    N := ANodes[i];
     FNodeIds.Add(N.Id);
     FOldX[i] := N.X;
     FOldY[i] := N.Y;
@@ -1135,7 +1146,7 @@ begin
   MaxHeight := 0;
   for i := 0 to ANodes.Count - 1 do
   begin
-    N := TCustomNode(ANodes[i]);
+    N := ANodes[i];
     if N.Width > MaxWidth then
       MaxWidth := N.Width;
     if N.Height > MaxHeight then
@@ -1183,6 +1194,91 @@ begin
       N.Y := FOldY[i];
     end;
   end;
+end;
+
+{ TReorderSelectedCommand }
+
+function NextZOrder(AGraph: TNodeGraph): Integer;
+begin
+  Result := 1;
+  for var i := 0 to AGraph.Nodes.Count - 1 do
+    Result := Max(Result, AGraph.Nodes[i].ZOrder + 1);
+end;
+
+constructor TReorderSelectedCommand.Create(AGraph: TNodeGraph; ANodes: TList<TCustomNode>; ToFront: Boolean);
+begin
+  inherited Create(AGraph, if ToFront then Translate('Bring to front') else Translate('Send to back'));
+
+  SetLength(FNodeIds, FGraph.Nodes.Count);
+  SetLength(FOldZ, FGraph.Nodes.Count);
+  SetLength(FNewZ, FGraph.Nodes.Count);
+
+  ANodes.Sort(TComparer<TCustomNode>.Construct(NodeOrderCompare));
+
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+  begin
+    var N := FGraph.Nodes[i];
+    FNodeIds[i] := N.Id;
+    FOldZ[i] := N.ZOrder;
+  end;
+
+  if ToFront then
+  begin
+    var NewZ := NextZOrder(AGraph);
+    for var i := 0 to ANodes.Count - 1 do
+    begin
+      ANodes[i].ZOrder := NewZ;
+      Inc(NewZ);
+    end;
+    for var i := 0 to FGraph.Nodes.Count - 1 do
+      FNewZ[i] := FGraph.Nodes[i].ZOrder;
+  end
+  else
+  begin
+    var SelCnt := ANodes.Count;
+    var NewZ := 1;
+    for var i := 0 to ANodes.Count - 1 do
+    begin
+      ANodes[i].ZOrder := NewZ;
+      Inc(NewZ);
+    end;
+    for var i := 0 to FGraph.Nodes.Count - 1 do
+    begin
+      var N := FGraph.Nodes[i];
+      if not ANodes.Contains(N) then
+        FNewZ[i] := N.ZOrder + SelCnt
+      else
+        FNewZ[i] := N.ZOrder;
+    end;
+  end;
+end;
+
+procedure TReorderSelectedCommand.DoExecute;
+begin
+  if FGraph = nil then
+    Exit;
+  for var i := 0 to Length(FNodeIds) - 1 do
+  begin
+    var N := FGraph.FindNodeById(FNodeIds[i]);
+    if N <> nil then
+      N.ZOrder := FNewZ[i];
+  end;
+
+  FGraph.DoGraphChanged;
+end;
+
+procedure TReorderSelectedCommand.Undo;
+begin
+  if FGraph = nil then
+    Exit;
+  for var i := 0 to Length(FNodeIds) - 1 do
+  begin
+    var N := FGraph.FindNodeById(FNodeIds[i]);
+    if N <> nil then
+      N.ZOrder := FOldZ[i];
+  end;
+
+  FGraph.DoGraphChanged;
 end;
 
 end.

@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Selection;
+﻿unit FMX.NodeEditor.Selection;
 
 interface
 
@@ -128,10 +128,7 @@ begin
     Exit;
 
   if not AAppend then
-  begin
-    FSelectedNodes.Clear;
-    FSelectedLinks.Clear;
-  end;
+    Clear;
 
   if FSelectedNodes.IndexOf(ANode) < 0 then
   begin

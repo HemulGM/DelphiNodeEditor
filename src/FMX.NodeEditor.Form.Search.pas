@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Form.Search;
+﻿unit FMX.NodeEditor.Form.Search;
 
 interface
 

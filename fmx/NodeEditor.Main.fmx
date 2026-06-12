@@ -79269,7 +79269,7 @@ object FormMain: TFormMain
                   Size.PlatformDefault = False
                   StyleLookup = 'labelstyle_bodystrong'
                   Text = 'Selecting'
-                  TabOrder = 4
+                  TabOrder = 5
                 end
                 object Panel19: TPanel
                   Align = Top
@@ -79282,7 +79282,7 @@ object FormMain: TFormMain
                   Size.Height = 1.000000000000000000
                   Size.PlatformDefault = False
                   StyleLookup = 'panelstyle_divider'
-                  TabOrder = 24
+                  TabOrder = 25
                 end
                 object Label37: TLabel
                   Align = Top
@@ -79351,7 +79351,7 @@ object FormMain: TFormMain
                     inherited Label3: TLabel
                       Size.Width = 92.000000000000000000
                       Text = 'Movement'
-                      TabOrder = 6
+                      TabOrder = 7
                     end
                     object Button11: TButton
                       Align = Left
@@ -80222,6 +80222,8 @@ object FormMain: TFormMain
             StyleLookup = ''
             TabOrder = 0
             Text = 'TabItemToolsLibrary'
+            ExplicitSize.cx = 16.000000000000000000
+            ExplicitSize.cy = 16.000000000000000000
             object Layout23: TLayout
               Align = Client
               Margins.Left = 25.000000000000000000

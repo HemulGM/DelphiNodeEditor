@@ -1,4 +1,4 @@
-{
+п»ї{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -149,7 +149,7 @@ begin
 
   if (FExecutor <> nil) and (FExecutor.Debugger <> nil) then
     FExecutor.Debugger.Continue;
-  // очищает внутреннее состояние отладчика
+  // РѕС‡РёС‰Р°РµС‚ РІРЅСѓС‚СЂРµРЅРЅРµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РѕС‚Р»Р°РґС‡РёРєР°
 end;
 
 procedure TGraphExecutionThread.Continue;
@@ -260,7 +260,7 @@ begin
     begin
       FSuccess := False;
       FErrorMessage := 'Start node is nil';
-      FillErrorInfo(integer(geeInvalidStartNode), FErrorMessage, nil);
+      FillErrorInfo(integer(TGraphExecutionError.InvalidStartNode), FErrorMessage, nil);
       Synchronize(DoError);
       Exit;
     end;
@@ -291,14 +291,14 @@ begin
       FSuccess := True;
       FErrorMessage := '';
       ClearErrorInfo;
-      // Не ошибка. Поток завершился из-за паузы.
+      // РќРµ РѕС€РёР±РєР°. РџРѕС‚РѕРє Р·Р°РІРµСЂС€РёР»СЃСЏ РёР·-Р·Р° РїР°СѓР·С‹.
     end;
     on E: ENodeExecutionStopped do
     begin
       FSuccess := False;
       FErrorMessage := 'Execution stopped';
       ClearErrorInfo;
-      // Остановка пользователем
+      // РћСЃС‚Р°РЅРѕРІРєР° РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј
     end;
     on E: Exception do
     begin

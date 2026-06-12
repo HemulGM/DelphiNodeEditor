@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Parser;
+﻿unit FMX.NodeEditor.Parser;
 
 interface
 

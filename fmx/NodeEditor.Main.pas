@@ -1536,8 +1536,7 @@ procedure TFormMain.MenuItemEditToBackClick(Sender: TObject);
 begin
   if FEditor.SelectedNodeCount = 0 then
     Exit;
-  for var i := 0 to FEditor.SelectedNodeCount - 1 do
-    FEditor.SendNodeToBack(FEditor.GetSelectedNode(i));
+  FEditor.SendNodeToBack(nil);
   LabelStat5.Text := 'Sent to back';
 end;
 
@@ -1545,8 +1544,7 @@ procedure TFormMain.MenuItemEditToFrontClick(Sender: TObject);
 begin
   if FEditor.SelectedNodeCount = 0 then
     Exit;
-  for var i := 0 to FEditor.SelectedNodeCount - 1 do
-    FEditor.BringNodeToFront(FEditor.GetSelectedNode(i));
+  FEditor.BringNodeToFront(nil);
   LabelStat5.Text := 'Brought to front';
 end;
 

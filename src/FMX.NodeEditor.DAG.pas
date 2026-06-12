@@ -1,4 +1,4 @@
-{
+п»ї{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -479,7 +479,7 @@ begin
         FEdges[I][J] := V + 1;
     end;
     FEdges[I].Sort;
-    // восстанавливаем сортировку (TList<Integer>.Sort использует дефолтный comparer)
+    // РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРѕСЂС‚РёСЂРѕРІРєСѓ (TList<Integer>.Sort РёСЃРїРѕР»СЊР·СѓРµС‚ РґРµС„РѕР»С‚РЅС‹Р№ comparer)
   end;
 end;
 

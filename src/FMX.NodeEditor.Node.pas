@@ -249,6 +249,8 @@ type
 
 function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
 
+function NodeOrderCompare(const Item1, Item2: TCustomNode): Integer; inline;
+
 implementation
 
 uses
@@ -257,6 +259,16 @@ uses
 function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
 begin
   Result := Item1.SortIndex - Item2.SortIndex;
+end;
+
+function NodeOrderCompare(const Item1, Item2: TCustomNode): Integer; inline;
+begin
+  if (Item1.ZOrder < Item2.ZOrder) then
+    Result := -1
+  else if Item1.ZOrder > Item2.ZOrder then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 { TCustomNode }

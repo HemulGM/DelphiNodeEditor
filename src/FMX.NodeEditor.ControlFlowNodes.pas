@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,7 +29,6 @@ uses
   FMX.NodeEditor.Runtime;
 
 type
-  { TBranchNode }
   TBranchNode = class(TExecutableNode)
   private
     FConditionPin: TNodePin;
@@ -41,7 +40,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TLoopNode }
   TLoopNode = class(TExecutableNode)
   private
     FConditionPin: TNodePin;
@@ -54,7 +52,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TForLoopNode }
   TForLoopNode = class(TExecutableNode)
   private
     FStartPin, FEndPin, FStepPin: TNodePin;
@@ -67,7 +64,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TSequenceNode }
   TSequenceNode = class(TExecutableNode)
   private
     FSteps: array of TNodePin;
@@ -81,7 +77,6 @@ type
     function StepCount: integer;
   end;
 
-  { TBreakNode }
   TBreakNode = class(TExecutableNode)
   protected
   public
@@ -90,7 +85,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TContinueNode }
   TContinueNode = class(TExecutableNode)
   protected
   public
@@ -99,7 +93,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TSwitchNode }
   TSwitchNode = class(TExecutableNode)
   private
     FValuePin: TNodePin;
@@ -116,7 +109,6 @@ type
     procedure AddCase;
   end;
 
-  { TWaitNode }
   TWaitNode = class(TExecutableNode)
   private
     FDurationPin: TNodePin;
@@ -128,7 +120,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TEventNode }
   TEventNode = class(TExecutableNode)
   private
     FTriggerExecPin: TNodePin;
@@ -140,7 +131,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TEventCallNode }
   TEventCallNode = class(TExecutableNode)
   private
     FEventNamePin: TNodePin;
@@ -152,7 +142,6 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-  { TEventListenerNode }
   TEventListenerNode = class(TExecutableNode)
   private
     FEventNamePin: TNodePin;
@@ -265,7 +254,8 @@ begin
     AContext.SelectExecOutput(FFalseExecPin);
 end;
 
-{ ==================== TLoopNode ==================== }
+{ TLoopNode }
+
 constructor TLoopNode.Create;
 begin
   inherited;
@@ -324,7 +314,8 @@ begin
   AContext.SelectExecOutput(FExitExecPin);
 end;
 
-{ ==================== TForLoopNode ==================== }
+{ TForLoopNode }
+
 constructor TForLoopNode.Create;
 begin
   inherited;
@@ -360,8 +351,7 @@ begin
     StepVal := 1;
 
   I := StartVal;
-  while (((StepVal > 0) and (I <= EndVal)) or
-    ((StepVal < 0) and (I >= EndVal))) do
+  while (((StepVal > 0) and (I <= EndVal)) or ((StepVal < 0) and (I >= EndVal))) do
   begin
     CheckThreadStopped;
 
@@ -384,7 +374,8 @@ begin
   AContext.SelectExecOutput(FExitExecPin);
 end;
 
-{ ==================== TSequenceNode ==================== }
+{ TSequenceNode }
+
 constructor TSequenceNode.Create;
 begin
   inherited;
@@ -442,7 +433,8 @@ begin
   AContext.SelectExecOutput(nil);
 end;
 
-{ ==================== TBreakNode ==================== }
+{ TBreakNode }
+
 constructor TBreakNode.Create;
 begin
   inherited;
@@ -462,7 +454,8 @@ begin
   raise ENodeBreakSignal.Create('Break');
 end;
 
-{ ==================== TContinueNode ==================== }
+{ TContinueNode }
+
 constructor TContinueNode.Create;
 begin
   inherited;
@@ -482,7 +475,8 @@ begin
   raise ENodeContinueSignal.Create('Continue');
 end;
 
-{ ==================== TSwitchNode ==================== }
+{ TSwitchNode }
+
 constructor TSwitchNode.Create;
 begin
   inherited;
@@ -538,7 +532,8 @@ begin
   AContext.SelectExecOutput(FDefaultExecPin);
 end;
 
-{ ==================== TWaitNode ==================== }
+{ TWaitNode }
+
 constructor TWaitNode.Create;
 begin
   inherited;
@@ -574,7 +569,8 @@ begin
   AContext.SelectExecOutput(FDoneExecPin);
 end;
 
-{ ==================== TEventNode ==================== }
+{ TEventNode }
+
 constructor TEventNode.Create;
 begin
   inherited;
@@ -603,7 +599,8 @@ begin
     AContext.SetVariableBool('EventExecuted_' + Self.Id, True);
 end;
 
-{ ==================== TEventCallNode ==================== }
+{ TEventCallNode }
+
 constructor TEventCallNode.Create;
 begin
   inherited;
@@ -637,7 +634,8 @@ begin
   AContext.SelectExecOutput(nil);
 end;
 
-{ ==================== TEventListenerNode ==================== }
+{ TEventListenerNode }
+
 constructor TEventListenerNode.Create;
 begin
   inherited;

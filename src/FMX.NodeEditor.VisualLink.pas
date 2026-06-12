@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.VisualLink;
+﻿unit FMX.NodeEditor.VisualLink;
 
 interface
 

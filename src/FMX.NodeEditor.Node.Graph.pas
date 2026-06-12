@@ -1,4 +1,4 @@
-//{$include Old/FMX.NodeEditor.Node.Graph.pas}
+﻿//{$include Old/FMX.NodeEditor.Node.Graph.pas}
 
 unit FMX.NodeEditor.Node.Graph;
 
@@ -97,6 +97,8 @@ type
     FOnLinkAdded: TGraphLinkEvent;
     FOnLinkRemoved: TGraphLinkEvent;
     FOnGraphChanged: TGraphChangedEvent;
+    FCommandBeforeJson: string;
+    FCommandDescription: string;
 
     procedure RemoveLinksToInput(APin: TNodePin);
     procedure TruncateUndo; inline;
@@ -151,13 +153,16 @@ type
     function GetCompatibleNodesForPin(APin: TNodePin): TStringList;
 
     procedure ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean = False);
+    procedure ExecuteJSONSnapshotCommand(const ABeforeJSON, AAfterJSON, ADescription: string);
+    procedure ExecuteBegin(const ADescription: string);
+    procedure ExecuteEnd;
+    procedure ExecuteCancel;
     procedure ClearUndoRedo;
     function CaptureJSONText: string;
-    procedure ExecuteJSONSnapshotCommand(const ABeforeJSON, AAfterJSON, ADescription: string);
 
     function NextZOrder: integer;
-    procedure BringNodeToFront(ANode: TCustomNode);
-    procedure SendNodeToBack(ANode: TCustomNode);
+    procedure BringNodeToFront(ANodes: TList<TCustomNode>);
+    procedure SendNodeToBack(ANodes: TList<TCustomNode>);
 
     property Nodes: TNodeDAG read FNodes;
     property Links: TObjectList<TNodeLink> read FLinks;
@@ -893,6 +898,29 @@ begin
   DoGraphChanged;
 end;
 
+procedure TNodeGraph.ExecuteBegin(const ADescription: string);
+begin
+  if not FCommandBeforeJson.IsEmpty then
+    raise Exception.Create('The execution has already started');
+  FCommandBeforeJson := CaptureJSONText;
+  FCommandDescription := ADescription;
+end;
+
+procedure TNodeGraph.ExecuteCancel;
+begin
+  FCommandBeforeJson := '';
+  FCommandDescription := '';
+end;
+
+procedure TNodeGraph.ExecuteEnd;
+begin
+  try
+    ExecuteJSONSnapshotCommand(FCommandBeforeJson, CaptureJSONText, FCommandDescription);
+  finally
+    ExecuteCancel;
+  end;
+end;
+
 procedure TNodeGraph.ExecuteCommand(ACommand: TGraphCommand; Silent: Boolean);
 begin
   if ACommand = nil then
@@ -963,30 +991,18 @@ begin
     Result := Max(Result, FNodes[i].ZOrder + 1);
 end;
 
-procedure TNodeGraph.BringNodeToFront(ANode: TCustomNode);
+procedure TNodeGraph.BringNodeToFront(ANodes: TList<TCustomNode>);
 begin
-  if ANode = nil then
+  if ANodes = nil then
     Exit;
-
-  ANode.ZOrder := NextZOrder;
-  DoGraphChanged;
+  ExecuteCommand(TReorderSelectedCommand.Create(Self, ANodes, True));
 end;
 
-procedure TNodeGraph.SendNodeToBack(ANode: TCustomNode);
+procedure TNodeGraph.SendNodeToBack(ANodes: TList<TCustomNode>);
 begin
-  if ANode = nil then
+  if ANodes = nil then
     Exit;
-
-  ANode.ZOrder := 1;
-
-  for var i := 0 to FNodes.Count - 1 do
-  begin
-    var N := FNodes[i];
-    if N <> ANode then
-      Inc(N.ZOrder);
-  end;
-
-  DoGraphChanged;
+  ExecuteCommand(TReorderSelectedCommand.Create(Self, ANodes, False));
 end;
 
 procedure TNodeGraph.Undo;

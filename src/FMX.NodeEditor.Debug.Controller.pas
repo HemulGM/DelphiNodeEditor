@@ -1,4 +1,4 @@
-{
+п»ї{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,10 +29,10 @@ uses
   FMX.NodeEditor.Executor, FMX.NodeEditor.Executor.Thread,
   FMX.NodeEditor.Runtime, FMX.NodeEditor.Debug.Intf;
 
-type
-  TDebugState = (dsStopped, dsRunning, dsPaused, dsError);
+{$SCOPEDENUMS ON}
 
-  { TNodeEditorDebugger }
+type
+  TDebugState = (Stopped, Running, Paused, Error);
 
   TNodeEditorDebugger = class
   private
@@ -103,26 +103,22 @@ begin
 end;
 
 procedure TNodeEditorDebugger.Run;
-var
-  i: integer;
-  StartNode: TExecutableNode;
-  N: TCustomNode;
 begin
   Stop;
 
-  StartNode := nil;
+  var StartNode: TExecutableNode := nil;
 
   if (FEditor <> nil) and (FEditor.SelectedNodeCount > 0) then
   begin
-    N := FEditor.GetSelectedNode(0);
+    var N := FEditor.GetSelectedNode(0);
     if N is TExecutableNode then
       StartNode := TExecutableNode(N);
   end;
 
   if StartNode = nil then
-    for i := 0 to FGraph.Nodes.Count - 1 do
+    for var i := 0 to FGraph.Nodes.Count - 1 do
     begin
-      N := TCustomNode(FGraph.Nodes[i]);
+      var N := FGraph.Nodes[i];
       if N is TExecutableNode then
       begin
         StartNode := TExecutableNode(N);
@@ -132,7 +128,7 @@ begin
 
   if StartNode = nil then
   begin
-    SetState(dsError);
+    SetState(TDebugState.Error);
     Exit;
   end;
 
@@ -141,7 +137,7 @@ begin
   FThread.OnError := OnThreadError;
   FThread.OnDebuggerPaused := HandleThreadDebuggerPaused;
 
-  SetState(dsRunning);
+  SetState(TDebugState.Running);
   FThread.Start;
 end;
 
@@ -152,7 +148,7 @@ begin
   else if FDebugger <> nil then
     FDebugger.Pause;
 
-  SetState(dsPaused);
+  SetState(TDebugState.Paused);
 end;
 
 procedure TNodeEditorDebugger.ContinueExecution;
@@ -162,7 +158,7 @@ begin
   else if FDebugger <> nil then
     FDebugger.Continue;
 
-  SetState(dsRunning);
+  SetState(TDebugState.Running);
 end;
 
 procedure TNodeEditorDebugger.StepOver;
@@ -170,7 +166,7 @@ begin
   if FThread <> nil then
   begin
     FThread.StepOver;
-    SetState(dsRunning);
+    SetState(TDebugState.Running);
   end
   else if FDebugger <> nil then
     FDebugger.StepOver;
@@ -181,7 +177,7 @@ begin
   if FThread <> nil then
   begin
     FThread.StepInto;
-    SetState(dsRunning);
+    SetState(TDebugState.Running);
   end
   else if FDebugger <> nil then
     FDebugger.StepInto;
@@ -196,9 +192,9 @@ begin
   end;
 
   if FDebugger <> nil then
-    FDebugger.Continue; // сбрасываем состояние паузы
+    FDebugger.Continue; // СЃР±СЂР°СЃС‹РІР°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РїР°СѓР·С‹
 
-  SetState(dsStopped);
+  SetState(TDebugState.Stopped);
 end;
 
 procedure TNodeEditorDebugger.ToggleBreakpoint(ANode: TCustomNode);
@@ -228,13 +224,13 @@ end;
 
 procedure TNodeEditorDebugger.OnThreadFinished(Sender: TObject; Success: Boolean; const ErrorMessage: string);
 begin
-  SetState(dsStopped);
+  SetState(TDebugState.Stopped);
 end;
 
 procedure TNodeEditorDebugger.OnThreadError(Sender: TObject; const ErrorInfo: TThreadErrorInfo);
 begin
-  SetState(dsError);
-  // Здесь можно показать сообщение об ошибке в UI
+  SetState(TDebugState.Error);
+  // Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РїРѕРєР°Р·Р°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РѕР± РѕС€РёР±РєРµ РІ UI
 end;
 
 procedure TNodeEditorDebugger.OnDebuggerPaused(ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext);
@@ -246,7 +242,7 @@ begin
     FEditor.Repaint;
   end;
 
-  SetState(dsPaused);
+  SetState(TDebugState.Paused);
 end;
 
 procedure TNodeEditorDebugger.HandleThreadDebuggerPaused(Sender: TObject; ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext);

@@ -1590,19 +1590,6 @@ begin
   FController.Selection.SelectLink(ALink, True);
 end;
 
-procedure TNodeEditor.SendNodeToBack(ANode: TCustomNode);
-begin
-  if ANode <> nil then
-    FController.SendNodeToBack(ANode)
-  else
-  begin
-    if SelectedNodeCount = 0 then
-      Exit;
-    for var i := 0 to SelectedNodeCount - 1 do
-      FController.SendNodeToBack(GetSelectedNode(i));
-  end;
-end;
-
 procedure TNodeEditor.ToggleNodeSelection(ANode: TCustomNode);
 begin
   if ANode = nil then
@@ -2354,15 +2341,12 @@ end;
 
 procedure TNodeEditor.BringNodeToFront(ANode: TCustomNode);
 begin
-  if ANode <> nil then
-    FController.BringNodeToFront(ANode)
-  else
-  begin
-    if SelectedNodeCount = 0 then
-      Exit;
-    for var i := 0 to SelectedNodeCount - 1 do
-      FController.BringNodeToFront(GetSelectedNode(i));
-  end;
+  FController.BringNodeToFront(ANode);
+end;
+
+procedure TNodeEditor.SendNodeToBack(ANode: TCustomNode);
+begin
+  FController.SendNodeToBack(ANode);
 end;
 
 procedure TNodeEditor.EndPaint;

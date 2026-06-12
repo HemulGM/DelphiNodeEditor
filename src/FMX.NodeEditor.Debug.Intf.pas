@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -26,8 +26,10 @@ interface
 uses
   Classes, SysUtils, Rtti, FMX.NodeEditor.Types, FMX.NodeEditor.Node;
 
+{$SCOPEDENUMS ON}
+
 type
-  TStepMode = (smNone, smStepOver, smStepInto);
+  TStepMode = (None, StepOver, StepInto);
 
   INodeExecutionContext = interface
     ['{D1F0D7A1-8D62-4D8A-8D74-2B2C537D0A11}']
@@ -65,7 +67,7 @@ type
     procedure PopNode(ANode: TCustomNode = nil);
     procedure ClearExecutionStack;
     procedure Pause;
-    procedure Continue;
+    procedure &Continue;
     procedure StepOver;
     procedure StepInto;
     function CheckPause(ANode: TCustomNode; APin: TNodePin = nil; const AContext: INodeExecutionContext = nil): Boolean;

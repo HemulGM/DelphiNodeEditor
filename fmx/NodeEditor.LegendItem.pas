@@ -1,4 +1,4 @@
-unit NodeEditor.LegendItem;
+﻿unit NodeEditor.LegendItem;
 
 interface
 

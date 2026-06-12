@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,10 +28,11 @@ uses
   FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
   FMX.NodeEditor.Runtime, FMX.NodeEditor.Debug.Intf;
 
-type
-  TStepMode = (smNone, smStepOver, smStepInto);
+{$SCOPEDENUMS ON}
 
-  { TExecutionStackFrame }
+type
+  TStepMode = (None, StepOver, StepInto);
+
   TExecutionStackFrame = class
   public
     Node: TCustomNode;
@@ -41,7 +42,6 @@ type
     constructor Create(ANode: TCustomNode; ADepth: Integer);
   end;
 
-  { TBreakpoint }
   TBreakpoint = class
   public
     Node: TCustomNode;
@@ -52,7 +52,6 @@ type
     constructor Create(ANode: TCustomNode; APin: TNodePin = nil);
   end;
 
-  { TWatchItem }
   TWatchItem = class
   public
     Expression: string;
@@ -61,7 +60,6 @@ type
     constructor Create(const AExpression: string);
   end;
 
-  { TExecutionTraceEntry }
   TExecutionTraceEntry = class
   public
     Step: Integer;
@@ -77,7 +75,6 @@ type
 
   TDebuggerBreakpointEvent = procedure(BP: TBreakpoint; Context: INodeExecutionContext) of object;
 
-  { TGraphDebugger }
   TGraphDebugger = class(TNoRefCountObject, IGraphDebugger)
   private
     FGraph: TNodeGraph;
@@ -147,6 +144,16 @@ type
     property OnPaused: TDebuggerPauseEvent read FOnPaused write FOnPaused;
   end;
 
+const
+  sGreaterOrEqual = '>=';
+  sLessOrEqual = '<=';
+  sEqual = '==';
+  sNotEqual = '!=';
+  sGreater = '>';
+  sLess = '<';
+  // ['==', '!=', '>', '<', '>=', '<=']
+  CondList: array of string = [sEqual, sNotEqual, sGreater, sLess, sGreaterOrEqual, sLessOrEqual];
+
 implementation
 
 uses
@@ -155,18 +162,18 @@ uses
 function TryExtractOperator(const S: string; out AOperator: string): Boolean;
 begin
   Result := True;
-  if Pos('==', S) > 0 then
-    AOperator := '=='
-  else if Pos('!=', S) > 0 then
-    AOperator := '!='
-  else if Pos('>=', S) > 0 then
-    AOperator := '>='
-  else if Pos('<=', S) > 0 then
-    AOperator := '<='
-  else if Pos('>', S) > 0 then
-    AOperator := '>'
-  else if Pos('<', S) > 0 then
-    AOperator := '<'
+  if Pos(sEqual, S) > 0 then
+    AOperator := sEqual
+  else if Pos(sNotEqual, S) > 0 then
+    AOperator := sNotEqual
+  else if Pos(sGreaterOrEqual, S) > 0 then
+    AOperator := sGreaterOrEqual
+  else if Pos(sLessOrEqual, S) > 0 then
+    AOperator := sLessOrEqual
+  else if Pos(sGreater, S) > 0 then
+    AOperator := sGreater
+  else if Pos(sLess, S) > 0 then
+    AOperator := sLess
   else
     Result := False;
 end;
@@ -254,7 +261,7 @@ begin
 
   FIsPaused := False;
   FPauseRequested := False;
-  FStepMode := smNone;
+  FStepMode := TStepMode.None;
   FLastSteppedNode := nil;
 
   FTraceEnabled := True;
@@ -276,7 +283,7 @@ var
 begin
   FIsPaused := False;
   FPauseRequested := False;
-  FStepMode := smNone;
+  FStepMode := TStepMode.None;
   FLastSteppedNode := nil;
   FExecutionStack.Clear;
   FTrace.Clear;
@@ -426,7 +433,7 @@ procedure TGraphDebugger.Continue;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := smNone;
+  FStepMode := TStepMode.None;
   FLastSteppedNode := nil;
 end;
 
@@ -434,7 +441,7 @@ procedure TGraphDebugger.StepOver;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := smStepOver;
+  FStepMode := TStepMode.StepOver;
   FLastSteppedNode := nil;
 end;
 
@@ -442,7 +449,7 @@ procedure TGraphDebugger.StepInto;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := smStepInto;
+  FStepMode := TStepMode.StepInto;
   FLastSteppedNode := nil;
 end;
 
@@ -455,28 +462,28 @@ var
   NumOk: Boolean;
 begin
   Result := True;
-  if (BP = nil) or (Trim(BP.Condition) = '') then
+  if (BP = nil) or BP.Condition.Trim.IsEmpty then
     Exit;
 
   if AContext = nil then
     Exit(False);
 
-  Cond := Trim(BP.Condition);
+  Cond := BP.Condition.Trim;
 
-  if SameText(Copy(Cond, 1, 8), 'HitCount') then
+  if Cond.StartsWith('HitCount') then
   begin
-    if Pos('>=', Cond) > 0 then
-      Exit(BP.HitCount >= StrToIntDef(Trim(Copy(Cond, Pos('>=', Cond) + 2, MaxInt)), 0));
-    if Pos('<=', Cond) > 0 then
-      Exit(BP.HitCount <= StrToIntDef(Trim(Copy(Cond, Pos('<=', Cond) + 2, MaxInt)), 0));
-    if Pos('==', Cond) > 0 then
-      Exit(BP.HitCount = StrToIntDef(Trim(Copy(Cond, Pos('==', Cond) + 2, MaxInt)), 0));
-    if Pos('!=', Cond) > 0 then
-      Exit(BP.HitCount <> StrToIntDef(Trim(Copy(Cond, Pos('!=', Cond) + 2, MaxInt)), 0));
-    if Pos('>', Cond) > 0 then
-      Exit(BP.HitCount > StrToIntDef(Trim(Copy(Cond, Pos('>', Cond) + 1, MaxInt)), 0));
-    if Pos('<', Cond) > 0 then
-      Exit(BP.HitCount < StrToIntDef(Trim(Copy(Cond, Pos('<', Cond) + 1, MaxInt)), 0));
+    if Pos(sGreaterOrEqual, Cond) > 0 then
+      Exit(BP.HitCount >= StrToIntDef(Trim(Copy(Cond, Pos(sGreaterOrEqual, Cond) + 2, MaxInt)), 0));
+    if Pos(sLessOrEqual, Cond) > 0 then
+      Exit(BP.HitCount <= StrToIntDef(Trim(Copy(Cond, Pos(sLessOrEqual, Cond) + 2, MaxInt)), 0));
+    if Pos(sEqual, Cond) > 0 then
+      Exit(BP.HitCount = StrToIntDef(Trim(Copy(Cond, Pos(sEqual, Cond) + 2, MaxInt)), 0));
+    if Pos(sNotEqual, Cond) > 0 then
+      Exit(BP.HitCount <> StrToIntDef(Trim(Copy(Cond, Pos(sNotEqual, Cond) + 2, MaxInt)), 0));
+    if Pos(sGreater, Cond) > 0 then
+      Exit(BP.HitCount > StrToIntDef(Trim(Copy(Cond, Pos(sGreater, Cond) + 1, MaxInt)), 0));
+    if Pos(sLess, Cond) > 0 then
+      Exit(BP.HitCount < StrToIntDef(Trim(Copy(Cond, Pos(sLess, Cond) + 1, MaxInt)), 0));
     Exit(True);
   end;
 
@@ -496,7 +503,7 @@ begin
   if NumOk then
   begin
     ActualFloat := NodeValueToFloatDef(ActualValue, 0.0);
-    case IndexStr(Op, ['==', '!=', '>', '<', '>=', '<=']) of
+    case IndexStr(Op, CondList) of
       0:
         Result := Abs(ActualFloat - ExpectedFloat) <= 1e-12;
       1:
@@ -518,7 +525,7 @@ begin
   ActualStr := NodeValueToStringDef(ActualValue, '');
   ExpectedStr := ValueStr;
 
-  case IndexStr(Op, ['==', '!=', '>', '<', '>=', '<=']) of
+  case IndexStr(Op, CondList) of
     0:
       Result := SameText(ActualStr, ExpectedStr);
     1:
@@ -537,24 +544,19 @@ begin
 end;
 
 procedure TGraphDebugger.UpdateWatches(AContext: INodeExecutionContext);
-var
-  W: TWatchItem;
-  V: TValue;
 begin
   if (AContext = nil) or (FWatches.Count = 0) then
     Exit;
 
-  for W in FWatches do
+  for var W in FWatches do
   begin
-    V := AContext.GetVariableValue(W.Expression);
+    var V := AContext.GetVariableValue(W.Expression);
     W.LastValue := V;
     W.HasValue := not V.IsEmpty;
   end;
 end;
 
 function TGraphDebugger.CheckPause(ANode: TCustomNode; APin: TNodePin; const AContext: INodeExecutionContext): Boolean;
-var
-  BP: TBreakpoint;
 begin
   Result := False;
 
@@ -570,7 +572,7 @@ begin
     Result := True;
   end;
 
-  BP := FindBreakpoint(ANode, APin);
+  var BP := FindBreakpoint(ANode, APin);
   if (not Result) and (BP <> nil) and BP.Enabled then
   begin
     Inc(BP.HitCount);
@@ -583,16 +585,16 @@ begin
     end;
   end;
 
-  if (not Result) and (FStepMode <> smNone) then
+  if (not Result) and (FStepMode <> TStepMode.None) then
   begin
     case FStepMode of
-      smStepInto:
+      TStepMode.StepInto:
         begin
           Result := True;
           FIsPaused := True;
-          FStepMode := smNone;
+          FStepMode := TStepMode.None;
         end;
-      smStepOver:
+      TStepMode.StepOver:
         begin
           if FLastSteppedNode = nil then
             FLastSteppedNode := ANode
@@ -600,7 +602,7 @@ begin
           begin
             Result := True;
             FIsPaused := True;
-            FStepMode := smNone;
+            FStepMode := TStepMode.None;
             FLastSteppedNode := nil;
           end;
         end;

@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -39,7 +39,11 @@ type
 
   ENodeContinueSignal = class(ENodeExecutionError);
 
+  ENodeStepLimit = class(ENodeExecutionError);
+
   ENodeDebuggerPause = class(ENodeExecutionError);
+
+  ENodeCycleDetected = class(ENodeExecutionError);
 
   ENodeExecutionStopped = class(ENodeExecutionError);
 
@@ -564,7 +568,7 @@ begin
   CheckThreadStopped;
   Inc(FStepCounter);
   if (FMaxStepCount > 0) and (FStepCounter > FMaxStepCount) then
-    raise ENodeExecutionError.CreateFmt('Execution step limit exceeded (%d)', [FMaxStepCount]);
+    raise ENodeStepLimit.CreateFmt('Execution step limit exceeded (%d)', [FMaxStepCount]);
 end;
 
 procedure TNodeExecutionContext.SelectExecOutput(APin: TNodePin);
@@ -705,7 +709,7 @@ begin
     Exit(Cached);
 
   if AContext.GetPinState(APin) = nvsEvaluating then
-    raise ENodeExecutionError.CreateFmt('Cycle detected while evaluating pin "%s" of node "%s"', [APin.Name, if APin.OwnerNode <> nil then TCustomNode(APin.OwnerNode).Title else '?']);
+    raise ENodeCycleDetected.CreateFmt('Cycle detected while evaluating pin "%s" of node "%s"', [APin.Name, if APin.OwnerNode <> nil then TCustomNode(APin.OwnerNode).Title else '?']);
 
   if APin.Direction = TPinDirection.Input then
     Exit(GetInputPinValue(APin, AContext));
@@ -832,7 +836,7 @@ var
   P: TNodePin;
 begin
   if HasCycle then
-    raise ENodeExecutionError.Create('Graph contains cycle');
+    raise ENodeCycleDetected.Create('Graph contains cycle');
 
   OwnContext := AContext = nil;
   if OwnContext then

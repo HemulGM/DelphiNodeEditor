@@ -1,4 +1,4 @@
-unit FMX.NodeEditor.Types;
+п»їunit FMX.NodeEditor.Types;
 
 interface
 
@@ -168,7 +168,7 @@ begin
   DX := DX / Len;
   DY := DY / Len;
 
-  // центрируем относительно 0.5
+  // С†РµРЅС‚СЂРёСЂСѓРµРј РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ 0.5
   StartPos := PointF(
     0.5 - DX * 0.5,
     0.5 - DY * 0.5);

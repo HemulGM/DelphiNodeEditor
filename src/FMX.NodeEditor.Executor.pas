@@ -1,4 +1,4 @@
-{
+﻿{
   Copyright (c) 2026 Aleksandr Vorobev aka CynicRus (CynicRus@gmail.com)
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,20 +27,20 @@ uses
   Classes, SysUtils, Rtti, FMX.NodeEditor.Types, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Runtime, FMX.NodeEditor.Debugger;
 
+{$SCOPEDENUMS ON}
+
 type
-  TExecutionMode = (emDataFlow, emControlFlow, emMixed);
+  //TExecutionMode = (DataFlow, ControlFlow, Mixed);
 
   TGraphExecutionError = (
-    geeNone,
-    geeGraphIsNil,
-    geeInvalidStartNode,
-    geeDataCycleDetected,
-    geeNodeEvaluationFailed,
-    geePinEvaluationFailed,
-    geeExecStepLimitExceeded
+    None,
+    GraphIsNil,
+    InvalidStartNode,
+    DataCycleDetected,
+    NodeEvaluationFailed,
+    PinEvaluationFailed,
+    ExecStepLimitExceeded
     );
-
-  { TGraphExecutor }
 
   TGraphExecutor = class
   private
@@ -97,7 +97,7 @@ end;
 
 procedure TGraphExecutor.ClearError;
 begin
-  FLastError := geeNone;
+  FLastError := TGraphExecutionError.None;
   FLastErrorMessage := '';
 end;
 
@@ -117,7 +117,7 @@ begin
 
   if FGraph = nil then
   begin
-    SetError(geeGraphIsNil, 'Graph is nil');
+    SetError(TGraphExecutionError.GraphIsNil, 'Graph is nil');
     Exit;
   end;
 
@@ -129,19 +129,24 @@ begin
 
     Result := FGraph.ExecuteDataFlow(Context);
   except
+    on E: ENodeCycleDetected do
+    begin
+      SetError(TGraphExecutionError.DataCycleDetected, E.Message);
+      Exit(False);
+    end;
+    on E: ENodeDebuggerPause do
+    begin
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
+      Exit(False);
+    end;
     on E: ENodeExecutionError do
     begin
-      if Pos('paused by debugger', LowerCase(E.Message)) > 0 then
-        SetError(geeNodeEvaluationFailed, E.Message)
-      else if Pos('cycle', LowerCase(E.Message)) > 0 then
-        SetError(geeDataCycleDetected, E.Message)
-      else
-        SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
     on E: Exception do
     begin
-      SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
   end;
@@ -154,13 +159,13 @@ begin
 
   if FGraph = nil then
   begin
-    SetError(geeGraphIsNil, 'Graph is nil');
+    SetError(TGraphExecutionError.GraphIsNil, 'Graph is nil');
     Exit;
   end;
 
   if ANode = nil then
   begin
-    SetError(geeInvalidStartNode, 'Start node is nil');
+    SetError(TGraphExecutionError.InvalidStartNode, 'Start node is nil');
     Exit;
   end;
 
@@ -171,19 +176,24 @@ begin
 
     Result := FGraph.ExecuteFromNode(ANode, Context);
   except
+    on E: ENodeDebuggerPause do
+    begin
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
+      Exit(False);
+    end;
+    on E: ENodeStepLimit do
+    begin
+      SetError(TGraphExecutionError.ExecStepLimitExceeded, E.Message);
+      Exit(False);
+    end;
     on E: ENodeExecutionError do
     begin
-      if Pos('paused by debugger', LowerCase(E.Message)) > 0 then
-        SetError(geeNodeEvaluationFailed, E.Message)
-      else if Pos('step limit', LowerCase(E.Message)) > 0 then
-        SetError(geeExecStepLimitExceeded, E.Message)
-      else
-        SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
     on E: Exception do
     begin
-      SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
   end;
@@ -196,13 +206,13 @@ begin
 
   if FGraph = nil then
   begin
-    SetError(geeGraphIsNil, 'Graph is nil');
+    SetError(TGraphExecutionError.GraphIsNil, 'Graph is nil');
     Exit;
   end;
 
   if (APin = nil) or (APin.Kind <> TPinKind.Exec) or (APin.Direction <> TPinDirection.Output) then
   begin
-    SetError(geeInvalidStartNode, 'Exec output pin expected');
+    SetError(TGraphExecutionError.InvalidStartNode, 'Exec output pin expected');
     Exit;
   end;
 
@@ -213,19 +223,24 @@ begin
 
     Result := FGraph.ExecuteExecPin(APin, Context);
   except
+    on E: ENodeDebuggerPause do
+    begin
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
+      Exit(False);
+    end;
+    on E: ENodeStepLimit do
+    begin
+      SetError(TGraphExecutionError.ExecStepLimitExceeded, E.Message);
+      Exit(False);
+    end;
     on E: ENodeExecutionError do
     begin
-      if Pos('paused by debugger', LowerCase(E.Message)) > 0 then
-        SetError(geeNodeEvaluationFailed, E.Message)
-      else if Pos('step limit', LowerCase(E.Message)) > 0 then
-        SetError(geeExecStepLimitExceeded, E.Message)
-      else
-        SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
     on E: Exception do
     begin
-      SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
   end;
@@ -239,7 +254,7 @@ begin
 
   if FGraph = nil then
   begin
-    SetError(geeGraphIsNil, 'Graph is nil');
+    SetError(TGraphExecutionError.GraphIsNil, 'Graph is nil');
     Exit;
   end;
 
@@ -250,12 +265,12 @@ begin
   except
     on E: ENodeExecutionError do
     begin
-      SetError(geePinEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.PinEvaluationFailed, E.Message);
       Exit(False);
     end;
     on E: Exception do
     begin
-      SetError(geePinEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.PinEvaluationFailed, E.Message);
       Exit(False);
     end;
   end;
@@ -271,13 +286,13 @@ begin
 
   if FGraph = nil then
   begin
-    SetError(geeGraphIsNil, 'Graph is nil');
+    SetError(TGraphExecutionError.GraphIsNil, 'Graph is nil');
     Exit;
   end;
 
   if ANode = nil then
   begin
-    SetError(geeNodeEvaluationFailed, 'Node is nil');
+    SetError(TGraphExecutionError.NodeEvaluationFailed, 'Node is nil');
     Exit;
   end;
 
@@ -289,12 +304,12 @@ begin
   except
     on E: ENodeExecutionError do
     begin
-      SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
     on E: Exception do
     begin
-      SetError(geeNodeEvaluationFailed, E.Message);
+      SetError(TGraphExecutionError.NodeEvaluationFailed, E.Message);
       Exit(False);
     end;
   end;
