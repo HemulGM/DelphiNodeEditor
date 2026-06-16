@@ -19,13 +19,13 @@
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 }
-unit FMX.NodeEditor.Runtime;
+unit FMX.NodeEditor.Executor.Runtime;
 
 interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections, System.Rtti,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
+  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph,
   FMX.NodeEditor.Debug.Intf;
 
 type
@@ -33,7 +33,7 @@ type
 
   TExecutableNode = class;
 
-  ENodeExecutionError = class(Exception);
+  ENodeExecutionError = class(ENodeEditorException);
 
   ENodeBreakSignal = class(ENodeExecutionError);
 
@@ -47,15 +47,7 @@ type
 
   ENodeExecutionStopped = class(ENodeExecutionError);
 
-  TNodeValueState = (
-    nvsMissing,
-    nvsEvaluating,
-    nvsReady
-    );
-
   TNodeExecutedEvent = procedure(AContext: TNodeExecutionContext; ANode: TExecutableNode) of object;
-
-  { TExecutableNode }
 
   TExecutableNode = class(TCustomNode)
   public
@@ -63,16 +55,12 @@ type
     procedure Execute(AContext: TNodeExecutionContext); virtual;
   end;
 
-  { TPinRuntimeValue }
-
   TPinRuntimeValue = class
   public
     State: TNodeValueState;
     Value: TValue;
     constructor Create;
   end;
-
-  { TNodeExecutionContext }
 
   TNodeExecutionContext = class(TNoRefCountObject, INodeExecutionContext)
   private
@@ -135,12 +123,10 @@ type
     procedure SelectExecOutput(APin: TNodePin);
   end;
 
-  { TNodeGraphRuntimeHelper }
-
   TNodeGraphRuntimeHelper = class helper for TNodeGraph
   public
     function FindIncomingLink(APin: TNodePin): TNodeLink;
-    function FindOutgoingLinks(APin: TNodePin; AList: TList): integer;
+    function FindOutgoingLinks(APin: TNodePin; AList: TList<TNodeLink>): integer;
 
     function EvaluatePinValue(APin: TNodePin; AContext: TNodeExecutionContext): TValue;
     function EvaluateNodeOutput(ANode: TCustomNode; APin: TNodePin; AContext: TNodeExecutionContext): TValue;
@@ -149,7 +135,7 @@ type
     function GetInputPinValueByIndex(ANode: TCustomNode; AIndex: integer; AContext: TNodeExecutionContext): TValue;
 
     function ExecuteDataFlow(AContext: TNodeExecutionContext = nil): boolean;
-    function FindExecOutgoingLinks(APin: TNodePin; AList: TList): integer;
+    function FindExecOutgoingLinks(APin: TNodePin; AList: TList<TNodeLink>): integer;
     function FindFirstConnectedExecOutput(ANode: TCustomNode): TNodePin;
     function ExecuteExecPin(APin: TNodePin; AContext: TNodeExecutionContext): boolean;
     function ExecuteFromNode(ANode: TCustomNode; AContext: TNodeExecutionContext): boolean;
@@ -326,7 +312,7 @@ end;
 constructor TPinRuntimeValue.Create;
 begin
   inherited Create;
-  State := nvsMissing;
+  State := TNodeValueState.Missing;
   Value := Default(TValue);
 end;
 
@@ -393,19 +379,15 @@ begin
 end;
 
 function TNodeExecutionContext.HasPinValue(APin: TNodePin): Boolean;
-var
-  E: TPinRuntimeValue;
 begin
-  E := GetPinEntry(APin, False);
-  Result := (E <> nil) and (E.State = nvsReady);
+  var E := GetPinEntry(APin, False);
+  Result := (E <> nil) and (E.State = TNodeValueState.Ready);
 end;
 
 function TNodeExecutionContext.TryGetPinValue(APin: TNodePin; out AValue: TValue): Boolean;
-var
-  E: TPinRuntimeValue;
 begin
-  E := GetPinEntry(APin, False);
-  Result := (E <> nil) and (E.State = nvsReady);
+  var E := GetPinEntry(APin, False);
+  Result := (E <> nil) and (E.State = TNodeValueState.Ready);
   if Result then
     AValue := E.Value
   else
@@ -413,36 +395,30 @@ begin
 end;
 
 procedure TNodeExecutionContext.SetPinValue(APin: TNodePin; const AValue: TValue);
-var
-  E: TPinRuntimeValue;
 begin
   if APin = nil then
     Exit;
-  E := GetPinEntry(APin, True);
+  var E := GetPinEntry(APin, True);
   E.Value := AValue;
-  E.State := nvsReady;
+  E.State := TNodeValueState.Ready;
 end;
 
 function TNodeExecutionContext.GetPinState(APin: TNodePin): TNodeValueState;
-var
-  E: TPinRuntimeValue;
 begin
-  E := GetPinEntry(APin, False);
+  var E := GetPinEntry(APin, False);
   if E = nil then
-    Result := nvsMissing
+    Result := TNodeValueState.Missing
   else
     Result := E.State;
 end;
 
 procedure TNodeExecutionContext.SetPinState(APin: TNodePin; AState: TNodeValueState);
-var
-  E: TPinRuntimeValue;
 begin
   if APin = nil then
     Exit;
-  E := GetPinEntry(APin, True);
+  var E := GetPinEntry(APin, True);
   E.State := AState;
-  if AState <> nvsReady then
+  if AState <> TNodeValueState.Ready then
     E.Value := Default(TValue);
 end;
 
@@ -475,13 +451,11 @@ begin
 end;
 
 function TNodeExecutionContext.GetVariableBool(const AName: string; const ADefault: Boolean): Boolean;
-var
-  V: TValue;
-  S: string;
 begin
-  V := GetVariableValue(AName);
+  var V := GetVariableValue(AName);
   if V.IsEmpty then
     Exit(ADefault);
+
   case V.Kind of
     tkInteger:
       Result := V.AsInteger <> 0;
@@ -491,7 +465,7 @@ begin
       Result := Abs(V.AsExtended) > 1e-12;
     tkLString, tkWString, tkUString:
       begin
-        S := Trim(LowerCase(V.AsString));
+        var S := Trim(LowerCase(V.AsString));
         Result := (S = 'true') or (S = '1') or (S = 'yes');
       end;
   else
@@ -532,28 +506,25 @@ begin
 end;
 
 procedure TNodeExecutionContext.RaiseEvent(const AEventName: string; const AData: TValue);
-var
-  Pair: TPair<string, string>;
 begin
   if Trim(AEventName) = '' then
     Exit;
 
   FEventQueue.AddOrSetValue(AEventName, AData);
 
-  for Pair in FEventListeners do
+  for var Pair in FEventListeners do
     if SameText(Pair.Value, AEventName) then
       FTriggeredListeners.AddOrSetValue(Pair.Key, AData);
 end;
 
 procedure TNodeExecutionContext.RegisterEventListener(const AListenerId, AEventName: string);
-var
-  Data: TValue;
 begin
   if (Trim(AListenerId) = '') or (Trim(AEventName) = '') then
     Exit;
 
   FEventListeners.AddOrSetValue(AListenerId, AEventName);
 
+  var Data: TValue;
   if FEventQueue.TryGetValue(AEventName, Data) then
     FTriggeredListeners.AddOrSetValue(AListenerId, Data);
 end;
@@ -581,14 +552,11 @@ end;
 { TExecutableNode }
 
 function TExecutableNode.GetExecInputPin: TNodePin;
-var
-  i: integer;
-  P: TNodePin;
 begin
   Result := nil;
-  for i := 0 to InputCount - 1 do
+  for var i := 0 to InputCount - 1 do
   begin
-    P := GetInput(i);
+    var P := GetInput(i);
     if (P <> nil) and (P.Kind = TPinKind.Exec) then
       Exit(P);
   end;
@@ -601,35 +569,29 @@ end;
 { TNodeGraphRuntimeHelper }
 
 function TNodeGraphRuntimeHelper.FindIncomingLink(APin: TNodePin): TNodeLink;
-var
-  i: integer;
-  L: TNodeLink;
 begin
   Result := nil;
   if APin = nil then
     Exit;
 
-  for i := 0 to Links.Count - 1 do
+  for var i := 0 to Links.Count - 1 do
   begin
-    L := Links[i];
+    var L := Links[i];
     if (L <> nil) and (L.ToPin = APin) then
       Exit(L);
   end;
 end;
 
-function TNodeGraphRuntimeHelper.FindOutgoingLinks(APin: TNodePin; AList: TList): integer;
-var
-  i: integer;
-  L: TNodeLink;
+function TNodeGraphRuntimeHelper.FindOutgoingLinks(APin: TNodePin; AList: TList<TNodeLink>): integer;
 begin
   Result := 0;
   if (APin = nil) or (AList = nil) then
     Exit;
 
   AList.Clear;
-  for i := 0 to Links.Count - 1 do
+  for var i := 0 to Links.Count - 1 do
   begin
-    L := Links[i];
+    var L := Links[i];
     if (L <> nil) and (L.FromPin = APin) then
       AList.Add(L);
   end;
@@ -637,9 +599,6 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.GetInputPinValue(APin: TNodePin; AContext: TNodeExecutionContext): TValue;
-var
-  L: TNodeLink;
-  DefValue: double;
 begin
   Result := Default(TValue);
 
@@ -649,7 +608,7 @@ begin
   if APin.Direction <> TPinDirection.Input then
     raise ENodeExecutionError.Create('GetInputPinValue expects input pin: ' + APin.Name);
 
-  L := FindIncomingLink(APin);
+  var L := FindIncomingLink(APin);
   if (L <> nil) and (L.FromPin <> nil) then
     Exit(EvaluatePinValue(L.FromPin, AContext));
 
@@ -657,6 +616,7 @@ begin
   begin
     if SameText(APin.DataType, 'float') then
     begin
+      var DefValue: Double;
       if TryStrToFloat(APin.DefaultValue, DefValue, FormatSettings) then
         Exit(MakeFloatValue(DefValue));
     end
@@ -678,13 +638,11 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.GetInputPinValueByIndex(ANode: TCustomNode; AIndex: integer; AContext: TNodeExecutionContext): TValue;
-var
-  P: TNodePin;
 begin
   if ANode = nil then
     raise ENodeExecutionError.Create('Node is nil');
 
-  P := ANode.GetInput(AIndex);
+  var P := ANode.GetInput(AIndex);
   if P = nil then
     raise ENodeExecutionError.CreateFmt('Input pin index %d out of range for node "%s"', [AIndex, ANode.Title]);
 
@@ -692,9 +650,6 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.EvaluatePinValue(APin: TNodePin; AContext: TNodeExecutionContext): TValue;
-var
-  Cached: TValue;
-  OwnerNode: TCustomNode;
 begin
   CheckThreadStopped;
   Result := Default(TValue);
@@ -705,35 +660,31 @@ begin
   if AContext = nil then
     raise ENodeExecutionError.Create('Execution context is nil');
 
+  var Cached: TValue;
   if AContext.TryGetPinValue(APin, Cached) then
     Exit(Cached);
 
-  if AContext.GetPinState(APin) = nvsEvaluating then
+  if AContext.GetPinState(APin) = TNodeValueState.Evaluating then
     raise ENodeCycleDetected.CreateFmt('Cycle detected while evaluating pin "%s" of node "%s"', [APin.Name, if APin.OwnerNode <> nil then TCustomNode(APin.OwnerNode).Title else '?']);
 
   if APin.Direction = TPinDirection.Input then
     Exit(GetInputPinValue(APin, AContext));
 
-  OwnerNode := TCustomNode(APin.OwnerNode);
+  var OwnerNode := APin.OwnerNode;
   if OwnerNode = nil then
     raise ENodeExecutionError.Create('Output pin has no owner node');
 
-  AContext.SetPinState(APin, nvsEvaluating);
+  AContext.SetPinState(APin, TNodeValueState.Evaluating);
   try
     Result := EvaluateNodeOutput(OwnerNode, APin, AContext);
     AContext.SetPinValue(APin, Result);
   except
-    AContext.SetPinState(APin, nvsMissing);
+    AContext.SetPinState(APin, TNodeValueState.Missing);
     raise;
   end;
 end;
 
 function TNodeGraphRuntimeHelper.EvaluateNodeOutput(ANode: TCustomNode; APin: TNodePin; AContext: TNodeExecutionContext): TValue;
-var
-  V: TNodeValue;
-  AValue, BValue: TValue;
-  AFloat, BFloat: double;
-  ExecNode: TExecutableNode;
 begin
   Result := Default(TValue);
 
@@ -748,7 +699,7 @@ begin
 
   if ANode is TExecutableNode then
   begin
-    ExecNode := TExecutableNode(ANode);
+    var ExecNode := TExecutableNode(ANode);
 
     AContext.IncStep;
     AContext.LastExecutedNode := ANode;
@@ -771,7 +722,7 @@ begin
       (APin <> ANode.GetOutput(0)) then
       raise ENodeExecutionError.CreateFmt('Unsupported output pin "%s" for node "%s"', [APin.Name, ANode.Title]);
 
-    V := ANode.FindValue('value');
+    var V := ANode.FindValue('value');
     if V = nil then
       Exit(MakeFloatValue(0.0));
 
@@ -792,11 +743,11 @@ begin
 
   if SameText(ANode.NodeType, 'add') then
   begin
-    AValue := GetInputPinValueByIndex(ANode, 0, AContext);
-    BValue := GetInputPinValueByIndex(ANode, 1, AContext);
+    var AValue := GetInputPinValueByIndex(ANode, 0, AContext);
+    var BValue := GetInputPinValueByIndex(ANode, 1, AContext);
 
-    AFloat := NodeValueToFloatDef(AValue, 0.0);
-    BFloat := NodeValueToFloatDef(BValue, 0.0);
+    var AFloat := NodeValueToFloatDef(AValue, 0.0);
+    var BFloat := NodeValueToFloatDef(BValue, 0.0);
 
     Result := MakeFloatValue(AFloat + BFloat);
     Exit;
@@ -827,41 +778,31 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.ExecuteDataFlow(AContext: TNodeExecutionContext): boolean;
-var
-  OwnContext: boolean;
-  Ctx: TNodeExecutionContext;
-  Order: TList<TCustomNode>;
-  i, j: integer;
-  N: TCustomNode;
-  P: TNodePin;
 begin
   if HasCycle then
     raise ENodeCycleDetected.Create('Graph contains cycle');
 
-  OwnContext := AContext = nil;
-  if OwnContext then
-    Ctx := TNodeExecutionContext.Create(Self)
-  else
-    Ctx := AContext;
+  var OwnContext := AContext = nil;
+  var Ctx := if OwnContext then TNodeExecutionContext.Create(Self)else AContext;
 
-  Order := TList<TCustomNode>.Create;
+  var Order := TList<TCustomNode>.Create;
   try
     TopologicalSortDataNodes(Order);
 
-    for i := 0 to Order.Count - 1 do
+    for var i := 0 to Order.Count - 1 do
     begin
       CheckThreadStopped;
-      N := Order[i];
+      var N := Order[i];
       if (N = nil) or (N.VisualKind = TNodeVisualKind.Comment) then
         Continue;
 
       if (Ctx.Debugger <> nil) and Ctx.Debugger.CheckPause(N, nil, Ctx) then
         raise ENodeDebuggerPause.Create('Execution paused by debugger');
 
-      for j := 0 to N.OutputCount - 1 do
+      for var j := 0 to N.OutputCount - 1 do
       begin
         CheckThreadStopped;
-        P := N.GetOutput(j);
+        var P := N.GetOutput(j);
         if (P <> nil) and (P.Kind = TPinKind.Data) then
           EvaluatePinValue(P, Ctx);
       end;
@@ -875,19 +816,16 @@ begin
   end;
 end;
 
-function TNodeGraphRuntimeHelper.FindExecOutgoingLinks(APin: TNodePin; AList: TList): integer;
-var
-  i: integer;
-  L: TNodeLink;
+function TNodeGraphRuntimeHelper.FindExecOutgoingLinks(APin: TNodePin; AList: TList<TNodeLink>): integer;
 begin
   Result := 0;
   if (APin = nil) or (AList = nil) then
     Exit;
 
   AList.Clear;
-  for i := 0 to Links.Count - 1 do
+  for var i := 0 to Links.Count - 1 do
   begin
-    L := Links[i];
+    var L := Links[i];
     if (L <> nil) and (L.FromPin = APin) and (L.FromPin.Kind = TPinKind.Exec) and
       (L.ToPin <> nil) and (L.ToPin.Kind = TPinKind.Exec) then
       AList.Add(L);
@@ -896,20 +834,16 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.FindFirstConnectedExecOutput(ANode: TCustomNode): TNodePin;
-var
-  i: integer;
-  P: TNodePin;
-  Tmp: TList;
 begin
   Result := nil;
   if ANode = nil then
     Exit;
 
-  Tmp := TList.Create;
+  var Tmp := TList<TNodeLink>.Create;
   try
-    for i := 0 to ANode.OutputCount - 1 do
+    for var i := 0 to ANode.OutputCount - 1 do
     begin
-      P := ANode.GetOutput(i);
+      var P := ANode.GetOutput(i);
       if (P <> nil) and (P.Kind = TPinKind.Exec) then
       begin
         if FindExecOutgoingLinks(P, Tmp) > 0 then
@@ -922,10 +856,6 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.ExecuteExecPin(APin: TNodePin; AContext: TNodeExecutionContext): boolean;
-var
-  L: TList;
-  Link: TNodeLink;
-  NextNode: TCustomNode;
 begin
   CheckThreadStopped;
   Result := False;
@@ -939,18 +869,18 @@ begin
   AContext.LastExecOutputPin := APin;
 
   if AContext.Debugger <> nil then
-    AContext.Debugger.AddTraceEntry('exec-out', TCustomNode(APin.OwnerNode), APin, AContext);
+    AContext.Debugger.AddTraceEntry('exec-out', APin.OwnerNode, APin, AContext);
 
-  L := TList.Create;
+  var L := TList<TNodeLink>.Create;
   try
     FindExecOutgoingLinks(APin, L);
     if L.Count = 0 then
       Exit(True);
 
-    Link := TNodeLink(L[0]);
+    var Link := L[0];
     if (Link <> nil) and (Link.ToPin <> nil) then
     begin
-      NextNode := TCustomNode(Link.ToPin.OwnerNode);
+      var NextNode := Link.ToPin.OwnerNode;
       if NextNode <> nil then
       begin
         if AContext.Debugger <> nil then
@@ -968,9 +898,6 @@ begin
 end;
 
 function TNodeGraphRuntimeHelper.ExecuteFromNode(ANode: TCustomNode; AContext: TNodeExecutionContext): boolean;
-var
-  ExecNode: TExecutableNode;
-  NextExecPin: TNodePin;
 begin
   CheckThreadStopped;
   Result := False;
@@ -982,6 +909,7 @@ begin
   begin
     if AContext.Debugger.CheckPause(ANode, nil, AContext) then
       raise ENodeDebuggerPause.Create('Execution paused by debugger');
+
     AContext.Debugger.PushNode(ANode);
     AContext.Debugger.AddTraceEntry('enter-node', ANode, nil, AContext);
   end;
@@ -994,7 +922,7 @@ begin
     if not (ANode is TExecutableNode) then
       Exit(True);
 
-    ExecNode := TExecutableNode(ANode);
+    var ExecNode := TExecutableNode(ANode);
     ExecNode.Execute(AContext);
 
     if Assigned(AContext.OnNodeExecuted) then
@@ -1003,7 +931,7 @@ begin
     if AContext.Debugger <> nil then
       AContext.Debugger.AddTraceEntry('executed', ANode, nil, AContext);
 
-    NextExecPin := AContext.LastExecOutputPin;
+    var NextExecPin := AContext.LastExecOutputPin;
     if (NextExecPin = nil) or (NextExecPin.OwnerNode <> ANode) then
       NextExecPin := FindFirstConnectedExecOutput(ANode);
 

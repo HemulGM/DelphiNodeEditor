@@ -25,15 +25,11 @@ interface
 
 uses
   System.Classes, System.SysUtils, FMX.NodeEditor.Types, FMX.NodeEditor.Node,
-  FMX.NodeEditor, FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Debugger,
+  FMX.NodeEditor, FMX.NodeEditor.Graph, FMX.NodeEditor.Debugger,
   FMX.NodeEditor.Executor, FMX.NodeEditor.Executor.Thread,
-  FMX.NodeEditor.Runtime, FMX.NodeEditor.Debug.Intf;
-
-{$SCOPEDENUMS ON}
+  FMX.NodeEditor.Executor.Runtime, FMX.NodeEditor.Debug.Intf;
 
 type
-  TDebugState = (Stopped, Running, Paused, Error);
-
   TNodeEditorDebugger = class
   private
     FEditor: TNodeEditor;
@@ -73,6 +69,8 @@ type
   end;
 
 implementation
+
+{ TNodeEditorDebugger }
 
 constructor TNodeEditorDebugger.Create(AEditor: TNodeEditor);
 begin
@@ -192,7 +190,7 @@ begin
   end;
 
   if FDebugger <> nil then
-    FDebugger.Continue; // сбрасываем состояние паузы
+    FDebugger.Continue; // resetting the pause state
 
   SetState(TDebugState.Stopped);
 end;
@@ -230,7 +228,7 @@ end;
 procedure TNodeEditorDebugger.OnThreadError(Sender: TObject; const ErrorInfo: TThreadErrorInfo);
 begin
   SetState(TDebugState.Error);
-  // Здесь можно показать сообщение об ошибке в UI
+  // Here you can display an error message in the UI.
 end;
 
 procedure TNodeEditorDebugger.OnDebuggerPaused(ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext);

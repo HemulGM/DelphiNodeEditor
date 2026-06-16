@@ -25,8 +25,8 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Math, System.Rtti,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Runtime,
-  FMX.NodeEditor.Node.Graph;
+  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Executor.Runtime,
+  FMX.NodeEditor.Graph;
 
 type
   TExecMathNode = class(TExecutableNode)
@@ -341,8 +341,6 @@ begin
 end;
 
 procedure TIntConstNode.SetupPins;
-var
-  V: TNodeValue;
 begin
   ClearPins;
   FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
@@ -351,16 +349,14 @@ begin
 
   if FindValue('value') = nil then
   begin
-    V := AddValue('value', TNodeValueKind.Integer);
+    var V := AddValue('value', TNodeValueKind.Integer);
     V.IntegerValue := 0;
   end;
 end;
 
 procedure TIntConstNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: TNodeValue;
 begin
-  V := FindValue('value');
+  var V := FindValue('value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeIntValue(V.IntegerValue))
   else
@@ -380,8 +376,6 @@ begin
 end;
 
 procedure TBoolConstNode.SetupPins;
-var
-  V: TNodeValue;
 begin
   ClearPins;
   FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
@@ -390,16 +384,14 @@ begin
 
   if FindValue('value') = nil then
   begin
-    V := AddValue('value', TNodeValueKind.Boolean);
+    var V := AddValue('value', TNodeValueKind.Boolean);
     V.BooleanValue := False;
   end;
 end;
 
 procedure TBoolConstNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: TNodeValue;
 begin
-  V := FindValue('value');
+  var V := FindValue('value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeBoolValue(V.BooleanValue))
   else
@@ -419,8 +411,6 @@ begin
 end;
 
 procedure TStringConstNode.SetupPins;
-var
-  V: TNodeValue;
 begin
   ClearPins;
   FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
@@ -429,16 +419,14 @@ begin
 
   if FindValue('value') = nil then
   begin
-    V := AddValue('value', TNodeValueKind.string);
+    var V := AddValue('value', TNodeValueKind.string);
     V.StringValue := '';
   end;
 end;
 
 procedure TStringConstNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: TNodeValue;
 begin
-  V := FindValue('value');
+  var V := FindValue('value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeStringValue(V.StringValue))
   else
@@ -467,12 +455,9 @@ begin
 end;
 
 procedure TSetVariableNode.Execute(AContext: TNodeExecutionContext);
-var
-  N: string;
-  V: TValue;
 begin
-  N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
-  V := AContext.GetInputValue(FValuePin);
+  var N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
+  var V := AContext.GetInputValue(FValuePin);
   if N <> '' then
     AContext.SetVariable(N, V);
   AContext.SelectExecOutput(FExecOut);
@@ -499,10 +484,8 @@ begin
 end;
 
 procedure TGetVariableNode.Execute(AContext: TNodeExecutionContext);
-var
-  N: string;
 begin
-  N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
+  var N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
   AContext.SetOutputValue(FValueOut, AContext.GetVariableValue(N));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -615,10 +598,8 @@ begin
 end;
 
 procedure TDivExecNode.Execute(AContext: TNodeExecutionContext);
-var
-  B: Double;
 begin
-  B := NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0);
+  var B := NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0);
   if Abs(B) < 1e-12 then
     raise ENodeExecutionError.Create('Division by zero');
   AContext.SetOutputValue(FResult, MakeFloatValue(
@@ -648,11 +629,9 @@ begin
 end;
 
 procedure TModExecNode.Execute(AContext: TNodeExecutionContext);
-var
-  AInt, BInt: Int64;
 begin
-  AInt := NodeValueToIntDef(AContext.GetInputValue(FA), 0);
-  BInt := NodeValueToIntDef(AContext.GetInputValue(FB), 1);
+  var AInt := NodeValueToIntDef(AContext.GetInputValue(FA), 0);
+  var BInt := NodeValueToIntDef(AContext.GetInputValue(FB), 1);
   if BInt = 0 then
     raise ENodeExecutionError.Create('Modulo by zero');
   AContext.SetOutputValue(FResult, MakeIntValue(AInt mod BInt));
@@ -791,10 +770,8 @@ begin
 end;
 
 procedure TSqrtExecNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: Double;
 begin
-  V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0);
   if V < 0 then
     raise ENodeExecutionError.Create('SQRT from negative number');
   AContext.SetOutputValue(FResult, MakeFloatValue(Sqrt(V)));
@@ -848,10 +825,8 @@ begin
 end;
 
 procedure TLogExecNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: Double;
 begin
-  V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
   if V <= 0 then
     raise ENodeExecutionError.Create('LOG10 argument must be > 0');
   AContext.SetOutputValue(FResult, MakeFloatValue(Log10(V)));
@@ -878,10 +853,8 @@ begin
 end;
 
 procedure TLnExecNode.Execute(AContext: TNodeExecutionContext);
-var
-  V: Double;
 begin
-  V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
   if V <= 0 then
     raise ENodeExecutionError.Create('LN argument must be > 0');
   AContext.SetOutputValue(FResult, MakeFloatValue(Ln(V)));
@@ -1080,12 +1053,9 @@ begin
 end;
 
 procedure TIsPrimeFlagNode.Execute(AContext: TNodeExecutionContext);
-var
-  Idx: Int64;
-  B: Boolean;
 begin
-  Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
-  B := AContext.GetVariableBool('prime_' + IntToStr(Idx), False);
+  var Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
+  var B := AContext.GetVariableBool('prime_' + IntToStr(Idx), False);
 
   AContext.SetVariable('last_prime_check_index', MakeIntValue(Idx));
   AContext.SetVariableBool('last_prime_check_value', B);
@@ -1115,12 +1085,9 @@ begin
 end;
 
 procedure TSetPrimeFlagNode.Execute(AContext: TNodeExecutionContext);
-var
-  Idx: Int64;
-  B: Boolean;
 begin
-  Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
-  B := NodeValueToBoolDef(AContext.GetInputValue(FValuePin), False);
+  var Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
+  var B := NodeValueToBoolDef(AContext.GetInputValue(FValuePin), False);
 
   AContext.SetVariable('last_set_prime_index', MakeIntValue(Idx));
   AContext.SetVariableBool('last_set_prime_value', B);
@@ -1150,17 +1117,11 @@ begin
 end;
 
 procedure TCollectPrimeNode.Execute(AContext: TNodeExecutionContext);
-var
-  P: Int64;
-  S: string;
 begin
-  P := NodeValueToIntDef(AContext.GetInputValue(FPrimePin), 0);
-  S := AContext.GetVariableStr('primes', '');
+  var P := NodeValueToIntDef(AContext.GetInputValue(FPrimePin), 0);
+  var S := AContext.GetVariableStr('primes', '');
 
-  if S = '' then
-    S := IntToStr(P)
-  else
-    S := S + ', ' + IntToStr(P);
+  S := if S = '' then P.ToString else S + ', ' + P.ToString;
 
   AContext.SetVariable('last_collected_prime', MakeIntValue(P));
   AContext.SetVariableStr('primes', S);

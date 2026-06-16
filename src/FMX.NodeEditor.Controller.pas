@@ -4,10 +4,12 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Types,
-  System.UITypes, System.JSON, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
+  System.UITypes, System.JSON, FMX.NodeEditor.Node, FMX.NodeEditor.Graph,
   FMX.NodeEditor.Types, FMX.NodeEditor.Selection;
 
 type
+  ENodeEditorControllerException = class(ENodeEditorException);
+
   TNodeEditorController = class
     FDragStartWorldPos: TPointF;
     FShowDragCoordinates: boolean;
@@ -15,9 +17,13 @@ type
     FGraph: TNodeGraph;
     FSelection: TNodeSelectionModel;
     FOnChanged: TNotifyEvent;
+    FOnSelectionChanged: TNotifyEvent;
     function NodesToJSONText(ANodes: TList<TCustomNode>): string;
     procedure PasteNodesFromJSONText(const AJSON: string; const Position: TPointF);
     procedure SetOnChanged(const Value: TNotifyEvent);
+    procedure SyncNodesFlags;
+    procedure SelectionChanged(Sender: TObject);
+    procedure SetOnSelectionChanged(const Value: TNotifyEvent);
   protected
     procedure DoChanged; virtual;
   public
@@ -74,13 +80,14 @@ type
     property Graph: TNodeGraph read FGraph;
     property Selection: TNodeSelectionModel read FSelection;
     property OnChanged: TNotifyEvent read FOnChanged write SetOnChanged;
+    property OnSelectionChanged: TNotifyEvent read FOnSelectionChanged write SetOnSelectionChanged;
   end;
 
 implementation
 
 uses
   System.Math, FMX.Types, FMX.Clipboard, FMX.Platform, System.IOUtils,
-  FMX.NodeEditor.Node.Command;
+  FMX.NodeEditor.Graph.Command;
 
 { TNodeEditorController }
 
@@ -88,15 +95,23 @@ constructor TNodeEditorController.Create(AGraph: TNodeGraph);
 begin
   inherited Create;
   if AGraph = nil then
-    raise Exception.Create('Graph can''t be nil');
+    raise ENodeEditorControllerException.Create('Graph can''t be nil');
   FGraph := AGraph;
   FSelection := TNodeSelectionModel.Create;
+  FSelection.OnChanged := SelectionChanged;
 end;
 
 destructor TNodeEditorController.Destroy;
 begin
   FSelection.Free;
   inherited Destroy;
+end;
+
+procedure TNodeEditorController.SelectionChanged(Sender: TObject);
+begin
+  SyncNodesFlags;
+  if Assigned(FOnSelectionChanged) then
+    FOnSelectionChanged(Self);
 end;
 
 procedure TNodeEditorController.AddNode(ANode: TCustomNode; Silent: Boolean);
@@ -174,6 +189,11 @@ begin
   FOnChanged := Value;
 end;
 
+procedure TNodeEditorController.SetOnSelectionChanged(const Value: TNotifyEvent);
+begin
+  FOnSelectionChanged := Value;
+end;
+
 procedure TNodeEditorController.RemoveNode(ANode: TCustomNode);
 begin
   if ANode = nil then
@@ -234,15 +254,15 @@ begin
     var Data := TJSONValue.ParseJSONValue(JSON);
     try
       if Data is not TJSONObject then
-        raise Exception.Create(Translate('Unknown version'));
+        raise ENodeEditorControllerException.Create(Translate('Unknown version'));
 
       var Version: Integer := 0;
       if not Data.TryGetValue<Integer>('version', Version) then
-        raise Exception.Create(Translate('Unknown version'));
+        raise ENodeEditorControllerException.Create(Translate('Unknown version'));
 
       var GraphObj := Data.GetValue<TJSONObject>('graph', nil);
       if GraphObj = nil then
-        raise Exception.Create(Translate('Graph data is missing'));
+        raise ENodeEditorControllerException.Create(Translate('Graph data is missing'));
 
       var UseAlphaColor := Data.GetValue<Boolean>('alpha', False);
 
@@ -256,7 +276,7 @@ begin
     end;
   except
     on E: Exception do
-      raise Exception.Create(Translate('Couldn''t load graph') + ':'#13#10 + E.Message);
+      raise ENodeEditorControllerException.Create(Translate('Couldn''t load graph') + ':'#13#10 + E.Message);
   end;
 
   DoChanged;
@@ -293,7 +313,7 @@ begin
         for var Issue in Issues do
         begin
           var Prefix: string;
-          if Issue.Kind = gviError then
+          if Issue.Kind = TGraphValidationIssueKind.Error then
             Prefix := Translate('Error') + ': '
           else
             Prefix := Translate('Warning') + ': ';
@@ -478,7 +498,7 @@ end;
 
 procedure TNodeEditorController.ReconnectLink(ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
 begin
-  if (ALink = nil) or (AOldPin = nil) or (ANewPin = nil) then
+  if (ALink = nil) or (AOldPin = nil) or (ANewPin = nil) or (AOldPin = ANewPin) then
     Exit;
 
   ExecuteCommand(TReconnectLinkCommand.Create(FGraph, ALink, AOldPin, ANewPin));
@@ -627,7 +647,26 @@ begin
   if not P2.CanAcceptMoreConnections then
     Exit;
 
-  Result := (FGraph <> nil) and FGraph.CanConnect(P1, P2);
+  Result := FGraph.CanConnect(P1, P2);
+end;
+
+procedure TNodeEditorController.SyncNodesFlags;
+begin
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+  begin
+    var N := FGraph.Nodes[i];
+    if N <> nil then
+      N.Selected := Selection.ContainsNode(N);
+    for var j := 0 to N.InputCount - 1 do
+      N.GetInput(j).Highlight := False;
+    for var j := 0 to N.OutputCount - 1 do
+      N.GetOutput(j).Highlight := False;
+  end;
+  for var L in Selection.Links do
+  begin
+    L.FromPin.Highlight := True;
+    L.ToPin.Highlight := True;
+  end;
 end;
 
 procedure TNodeEditorController.ConnectSelectedPins;

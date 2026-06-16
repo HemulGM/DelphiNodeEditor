@@ -9,38 +9,41 @@ uses
 {$SCOPEDENUMS ON}
 
 type
+  ENodeEditorException = class(Exception);
+
+  { Execution and debugging }
+
+  TDebugStepMode = (None, StepOver, StepInto);
+
+  TDebugState = (Stopped, Running, Paused, Error);
+
+  //TExecutionMode = (DataFlow, ControlFlow, Mixed);
+
+  TGraphExecutionError = (None, GraphIsNil, InvalidStartNode, DataCycleDetected, NodeEvaluationFailed, PinEvaluationFailed, ExecStepLimitExceeded);
+
+  TNodeValueState = (Missing, Evaluating, Ready);
+
+  { View }
+
   TGridType = (Lines, Dots);
+
+  TLinkVisualType = (Bezier, Line, PolyLine, Rect);
+
+  { Graph }
+
+  TGraphValidationIssueKind = (Error, Warning);
+
+  { Nodes }
+
+  TNodeVisualKind = (Normal, Reroute, Comment);
+
+  TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON);
+
+  { Pins }
 
   TPinDirection = (Input, Output);
 
-  TAlignMode = (Left, Right, Top, Bottom, CenterHorizontal, CenterVertical);
-
-  TDistributeMode = (Horizontal, Vertical);
-
-  TMatchSizeMode = (Width, Height, Both);
-
-  TMoveDirection = (Left, Up, Right, Down);
-
-  TNodeValueKind = (
-    Null,
-    Float,
-    Integer,
-    &String,
-    Boolean,
-    JSON
-    );
-
-  TNodePinTypeFlag = (
-    Any,
-    &Array,
-    List,
-    Map,
-    &Object,
-    Nullable,
-    Optional,
-    Generic,
-    Wildcard
-    );
+  TNodePinTypeFlag = (Any, &Array, List, Map, &Object, Nullable, Optional, Generic, Wildcard);
 
   TNodePinTypeFlags = set of TNodePinTypeFlag;
 
@@ -48,9 +51,17 @@ type
 
   TPinCompatible = (Undefined, True, False);
 
-  TNodeVisualKind = (Normal, Reroute, Comment);
+  { Alignment }
 
-  TLinkVisualType = (Bezier, Line, PolyLine, Rect);
+  TAlignMode = (Left, Right, Top, Bottom, CenterHorizontal, CenterVertical);
+
+  TDistributeMode = (Horizontal, Vertical);
+
+  TMatchSizeMode = (Width, Height, Both);
+
+  { Controls }
+
+  TMoveDirection = (Left, Up, Right, Down);
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 

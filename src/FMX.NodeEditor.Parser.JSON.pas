@@ -1,21 +1,16 @@
-﻿unit FMX.NodeEditor.JSON;
+﻿unit FMX.NodeEditor.Parser.JSON;
 
 interface
 
 uses
   System.Classes, System.SysUtils, System.Types, FMX.Controls, FMX.Dialogs,
   System.JSON, FMX.NodeEditor, FMX.NodeEditor.Node, System.Generics.Collections,
-  FMX.NodeEditor.Types;
+  FMX.NodeEditor.Types, FMX.NodeEditor.Parser;
+
+{$SCOPEDENUMS ON}
 
 type
-  TJSONNodeKind = (
-    jnkObject,
-    jnkArray,
-    jnkString,
-    jnkNumber,
-    jnkBoolean,
-    jnkNull
-    );
+  TJSONNodeKind = (&Object, &Array, &String, Number, Boolean, Null);
 
   TJsonNode = class(TCustomNode)
   private
@@ -73,40 +68,21 @@ type
     procedure SetupPins; override;
   end;
 
-  TJsonEditorChangedEvent = procedure(Sender: TObject) of object;
-
-  TJsonNodeEditor = class(TComponent)
+  TJsonNodeEditor = class(TGraphParser)
   private
     FNodeEditor: TNodeEditor;
-    FOnChanged: TJsonEditorChangedEvent;
-
     procedure RegisterJsonNodes;
-
     function JsonKindToNodeType(AData: TJSONValue): string;
     function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer; Direct: Boolean): TJsonNode;
-
     procedure BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
-
     function FindLinkedChildNode(AFromPin: TNodePin): TJsonNode;
     function BuildJSONFromNode(ANode: TJsonNode): TJSONValue;
     function GetRootJsonNode: TJsonNode;
-
-    procedure DoChanged;
-    procedure SetNodeEditor(const Value: TNodeEditor);
   public
-    constructor Create(AOwner: TComponent); override;
-
-    procedure Clear;
-
-    procedure LoadJSONText(const AText: string);
-    function SaveJSONText(AFormatted: boolean = True): string;
-
-    procedure LoadFromFile(const AFileName: string);
-    procedure SaveToFile(const AFileName: string; AFormatted: boolean = True);
-
-    property NodeEditor: TNodeEditor read FNodeEditor write SetNodeEditor;
-  published
-    property OnChanged: TJsonEditorChangedEvent read FOnChanged write FOnChanged;
+    procedure Clear; override;
+    procedure LoadFromString(const Value: string); override;
+    function SaveToString(const Formatted: Boolean = True): string; override;
+    constructor Create(AEditor: TNodeEditor); override;
   end;
 
 implementation
@@ -117,17 +93,17 @@ uses
 function JsonKindToStr(AKind: TJSONNodeKind): string;
 begin
   case AKind of
-    jnkObject:
+    TJSONNodeKind.object:
       Result := 'object';
-    jnkArray:
+    TJSONNodeKind.array:
       Result := 'array';
-    jnkString:
+    TJSONNodeKind.string:
       Result := 'string';
-    jnkNumber:
+    TJSONNodeKind.Number:
       Result := 'number';
-    jnkBoolean:
+    TJSONNodeKind.Boolean:
       Result := 'boolean';
-    jnkNull:
+    TJSONNodeKind.Null:
       Result := 'null';
   else
     Result := 'null';
@@ -137,38 +113,38 @@ end;
 function StrToJsonKind(const S: string): TJSONNodeKind;
 begin
   if SameText(S, 'object') then
-    Result := jnkObject
+    Result := TJSONNodeKind.object
   else if SameText(S, 'array') then
-    Result := jnkArray
+    Result := TJSONNodeKind.array
   else if SameText(S, 'string') then
-    Result := jnkString
+    Result := TJSONNodeKind.string
   else if SameText(S, 'number') then
-    Result := jnkNumber
+    Result := TJSONNodeKind.Number
   else if SameText(S, 'boolean') then
-    Result := jnkBoolean
+    Result := TJSONNodeKind.Boolean
   else
-    Result := jnkNull;
+    Result := TJSONNodeKind.Null;
 end;
 
 function JSONTypeToJsonKind(AData: TJSONValue): TJSONNodeKind;
 begin
   if AData = nil then
-    Exit(jnkNull);
+    Exit(TJSONNodeKind.Null);
 
   if AData is TJSONObject then
-    Exit(jnkObject)
+    Exit(TJSONNodeKind.object)
   else if AData is TJSONArray then
-    Exit(jnkArray)
+    Exit(TJSONNodeKind.array)
   else if AData is TJSONString then
-    Exit(jnkString)
+    Exit(TJSONNodeKind.string)
   else if AData is TJSONNumber then
-    Exit(jnkNumber)
+    Exit(TJSONNodeKind.Number)
   else if AData is TJSONBool then
-    Exit(jnkBoolean)
+    Exit(TJSONNodeKind.Boolean)
   else if AData is TJSONNull then
-    Exit(jnkNull)
+    Exit(TJSONNodeKind.Null)
   else
-    Result := jnkNull;
+    Result := TJSONNodeKind.Null;
 end;
 
 { TJsonNode }
@@ -178,7 +154,7 @@ begin
   inherited;
   NodeType := 'json.base';
   JsonName := '';
-  FJsonKind := jnkNull;
+  FJsonKind := TJSONNodeKind.Null;
   HeaderColor := $FFD8D8D8;
   BodyColor := $FFFFFFFF;
   Width := 220;
@@ -234,7 +210,7 @@ constructor TJsonObjectNode.Create;
 begin
   inherited;
   NodeType := 'json.object';
-  FJsonKind := jnkObject;
+  FJsonKind := TJSONNodeKind.object;
   HeaderColor := $FF8C5700;
   Width := 240;
   Height := 120;
@@ -253,7 +229,7 @@ constructor TJsonArrayNode.Create;
 begin
   inherited;
   NodeType := 'json.array';
-  FJsonKind := jnkArray;
+  FJsonKind := TJSONNodeKind.array;
   HeaderColor := $FF830D0D;
   Width := 240;
   Height := 120;
@@ -272,7 +248,7 @@ constructor TJsonStringNode.Create;
 begin
   inherited;
   NodeType := 'json.string';
-  FJsonKind := jnkString;
+  FJsonKind := TJSONNodeKind.string;
   HeaderColor := $FF0046AE;
   Width := 220;
   Height := 95;
@@ -296,7 +272,7 @@ constructor TJsonNumberNode.Create;
 begin
   inherited;
   NodeType := 'json.number';
-  FJsonKind := jnkNumber;
+  FJsonKind := TJSONNodeKind.Number;
   HeaderColor := $FF9D0068;
   Width := 220;
   Height := 95;
@@ -320,7 +296,7 @@ constructor TJsonBooleanNode.Create;
 begin
   inherited;
   NodeType := 'json.boolean';
-  FJsonKind := jnkBoolean;
+  FJsonKind := TJSONNodeKind.Boolean;
   HeaderColor := $FFA63C00;
   Width := 220;
   Height := 95;
@@ -344,7 +320,7 @@ constructor TJsonNullNode.Create;
 begin
   inherited;
   NodeType := 'json.null';
-  FJsonKind := jnkNull;
+  FJsonKind := TJSONNodeKind.Null;
   HeaderColor := $FF4F4F4F;
   Width := 200;
   Height := 80;
@@ -359,9 +335,11 @@ end;
 
 { TJsonNodeEditor }
 
-constructor TJsonNodeEditor.Create(AOwner: TComponent);
+constructor TJsonNodeEditor.Create(AEditor: TNodeEditor);
 begin
-  inherited Create(AOwner);
+  inherited Create(AEditor);
+  FNodeEditor := AEditor;
+  RegisterJsonNodes;
 end;
 
 procedure TJsonNodeEditor.RegisterJsonNodes;
@@ -433,12 +411,6 @@ begin
   );
 end;
 
-procedure TJsonNodeEditor.DoChanged;
-begin
-  if Assigned(FOnChanged) then
-    FOnChanged(Self);
-end;
-
 procedure TJsonNodeEditor.Clear;
 begin
   FNodeEditor.Clear;
@@ -447,17 +419,17 @@ end;
 function TJsonNodeEditor.JsonKindToNodeType(AData: TJSONValue): string;
 begin
   case JSONTypeToJsonKind(AData) of
-    jnkObject:
+    TJSONNodeKind.object:
       Result := 'json.object';
-    jnkArray:
+    TJSONNodeKind.array:
       Result := 'json.array';
-    jnkString:
+    TJSONNodeKind.string:
       Result := 'json.string';
-    jnkNumber:
+    TJSONNodeKind.Number:
       Result := 'json.number';
-    jnkBoolean:
+    TJSONNodeKind.Boolean:
       Result := 'json.boolean';
-    jnkNull:
+    TJSONNodeKind.Null:
       Result := 'json.null';
   else
     Result := 'json.null';
@@ -483,21 +455,21 @@ begin
   Result.JsonName := AName;
 
   case Result.JsonKind of
-    jnkObject:
+    TJSONNodeKind.object:
       Result.Title := TitleText + ': Object';
-    jnkArray:
+    TJSONNodeKind.array:
       begin
         Result.Title := TitleText + ': Array';
         Result.Collapsed := True;
       end;
-    jnkString:
+    TJSONNodeKind.string:
       begin
         Result.Title := TitleText + ': String';
         V := Result.FindValue('value');
         if V <> nil then
           V.StringValue := TJSONString(AData).Value;
       end;
-    jnkNumber:
+    TJSONNodeKind.Number:
       begin
         Result.Title := TitleText + ': Number';
         V := Result.FindValue('value');
@@ -508,14 +480,14 @@ begin
           V.FloatValue := 0;
         end;
       end;
-    jnkBoolean:
+    TJSONNodeKind.Boolean:
       begin
         Result.Title := TitleText + ': Boolean';
         V := Result.FindValue('value');
         if V <> nil then
           V.BooleanValue := TJSONBool(AData).AsBoolean;
       end;
-    jnkNull:
+    TJSONNodeKind.Null:
       Result.Title := TitleText + ': Null';
   end;
   Result.ZOrder := FNodeEditor.Graph.Nodes.Count + 1;
@@ -592,7 +564,7 @@ begin
   AParent.Height := AParent.HeaderHeight + Max(AParent.InputCount, AParent.OutputCount) * 40;
 end;
 
-procedure TJsonNodeEditor.LoadJSONText(const AText: string);
+procedure TJsonNodeEditor.LoadFromString(const Value: string);
 var
   Data: TJSONValue;
   RootNode: TJsonNode;
@@ -600,10 +572,10 @@ var
 begin
   Clear;
 
-  if Trim(AText) = '' then
+  if Value.Trim.IsEmpty then
     Exit;
 
-  Data := TJSONValue.ParseJSONValue(AText);
+  Data := TJSONValue.ParseJSONValue(Value);
   try
     Row := 0;
 
@@ -615,7 +587,6 @@ begin
       FNodeEditor.Graph.EndUpdate;
     end;
     FNodeEditor.ResetView;
-    DoChanged;
   finally
     Data.Free;
   end;
@@ -658,7 +629,7 @@ begin
     Exit(TJSONNull.Create);
 
   case ANode.JsonKind of
-    jnkObject:
+    TJSONNodeKind.object:
       begin
         Obj := TJSONObject.Create;
 
@@ -675,7 +646,7 @@ begin
 
         Result := Obj;
       end;
-    jnkArray:
+    TJSONNodeKind.array:
       begin
         Arr := TJSONArray.Create;
 
@@ -692,7 +663,7 @@ begin
 
         Result := Arr;
       end;
-    jnkString:
+    TJSONNodeKind.string:
       begin
         V := ANode.FindValue('value');
         if V <> nil then
@@ -700,7 +671,7 @@ begin
         else
           Result := TJSONString.Create('');
       end;
-    jnkNumber:
+    TJSONNodeKind.Number:
       begin
         V := ANode.FindValue('value');
         if V <> nil then
@@ -708,7 +679,7 @@ begin
         else
           Result := TJSONNumber.Create(0);
       end;
-    jnkBoolean:
+    TJSONNodeKind.Boolean:
       begin
         V := ANode.FindValue('value');
         if V <> nil then
@@ -716,7 +687,7 @@ begin
         else
           Result := TJSONBool.Create(False);
       end;
-    jnkNull:
+    TJSONNodeKind.Null:
       Result := TJSONNull.Create;
   end;
 
@@ -751,7 +722,7 @@ begin
   end;
 end;
 
-function TJsonNodeEditor.SaveJSONText(AFormatted: boolean): string;
+function TJsonNodeEditor.SaveToString(const Formatted: Boolean): string;
 var
   RootNode: TJsonNode;
   Data: TJSONValue;
@@ -764,29 +735,13 @@ begin
 
   Data := BuildJSONFromNode(RootNode);
   try
-    if AFormatted then
+    if Formatted then
       Result := Data.Format
     else
       Result := Data.ToJSON;
   finally
     Data.Free;
   end;
-end;
-
-procedure TJsonNodeEditor.LoadFromFile(const AFileName: string);
-begin
-  LoadJSONText(TFile.ReadAllText(AFileName));
-end;
-
-procedure TJsonNodeEditor.SaveToFile(const AFileName: string; AFormatted: boolean);
-begin
-  TFile.WriteAllText(AFileName, SaveJSONText(AFormatted));
-end;
-
-procedure TJsonNodeEditor.SetNodeEditor(const Value: TNodeEditor);
-begin
-  FNodeEditor := Value;
-  RegisterJsonNodes;
 end;
 
 end.

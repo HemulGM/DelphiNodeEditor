@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Layouts,
   FMX.ListBox, FMX.NodeEditor, System.Actions, FMX.ActnList,
-  FMX.Controls.Presentation, FMX.Edit, FMX.SearchBox, FMX.NodeEditor.Node.Graph,
+  FMX.Controls.Presentation, FMX.Edit, FMX.SearchBox, FMX.NodeEditor.Graph,
   WinUI3.Form, FMX.StdCtrls;
 
 type

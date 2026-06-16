@@ -15,11 +15,11 @@ type
     class function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean; inline; static;
     class function PointNearLine(const P, P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline; static;
   public
-    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF); virtual; abstract;
+    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean = False); virtual; abstract;
     class function IsLinkInsideRect(const R: TRectF; Zoom: Single; PFrom, PTo: TPointF): Boolean; virtual; abstract;
     class function HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; virtual; abstract;
     class procedure DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); overload; virtual; abstract;
-    class procedure DrawLink(Canvas: TCanvas; const PFrom, PTo: TPointF; Zoom, OffsetX, OffsetY: Double; Opacity: Single); overload; virtual;
+    class procedure DrawLink(Canvas: TCanvas; const PFrom, PTo: TPointF; Zoom, OffsetX, OffsetY: Double; Opacity: Single; RTL: Boolean = False); overload; virtual;
   end;
 
   TLinkVisualBezier = class(TLinkVisualObject)
@@ -27,7 +27,7 @@ type
     class function CubicBezierPoint(const P0, P1, P2, P3: TPointF; T: Single): TPointF; inline; static;
     class function PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean; inline; static;
   public
-    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF); override;
+    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean = False); override;
     class function IsLinkInsideRect(const R: TRectF; Zoom: Single; PFrom, PTo: TPointF): Boolean; override;
     class function HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; override;
     class procedure DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); override;
@@ -35,7 +35,7 @@ type
 
   TLinkVisualPolyLine = class(TLinkVisualObject)
   public
-    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF); override;
+    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean = False); override;
     class function IsLinkInsideRect(const R: TRectF; Zoom: Single; PFrom, PTo: TPointF): Boolean; override;
     class function HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; override;
     class procedure DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); override;
@@ -43,7 +43,7 @@ type
 
   TLinkVisualRect = class(TLinkVisualObject)
   public
-    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF); override;
+    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean = False); override;
     class function IsLinkInsideRect(const R: TRectF; Zoom: Single; PFrom, PTo: TPointF): Boolean; override;
     class function HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; override;
     class procedure DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); override;
@@ -51,7 +51,7 @@ type
 
   TLinkVisualLine = class(TLinkVisualObject)
   public
-    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF); override;
+    class procedure GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean = False); override;
     class function IsLinkInsideRect(const R: TRectF; Zoom: Single; PFrom, PTo: TPointF): Boolean; override;
     class function HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean; override;
     class procedure DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single); override;
@@ -111,7 +111,7 @@ begin
   }
 end;
 
-class procedure TLinkVisualBezier.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF);
+class procedure TLinkVisualBezier.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
 begin
   P0 := PFrom;
   P3 := PTo;
@@ -123,10 +123,18 @@ begin
   //var D := Max(Hypot(P3.X - P0.X, P3.Y - P0.Y) * 0.35, 0);
 
   P1 := P0;
-  P1.X := P1.X + D;
-
   P2 := P3;
-  P2.X := P2.X - D;
+
+  if RTL then
+  begin
+    P1.X := P1.X - D;
+    P2.X := P2.X + D;
+  end
+  else
+  begin
+    P1.X := P1.X + D;
+    P2.X := P2.X - D;
+  end;
 end;
 
 class function TLinkVisualBezier.PointNearPath(const P: TPointF; P0, P1, P2, P3: TPointF; Tolerance: Single): Boolean;
@@ -206,17 +214,25 @@ begin
   Canvas.DrawPath(CachePathObject, Opacity);
 end;
 
-class procedure TLinkVisualPolyLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF);
+class procedure TLinkVisualPolyLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
 begin
   P0 := PFrom;
   P3 := PTo;
   var D: Single := 15;
 
   P1 := P0;
-  P1.X := P1.X + D;
-
   P2 := P3;
-  P2.X := P2.X - D;
+
+  if RTL then
+  begin
+    P1.X := P1.X - D;
+    P2.X := P2.X + D;
+  end
+  else
+  begin
+    P1.X := P1.X + D;
+    P2.X := P2.X - D;
+  end;
 end;
 
 class function TLinkVisualPolyLine.HitTestLink(const PFrom, PTo: TPointF; AX, AY: Single; Zoom, OffsetX, OffsetY: Double): Boolean;
@@ -272,16 +288,16 @@ begin
   Canvas.DrawPath(CachePathObject, Opacity);
 end;
 
-class procedure TLinkVisualRect.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF);
+class procedure TLinkVisualRect.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
 begin
   P0 := PFrom;
   P3 := PTo;
   var D: Single := (P3.X - P0.X) / 2;
 
   P1 := P0;
-  P1.X := P1.X + D;
-
   P2 := P3;
+
+  P1.X := P1.X + D;
   P2.X := P2.X - D;
 end;
 
@@ -347,10 +363,10 @@ begin
   Result := P.Distance(A + AB * EnsureRange(AP.DotProduct(AB) / LenSq, 0, 1));
 end;
 
-class procedure TLinkVisualObject.DrawLink(Canvas: TCanvas; const PFrom, PTo: TPointF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
+class procedure TLinkVisualObject.DrawLink(Canvas: TCanvas; const PFrom, PTo: TPointF; Zoom, OffsetX, OffsetY: Double; Opacity: Single; RTL: Boolean = False);
 begin
   var P0, P1, P2, P3: TPointF;
-  GetLinkWorldPoints(1, PFrom, PTo, P0, P1, P2, P3);
+  GetLinkWorldPoints(1, PFrom, PTo, P0, P1, P2, P3, RTL);
 
   var W0 := WorldToScreen(P0.X, P0.Y, Zoom, OffsetX, OffsetY);
   var W1 := WorldToScreen(P1.X, P1.Y, Zoom, OffsetX, OffsetY);
@@ -428,7 +444,7 @@ begin
   Canvas.DrawLine(P0, P3, Opacity);
 end;
 
-class procedure TLinkVisualLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF);
+class procedure TLinkVisualLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
 begin
   P0 := PFrom;
   P3 := PTo;

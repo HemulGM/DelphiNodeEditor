@@ -24,23 +24,12 @@ unit FMX.NodeEditor.Executor;
 interface
 
 uses
-  Classes, SysUtils, Rtti, FMX.NodeEditor.Types, FMX.NodeEditor.Node,
-  FMX.NodeEditor.Node.Graph, FMX.NodeEditor.Runtime, FMX.NodeEditor.Debugger;
-
-{$SCOPEDENUMS ON}
+  System.Classes, System.SysUtils, System.Rtti, FMX.NodeEditor.Types,
+  FMX.NodeEditor.Node, FMX.NodeEditor.Graph, FMX.NodeEditor.Executor.Runtime,
+  FMX.NodeEditor.Debugger;
 
 type
-  //TExecutionMode = (DataFlow, ControlFlow, Mixed);
-
-  TGraphExecutionError = (
-    None,
-    GraphIsNil,
-    InvalidStartNode,
-    DataCycleDetected,
-    NodeEvaluationFailed,
-    PinEvaluationFailed,
-    ExecStepLimitExceeded
-    );
+  ENodeEditorExecutorException = class(ENodeEditorException);
 
   TGraphExecutor = class
   private
@@ -62,21 +51,26 @@ type
     property LastError: TGraphExecutionError read FLastError;
     property LastErrorMessage: string read FLastErrorMessage;
 
-    function ExecuteAllDataFlow: boolean;
-    function ExecuteFromNode(ANode: TCustomNode): boolean;
-    function ExecuteFromExecPin(APin: TNodePin): boolean;
+    function ExecuteAllDataFlow: Boolean;
+    function ExecuteFromNode(ANode: TCustomNode): Boolean;
+    function ExecuteFromExecPin(APin: TNodePin): Boolean;
 
-    function EvaluatePin(APin: TNodePin; out AValue: TValue): boolean;
-    function EvaluateNodeOutputs(ANode: TCustomNode): boolean;
+    function EvaluatePin(APin: TNodePin; out AValue: TValue): Boolean;
+    function EvaluateNodeOutputs(ANode: TCustomNode): Boolean;
 
     procedure ResetContext;
   end;
 
 implementation
 
+{ TGraphExecutor }
+
 constructor TGraphExecutor.Create(AGraph: TNodeGraph);
 begin
   inherited Create;
+  if AGraph = nil then
+    raise ENodeEditorExecutorException.Create('Graph can''t be nil');
+
   FGraph := AGraph;
   FContext := nil;
   FDebugger := nil;
@@ -110,7 +104,7 @@ begin
   Result := FContext;
 end;
 
-function TGraphExecutor.ExecuteAllDataFlow: boolean;
+function TGraphExecutor.ExecuteAllDataFlow: Boolean;
 begin
   Result := False;
   ClearError;
@@ -152,7 +146,7 @@ begin
   end;
 end;
 
-function TGraphExecutor.ExecuteFromNode(ANode: TCustomNode): boolean;
+function TGraphExecutor.ExecuteFromNode(ANode: TCustomNode): Boolean;
 begin
   Result := False;
   ClearError;
@@ -199,7 +193,7 @@ begin
   end;
 end;
 
-function TGraphExecutor.ExecuteFromExecPin(APin: TNodePin): boolean;
+function TGraphExecutor.ExecuteFromExecPin(APin: TNodePin): Boolean;
 begin
   Result := False;
   ClearError;
@@ -246,7 +240,7 @@ begin
   end;
 end;
 
-function TGraphExecutor.EvaluatePin(APin: TNodePin; out AValue: TValue): boolean;
+function TGraphExecutor.EvaluatePin(APin: TNodePin; out AValue: TValue): Boolean;
 begin
   Result := False;
   ClearError;
@@ -276,10 +270,7 @@ begin
   end;
 end;
 
-function TGraphExecutor.EvaluateNodeOutputs(ANode: TCustomNode): boolean;
-var
-  i: Integer;
-  V: TValue;
+function TGraphExecutor.EvaluateNodeOutputs(ANode: TCustomNode): Boolean;
 begin
   Result := False;
   ClearError;
@@ -298,8 +289,8 @@ begin
 
   try
     Context.Debugger := FDebugger;
-    for i := 0 to ANode.OutputCount - 1 do
-      V := FGraph.EvaluatePinValue(ANode.GetOutput(i), Context);
+    for var i := 0 to ANode.OutputCount - 1 do
+      FGraph.EvaluatePinValue(ANode.GetOutput(i), Context);
     Result := True;
   except
     on E: ENodeExecutionError do

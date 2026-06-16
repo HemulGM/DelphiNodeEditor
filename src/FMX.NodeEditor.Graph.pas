@@ -1,6 +1,6 @@
 ﻿//{$include Old/FMX.NodeEditor.Node.Graph.pas}
 
-unit FMX.NodeEditor.Node.Graph;
+unit FMX.NodeEditor.Graph;
 
 interface
 
@@ -10,6 +10,8 @@ uses
   FMX.NodeEditor.DAG;
 
 type
+  ENodeEditorGraphException = class(ENodeEditorException);
+
   TNodeGraph = class;
 
   TNodeDAG = TObjectDAG<TCustomNode>;
@@ -19,8 +21,6 @@ type
   TGraphLinkEvent = procedure(Sender: TObject; ALink: TNodeLink) of object;
 
   TGraphChangedEvent = procedure(Sender: TObject) of object;
-
-  TGraphValidationIssueKind = (gviError, gviWarning);
 
   TGraphCommand = class
   protected
@@ -182,7 +182,7 @@ implementation
 
 uses
   System.Math, FMX.NodeEditor.Node.Defaults, FMX.Types,
-  FMX.NodeEditor.Node.Command, System.Generics.Defaults;
+  FMX.NodeEditor.Graph.Command, System.Generics.Defaults;
 
 procedure LoadGraphFromJSONText(AGraph: TNodeGraph; const S: string; UseAlphaColor: Boolean);
 begin
@@ -901,7 +901,7 @@ end;
 procedure TNodeGraph.ExecuteBegin(const ADescription: string);
 begin
   if not FCommandBeforeJson.IsEmpty then
-    raise Exception.Create('The execution has already started');
+    raise ENodeEditorGraphException.Create('The execution has already started');
   FCommandBeforeJson := CaptureJSONText;
   FCommandDescription := ADescription;
 end;
@@ -1301,7 +1301,7 @@ begin
     if (L.FromPin = nil) or (L.ToPin = nil) then
     begin
       if AIssues <> nil then
-        AddIssue(gviError, 'Broken link: nil pin.', nil, L);
+        AddIssue(TGraphValidationIssueKind.Error, 'Broken link: nil pin.', nil, L);
       Result := False;
       Continue;
     end;
@@ -1309,7 +1309,7 @@ begin
     if not CanConnect(L.FromPin, L.ToPin) then
     begin
       if AIssues <> nil then
-        AddIssue(gviError, 'Invalid link type/direction.', nil, L);
+        AddIssue(TGraphValidationIssueKind.Error, 'Invalid link type/direction.', nil, L);
       Result := False;
     end;
   end;
@@ -1328,7 +1328,7 @@ begin
         begin
           if AIssues <> nil then
             AddIssue(
-              gviWarning,
+              TGraphValidationIssueKind.Warning,
               'Required input "' + P.Name + '" is not connected on node "' +
               N.Title + '".',
               N,
@@ -1341,7 +1341,7 @@ begin
   if HasCycle then
   begin
     if AIssues <> nil then
-      AddIssue(gviError, 'Graph contains cycle.', nil, nil);
+      AddIssue(TGraphValidationIssueKind.Error, 'Graph contains cycle.', nil, nil);
     Result := False;
   end;
 end;

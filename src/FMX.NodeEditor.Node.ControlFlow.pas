@@ -19,14 +19,14 @@
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 }
-unit FMX.NodeEditor.ControlFlowNodes;
+unit FMX.NodeEditor.Node.ControlFlow;
 
 interface
 
 uses
   System.Classes, System.SysUtils, System.Rtti, System.Generics.Collections,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
-  FMX.NodeEditor.Runtime;
+  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph,
+  FMX.NodeEditor.Executor.Runtime;
 
 type
   TBranchNode = class(TExecutableNode)
@@ -154,66 +154,66 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
-procedure RegisterControlFlowNodes(ARegistry: TNodeRegistry);
+procedure RegisterControlFlowNodes(Registry: TNodeRegistry);
 
 implementation
 
-procedure RegisterControlFlowNodes(ARegistry: TNodeRegistry);
+procedure RegisterControlFlowNodes(Registry: TNodeRegistry);
 begin
-  if ARegistry = nil then
+  if Registry = nil then
     Exit;
 
-  ARegistry.RegisterNodeEx('branch', 'Branch', 'Control Flow',
+  Registry.RegisterNodeEx('branch', 'Branch', 'Control Flow',
     'Conditional branch by boolean condition',
     'if,branch,condition,true,false', '',
     TBranchNode, $FFFFE082);
 
-  ARegistry.RegisterNodeEx('loop', 'Loop', 'Control Flow',
+  Registry.RegisterNodeEx('loop', 'Loop', 'Control Flow',
     'While-like loop with condition input and body/exit exec outputs',
     'loop,while,cycle,iteration', '',
     TLoopNode, $FFFFCC80);
 
-  ARegistry.RegisterNodeEx('forloop', 'For Loop', 'Control Flow',
+  Registry.RegisterNodeEx('forloop', 'For Loop', 'Control Flow',
     'For loop with start, end and step',
     'for,loop,cycle,iteration,index', '',
     TForLoopNode, $FFFFCC80);
 
-  ARegistry.RegisterNodeEx('sequence', 'Sequence', 'Control Flow',
+  Registry.RegisterNodeEx('sequence', 'Sequence', 'Control Flow',
     'Executes several exec outputs one by one',
     'sequence,steps,order,exec', '',
     TSequenceNode, $FFB39DDB);
 
-  ARegistry.RegisterNodeEx('break', 'Break', 'Control Flow',
+  Registry.RegisterNodeEx('break', 'Break', 'Control Flow',
     'Break current loop',
     'break,loop,stop', '',
     TBreakNode, $FFEF9A9A);
 
-  ARegistry.RegisterNodeEx('continue', 'Continue', 'Control Flow',
+  Registry.RegisterNodeEx('continue', 'Continue', 'Control Flow',
     'Continue current loop iteration',
     'continue,loop,skip', '',
     TContinueNode, $FF90CAF9);
 
-  ARegistry.RegisterNodeEx('switch', 'Switch', 'Control Flow',
+  Registry.RegisterNodeEx('switch', 'Switch', 'Control Flow',
     'Selects exec output by input value',
     'switch,case,branch,select', '',
     TSwitchNode, $FFCE93D8);
 
-  ARegistry.RegisterNodeEx('wait', 'Wait', 'Control Flow',
+  Registry.RegisterNodeEx('wait', 'Wait', 'Control Flow',
     'Wait for specified duration in milliseconds',
     'wait,delay,sleep,timer', '',
     TWaitNode, $FFA5D6A7);
 
-  ARegistry.RegisterNodeEx('event', 'Event', 'Events',
+  Registry.RegisterNodeEx('event', 'Event', 'Events',
     'Event source node',
     'event,trigger,signal', '',
     TEventNode, $FF80CBC4);
 
-  ARegistry.RegisterNodeEx('eventcall', 'Call Event', 'Events',
+  Registry.RegisterNodeEx('eventcall', 'Call Event', 'Events',
     'Raise named event with payload',
     'event,call,emit,signal', '',
     TEventCallNode, $FF80CBC4);
 
-  ARegistry.RegisterNodeEx('eventlistener', 'Event Listener', 'Events',
+  Registry.RegisterNodeEx('eventlistener', 'Event Listener', 'Events',
     'Listen named event and output payload when triggered',
     'event,listener,subscribe,signal', '',
     TEventListenerNode, $FF80CBC4);
@@ -239,13 +239,11 @@ begin
 end;
 
 procedure TBranchNode.Execute(AContext: TNodeExecutionContext);
-var
-  Cond: boolean;
 begin
   if AContext = nil then
     Exit;
 
-  Cond := NodeValueToBoolDef(AContext.GetInputValue(FConditionPin), False);
+  var Cond := NodeValueToBoolDef(AContext.GetInputValue(FConditionPin), False);
   AContext.SetVariableBool('BranchResult_' + Self.Id, Cond);
 
   if Cond then
@@ -277,20 +275,16 @@ begin
 end;
 
 procedure TLoopNode.Execute(AContext: TNodeExecutionContext);
-var
-  Iter: Int64;
-  Cond: Boolean;
 begin
   if AContext = nil then
     Exit;
 
-  Iter := 0;
+  var Iter: Int64 := 0;
   while True do
   begin
     CheckThreadStopped;
 
-    Cond := NodeValueToBoolDef(AContext.GetInputValue(FConditionPin), False);
-    if not Cond then
+    if not NodeValueToBoolDef(AContext.GetInputValue(FConditionPin), False) then
       Break;
 
     AContext.SetOutputValue(FIndexPin, MakeIntValue(Iter));
@@ -337,20 +331,18 @@ begin
 end;
 
 procedure TForLoopNode.Execute(AContext: TNodeExecutionContext);
-var
-  StartVal, EndVal, StepVal, I: Int64;
 begin
   if AContext = nil then
     Exit;
 
-  StartVal := NodeValueToIntDef(AContext.GetInputValue(FStartPin), 0);
-  EndVal := NodeValueToIntDef(AContext.GetInputValue(FEndPin), 0);
-  StepVal := NodeValueToIntDef(AContext.GetInputValue(FStepPin), 1);
+  var StartVal := NodeValueToIntDef(AContext.GetInputValue(FStartPin), 0);
+  var EndVal := NodeValueToIntDef(AContext.GetInputValue(FEndPin), 0);
+  var StepVal := NodeValueToIntDef(AContext.GetInputValue(FStepPin), 1);
 
   if StepVal = 0 then
     StepVal := 1;
 
-  I := StartVal;
+  var I := StartVal;
   while (((StepVal > 0) and (I <= EndVal)) or ((StepVal < 0) and (I >= EndVal))) do
   begin
     CheckThreadStopped;
@@ -395,10 +387,8 @@ begin
 end;
 
 procedure TSequenceNode.AddStep;
-var
-  NewPin: TNodePin;
 begin
-  NewPin := AddOutputPin('Step ' + IntToStr(Length(FSteps) + 1), 'exec', TPinKind.Exec);
+  var NewPin := AddOutputPin('Step ' + IntToStr(Length(FSteps) + 1), 'exec', TPinKind.Exec);
   SetLength(FSteps, Length(FSteps) + 1);
   FSteps[High(FSteps)] := NewPin;
 end;
@@ -417,17 +407,15 @@ begin
 end;
 
 procedure TSequenceNode.Execute(AContext: TNodeExecutionContext);
-var
-  i: Integer;
 begin
   if AContext = nil then
     Exit;
 
-  for i := 0 to High(FSteps) do
+  for var I := 0 to High(FSteps) do
   begin
     CheckThreadStopped;
-    if FSteps[i] <> nil then
-      AContext.Graph.ExecuteExecPin(FSteps[i], AContext);
+    if FSteps[I] <> nil then
+      AContext.Graph.ExecuteExecPin(FSteps[I], AContext);
   end;
 
   AContext.SelectExecOutput(nil);
@@ -497,33 +485,28 @@ begin
 end;
 
 procedure TSwitchNode.AddCase;
-var
-  Idx: Integer;
 begin
-  Idx := Length(FCases);
+  var Idx := Length(FCases);
   SetLength(FCases, Idx + 1);
   FCases[Idx].ValuePin := AddInputPin('CaseValue' + IntToStr(Idx), 'any', TPinKind.Data);
   FCases[Idx].ExecPin := AddOutputPin('Case' + IntToStr(Idx), 'exec', TPinKind.Exec);
 end;
 
 procedure TSwitchNode.Execute(AContext: TNodeExecutionContext);
-var
-  Value, CaseValue: string;
-  i: Integer;
 begin
   if AContext = nil then
     Exit;
 
   CheckThreadStopped;
-  Value := NodeValueToStringDef(AContext.GetInputValue(FValuePin), '');
+  var Value := NodeValueToStringDef(AContext.GetInputValue(FValuePin), '');
 
-  for i := 0 to High(FCases) do
+  for var I := 0 to High(FCases) do
   begin
-    CaseValue := NodeValueToStringDef(AContext.GetInputValue(FCases[i].ValuePin), '');
+    var CaseValue := NodeValueToStringDef(AContext.GetInputValue(FCases[I].ValuePin), '');
     if SameText(CaseValue, Value) then
     begin
-      AContext.SetVariable('SwitchCase_' + Self.Id, MakeIntValue(i));
-      AContext.SelectExecOutput(FCases[i].ExecPin);
+      AContext.SetVariable('SwitchCase_' + Self.Id, MakeIntValue(I));
+      AContext.SelectExecOutput(FCases[I].ExecPin);
       Exit;
     end;
   end;
@@ -551,13 +534,11 @@ begin
 end;
 
 procedure TWaitNode.Execute(AContext: TNodeExecutionContext);
-var
-  Duration: Double;
 begin
   if AContext = nil then
     Exit;
 
-  Duration := NodeValueToFloatDef(AContext.GetInputValue(FDurationPin), 0);
+  var Duration := NodeValueToFloatDef(AContext.GetInputValue(FDurationPin), 0);
   if Duration > 0 then
   begin
     CheckThreadStopped;
@@ -618,15 +599,12 @@ begin
 end;
 
 procedure TEventCallNode.Execute(AContext: TNodeExecutionContext);
-var
-  EventName: string;
-  EventData: TValue;
 begin
   if AContext = nil then
     Exit;
 
-  EventName := NodeValueToStringDef(AContext.GetInputValue(FEventNamePin), '');
-  EventData := AContext.GetInputValue(FDataPin);
+  var EventName := NodeValueToStringDef(AContext.GetInputValue(FEventNamePin), '');
+  var EventData := AContext.GetInputValue(FDataPin);
 
   if EventName <> '' then
     AContext.RaiseEvent(EventName, EventData);
@@ -654,19 +632,17 @@ begin
 end;
 
 procedure TEventListenerNode.Execute(AContext: TNodeExecutionContext);
-var
-  EventName: string;
-  ReceivedData: TValue;
 begin
   if AContext = nil then
     Exit;
 
-  EventName := NodeValueToStringDef(AContext.GetInputValue(FEventNamePin), '');
+  var EventName := NodeValueToStringDef(AContext.GetInputValue(FEventNamePin), '');
   if EventName = '' then
     Exit;
 
   AContext.RegisterEventListener(Self.Id, EventName);
 
+  var ReceivedData: TValue;
   if AContext.WasListenerTriggered(Self.Id, ReceivedData) then
   begin
     AContext.SetOutputValue(FDataOutputPin, ReceivedData);

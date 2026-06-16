@@ -24,13 +24,10 @@ unit FMX.NodeEditor.Debug.Intf;
 interface
 
 uses
-  Classes, SysUtils, Rtti, FMX.NodeEditor.Types, FMX.NodeEditor.Node;
-
-{$SCOPEDENUMS ON}
+  System.Classes, System.SysUtils, System.Rtti, FMX.NodeEditor.Types,
+  FMX.NodeEditor.Node;
 
 type
-  TStepMode = (None, StepOver, StepInto);
-
   INodeExecutionContext = interface
     ['{D1F0D7A1-8D62-4D8A-8D74-2B2C537D0A11}']
     function GetStepCounter: Integer;
@@ -54,8 +51,6 @@ type
     property HitCount: Integer read GetHitCount write SetHitCount;
     property Condition: string read GetCondition write SetCondition;
   end;
-
-  TDebuggerBreakpointEvent = procedure(const ABreakpoint: IDebugBreakpoint; const AContext: INodeExecutionContext) of object;
 
   TDebuggerPauseEvent = procedure(ANode: TCustomNode; APin: TNodePin; const AContext: INodeExecutionContext) of object;
 

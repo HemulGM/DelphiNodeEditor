@@ -3,19 +3,20 @@
 interface
 
 uses
-  System.SysUtils, System.Classes, FMX.NodeEditor.Controller;
+  System.SysUtils, System.Classes, FMX.NodeEditor;
 
 type
-  TGraphParser = class abstract
+  TGraphParser = class abstract(TComponent)
   protected
-    FController: TNodeEditorController;
+    FEditor: TNodeEditor;
   public
     procedure LoadFromFile(const FileName: string); virtual;
     procedure SaveToFile(const FileName: string); virtual;
     procedure LoadFromString(const Value: string); virtual; abstract;
-    function SaveToString: string; virtual; abstract;
+    function SaveToString(const Formatted: Boolean = True): string; virtual; abstract;
+    procedure Clear; virtual; abstract;
 
-    constructor Create(AController: TNodeEditorController); reintroduce;
+    constructor Create(AEditor: TNodeEditor); reintroduce; virtual;
   end;
 
 implementation
@@ -25,10 +26,10 @@ uses
 
 { TGraphParser }
 
-constructor TGraphParser.Create(AController: TNodeEditorController);
+constructor TGraphParser.Create(AEditor: TNodeEditor);
 begin
-  inherited Create;
-  FController := AController;
+  inherited Create(AEditor);
+  FEditor := AEditor;
 end;
 
 procedure TGraphParser.LoadFromFile(const FileName: string);

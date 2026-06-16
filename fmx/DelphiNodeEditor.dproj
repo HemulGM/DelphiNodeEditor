@@ -385,9 +385,9 @@
         </DCCReference>
         <DCCReference Include="..\src\FMX.NodeEditor.Node.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Node.Defaults.pas"/>
-        <DCCReference Include="..\src\FMX.NodeEditor.Node.Command.pas"/>
-        <DCCReference Include="..\src\FMX.NodeEditor.Node.Graph.pas"/>
-        <DCCReference Include="..\src\FMX.NodeEditor.JSON.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Graph.Command.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Graph.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Parser.JSON.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Types.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Controller.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.DAG.pas"/>
@@ -419,12 +419,11 @@
         <DCCReference Include="..\src\FMX.NodeEditor.VisualLink.pas"/>
         <DCCReference Include="NodeEditor.LegendItem.pas">
             <Form>FrameLegendItem</Form>
-            <FormType>fmx</FormType>
             <DesignClass>TFrame</DesignClass>
         </DCCReference>
-        <DCCReference Include="..\src\FMX.NodeEditor.Runtime.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Executor.Runtime.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Debug.Intf.pas"/>
-        <DCCReference Include="..\src\FMX.NodeEditor.ControlFlowNodes.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Node.ControlFlow.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Debug.Controller.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Debugger.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Executor.pas"/>

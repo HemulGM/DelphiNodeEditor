@@ -1,11 +1,11 @@
-﻿unit FMX.NodeEditor.Node.Command;
+﻿unit FMX.NodeEditor.Graph.Command;
 
 interface
 
 uses
   System.Classes, System.Generics.Collections, System.Generics.Defaults,
   System.Types, System.SysUtils, System.JSON, FMX.NodeEditor,
-  FMX.NodeEditor.Node, FMX.NodeEditor.Types, FMX.NodeEditor.Node.Graph;
+  FMX.NodeEditor.Node, FMX.NodeEditor.Types, FMX.NodeEditor.Graph;
 
 type
   TJSONSnapshotCommand = class(TGraphCommand)
@@ -1207,7 +1207,7 @@ end;
 
 constructor TReorderSelectedCommand.Create(AGraph: TNodeGraph; ANodes: TList<TCustomNode>; ToFront: Boolean);
 begin
-  inherited Create(AGraph, if ToFront then Translate('Bring to front') else Translate('Send to back'));
+  inherited Create(AGraph, if ToFront then Translate('Bring to front')else Translate('Send to back'));
 
   SetLength(FNodeIds, FGraph.Nodes.Count);
   SetLength(FOldZ, FGraph.Nodes.Count);

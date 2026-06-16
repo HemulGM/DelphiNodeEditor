@@ -89,6 +89,8 @@ type
     class var
       VisualClass: TLinkVisualObjectClass;
       UseGradient: Boolean;
+      DefaultColor: TAlphaColor;
+      Thickness: Single;
   public
     Id: string;
     FromPin: TNodePin;
@@ -862,6 +864,8 @@ begin        //Exit;
   begin
     var R := ALayout.TextRect;
     R.Inflate(0, -3 * AZoom);
+    R.TopLeft := R.TopLeft.Truncate;
+    R.TopLeft.Offset(0.5, 0.5);
     //AZoom  ZoomDetailLimit - 100% (0.5)  ZoomDetailLimitExt - 0% (0)
     Canvas.FillRect(R, AOpacity * EnsureRange(0.5 * (AZoom - ZoomDetailLimitExt) / (ZoomDetailLimit - ZoomDetailLimitExt), 0.0, 0.5));
   end
@@ -1734,7 +1738,7 @@ begin
   begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := $FFC97200;
-    Canvas.Stroke.Thickness := 12 * Zoom;
+    Canvas.Stroke.Thickness := Thickness * 4 * Zoom;
     VisualClass.DrawLink(Canvas, W0, W1, W2, W3, LinkOpacity * 0.5);
   end;
 
@@ -1760,10 +1764,13 @@ begin
   else // Solid
   begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
-    Canvas.Stroke.Color := ToPin.OwnerNode.HeaderColor;
+    if DefaultColor = TAlphaColors.Null then
+      Canvas.Stroke.Color := ToPin.OwnerNode.HeaderColor
+    else
+      Canvas.Stroke.Color := DefaultColor;
   end;
   // Line width
-  Canvas.Stroke.Thickness := 3 * Zoom;
+  Canvas.Stroke.Thickness := Thickness * Zoom;
 
   // Draw bezier
   VisualClass.DrawLink(Canvas, W0, W1, W2, W3, LinkOpacity);
@@ -2023,6 +2030,9 @@ end;
 initialization
   TNodeLink.UseGradient := True;
   TNodeLink.VisualClass := TLinkVisualBezier;
+  TNodeLink.Thickness := 3;
+  TNodeLink.DefaultColor := TAlphaColors.Null;
+
   TCustomNode.DrawIcon := False;
 
 end.

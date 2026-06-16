@@ -24,14 +24,14 @@ unit FMX.NodeEditor.Executor.Thread;
 interface
 
 uses
-  Classes, SysUtils, FMX.NodeEditor.Types, FMX.NodeEditor.Node.Graph,
-  FMX.NodeEditor.Executor, FMX.NodeEditor.Runtime, FMX.NodeEditor.Node,
-  FMX.NodeEditor.Debugger, FMX.NodeEditor.Debug.Intf;
+  System.Classes, System.SysUtils, System.TimeSpan, FMX.NodeEditor.Types,
+  FMX.NodeEditor.Graph, FMX.NodeEditor.Executor, FMX.NodeEditor.Executor.Runtime,
+  FMX.NodeEditor.Node, FMX.NodeEditor.Debugger, FMX.NodeEditor.Debug.Intf;
 
 type
   TNodeExecutionEvent = procedure(Sender: TObject; ANode: TExecutableNode) of object;
 
-  TExecutionFinishedEvent = procedure(Sender: TObject; Success: boolean; const ErrorMessage: string) of object;
+  TExecutionFinishedEvent = procedure(Sender: TObject; Success: Boolean; const ErrorMessage: string) of object;
 
   TDebuggerPauseThreadEvent = procedure(Sender: TObject; ANode: TCustomNode; APin: TNodePin; Context: INodeExecutionContext) of object;
 
@@ -45,13 +45,11 @@ type
 
   TThreadErrorEvent = procedure(Sender: TObject; const ErrorInfo: TThreadErrorInfo) of object;
 
-  { TGraphExecutionThread }
-
   TGraphExecutionThread = class(TThread)
   private
     FExecutor: TGraphExecutor;
     FStartNode: TExecutableNode;
-    FSuccess: boolean;
+    FSuccess: Boolean;
     FErrorMessage: string;
     FErrorInfo: TThreadErrorInfo;
 
@@ -64,6 +62,8 @@ type
     FSyncNode: TExecutableNode;
     FPausedNode: TCustomNode;
     FPausedPin: TNodePin;
+
+    FLastTimeElapsed: TTimeSpan;
 
     procedure ClearErrorInfo;
     procedure FillErrorInfo(AErrorCode: integer; const AMessage: string; ANode: TExecutableNode);
@@ -85,7 +85,7 @@ type
 
     procedure Pause;
     procedure Stop;
-    procedure Continue;
+    procedure &Continue;
     procedure StepInto;
     procedure StepOver;
 
@@ -97,9 +97,15 @@ type
 
     property Executor: TGraphExecutor read FExecutor;
     property ErrorInfo: TThreadErrorInfo read FErrorInfo;
+    property LastTimeElapsed: TTimeSpan read FLastTimeElapsed;
   end;
 
 implementation
+
+uses
+  System.Diagnostics;
+
+{ TGraphExecutionThread }
 
 constructor TGraphExecutionThread.Create(AGraph: TNodeGraph; AStartNode: TExecutableNode; ADebugger: TGraphDebugger);
 begin
@@ -123,12 +129,10 @@ begin
 end;
 
 destructor TGraphExecutionThread.Destroy;
-var
-  Proc: TDebuggerPauseEvent;
 begin
   if (FExecutor <> nil) and (FExecutor.Debugger <> nil) then
   begin
-    Proc := HandleDebuggerPaused;
+    var Proc := HandleDebuggerPaused;
     if TMethod(Proc) = TMethod(FExecutor.Debugger.OnPaused) then
       FExecutor.Debugger.OnPaused := nil;
   end;
@@ -149,7 +153,7 @@ begin
 
   if (FExecutor <> nil) and (FExecutor.Debugger <> nil) then
     FExecutor.Debugger.Continue;
-  // очищает внутреннее состояние отладчика
+  // Clears the internal state of the debugger
 end;
 
 procedure TGraphExecutionThread.Continue;
@@ -187,12 +191,8 @@ begin
 
   if ANode <> nil then
   begin
+    FErrorInfo.NodeTitle := ANode.Title;
     FErrorInfo.NodeType := ANode.ClassName;
-    try
-      FErrorInfo.NodeTitle := ANode.Title;
-    except
-      FErrorInfo.NodeTitle := '';
-    end;
   end
   else
   begin
@@ -245,77 +245,82 @@ begin
 end;
 
 procedure TGraphExecutionThread.Execute;
-var
-  FailedNode: TExecutableNode;
 begin
   FSuccess := True;
   FErrorMessage := '';
   ClearErrorInfo;
-  FailedNode := nil;
-
+  var FailedNode: TExecutableNode := nil;
+  var SW := TStopwatch.StartNew;
   try
-    Synchronize(DoStarted);
+    try
+      Synchronize(DoStarted);
 
-    if FStartNode = nil then
-    begin
-      FSuccess := False;
-      FErrorMessage := 'Start node is nil';
-      FillErrorInfo(integer(TGraphExecutionError.InvalidStartNode), FErrorMessage, nil);
-      Synchronize(DoError);
-      Exit;
-    end;
-
-    FExecutor.Context.OnNodeExecuted := HandleContextNodeExecuted;
-
-    FSuccess := FExecutor.ExecuteFromNode(FStartNode);
-    if not FSuccess then
-    begin
-      FErrorMessage := FExecutor.LastErrorMessage;
-      if FErrorMessage = '' then
-        FErrorMessage := 'Graph execution failed';
-
-      if FExecutor.Context <> nil then
+      if FStartNode = nil then
       begin
-        if FExecutor.Context.LastExecutedNode is TExecutableNode then
+        FSuccess := False;
+        FErrorMessage := 'Start node is nil';
+        FillErrorInfo(integer(TGraphExecutionError.InvalidStartNode), FErrorMessage, nil);
+        SW.Stop;
+        Synchronize(DoError);
+        Exit;
+      end;
+
+      FExecutor.Context.OnNodeExecuted := HandleContextNodeExecuted;
+
+      FSuccess := FExecutor.ExecuteFromNode(FStartNode);
+      if not FSuccess then
+      begin
+        FErrorMessage := FExecutor.LastErrorMessage;
+        if FErrorMessage = '' then
+          FErrorMessage := 'Graph execution failed';
+
+        if FExecutor.Context <> nil then
+        begin
+          if FExecutor.Context.LastExecutedNode is TExecutableNode then
+            FailedNode := TExecutableNode(FExecutor.Context.LastExecutedNode)
+          else
+            FailedNode := nil;
+        end;
+
+        FillErrorInfo(integer(FExecutor.LastError), FErrorMessage, FailedNode);
+        SW.Stop;
+        Synchronize(DoError);
+      end;
+    except
+      on E: ENodeDebuggerPause do
+      begin
+        FSuccess := True;
+        FErrorMessage := '';
+        ClearErrorInfo;
+        // Not an error. The stream ended due to a pause.
+      end;
+      on E: ENodeExecutionStopped do
+      begin
+        FSuccess := False;
+        FErrorMessage := 'Execution stopped';
+        ClearErrorInfo;
+        // User stop
+      end;
+      on E: Exception do
+      begin
+        FSuccess := False;
+        FErrorMessage := E.Message;
+
+        if (FExecutor <> nil) and (FExecutor.Context <> nil) and
+          (FExecutor.Context.LastExecutedNode is TExecutableNode) then
           FailedNode := TExecutableNode(FExecutor.Context.LastExecutedNode)
         else
           FailedNode := nil;
+
+        FillErrorInfo(-1, FErrorMessage, FailedNode);
+        SW.Stop;
+        Synchronize(DoError);
       end;
-
-      FillErrorInfo(integer(FExecutor.LastError), FErrorMessage, FailedNode);
-      Synchronize(DoError);
     end;
-  except
-    on E: ENodeDebuggerPause do
-    begin
-      FSuccess := True;
-      FErrorMessage := '';
-      ClearErrorInfo;
-      // Не ошибка. Поток завершился из-за паузы.
-    end;
-    on E: ENodeExecutionStopped do
-    begin
-      FSuccess := False;
-      FErrorMessage := 'Execution stopped';
-      ClearErrorInfo;
-      // Остановка пользователем
-    end;
-    on E: Exception do
-    begin
-      FSuccess := False;
-      FErrorMessage := E.Message;
-
-      if (FExecutor <> nil) and (FExecutor.Context <> nil) and
-        (FExecutor.Context.LastExecutedNode is TExecutableNode) then
-        FailedNode := TExecutableNode(FExecutor.Context.LastExecutedNode)
-      else
-        FailedNode := nil;
-
-      FillErrorInfo(-1, FErrorMessage, FailedNode);
-      Synchronize(DoError);
-    end;
+  finally
+    SW.Stop;
+    FLastTimeElapsed := SW.Elapsed;
   end;
-
   Synchronize(DoFinished);
 end;
 

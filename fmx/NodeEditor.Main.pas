@@ -9,12 +9,16 @@ uses
   FMX.Grid.Style, FMX.Layouts, FMX.Menus, FMX.EditBox, FMX.SpinBox,
   FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
   System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
-  FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.JSON, FMX.NodeEditor.Types,
+  FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.Parser.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
   FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors,
-  System.ImageList, FMX.ImgList, NodeEditor.LegendItem, FMX.NodeEditor.Runtime;
+  System.ImageList, FMX.ImgList, NodeEditor.LegendItem,
+  FMX.NodeEditor.Executor.Runtime;
 
 type
+  {$SCOPEDENUMS ON}
+  TLogKind = (None, Info, Warn, Error, Succ);
+
   { TMathExprNode — кастомная нода с exec-пинами и values }
   TMathExprNode = class(TCustomNode)
   public
@@ -389,11 +393,10 @@ type
     TabItemToolsLibrary: TTabItem;
     MenuItemAlignment: TMenuItem;
     MenuItemLegend: TMenuItem;
-    MemoLog: TMemo;
     MenuItem4: TMenuItem;
     MenuItemDemoSimple: TMenuItem;
     MenuItemDemoExec: TMenuItem;
-    Layout1: TLayout;
+    LayoutDebug: TLayout;
     ButtonRun: TButton;
     PathLabel22: TPathLabel;
     ButtonDebugToggleBreak: TButton;
@@ -414,6 +417,26 @@ type
     Panel21: TPanel;
     Panel22: TPanel;
     Panel23: TPanel;
+    MenuItemRun: TMenuItem;
+    MenuItemRunRun: TMenuItem;
+    MenuItem18: TMenuItem;
+    MenuItemRunPause: TMenuItem;
+    MenuItemRunReset: TMenuItem;
+    MenuItemRunStepOver: TMenuItem;
+    MenuItemRunTraceInto: TMenuItem;
+    MenuItem21: TMenuItem;
+    MenuItemRunContinue: TMenuItem;
+    MenuItem16: TMenuItem;
+    MenuItemRunBreakpoints: TMenuItem;
+    MenuItemRunToggleBreakpoint: TMenuItem;
+    MenuItem22: TMenuItem;
+    MenuItemRunClearBreakpoints: TMenuItem;
+    MenuItem19: TMenuItem;
+    MenuItemGraphClear: TMenuItem;
+    ExpanderMessages: TExpander;
+    MemoLog: TMemo;
+    LayoutOverlay: TLayout;
+    ListBoxMessages: TListBox;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -491,6 +514,7 @@ type
     procedure ButtonDebugStopClick(Sender: TObject);
     procedure ButtonDebugPauseClick(Sender: TObject);
     procedure ButtonDebugClearBreaksClick(Sender: TObject);
+    procedure MenuItemGraphClearClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -513,7 +537,6 @@ type
     procedure RefreshFromSelection;
     procedure ClearAllSections;
     procedure OnUpdatedStatus(Sender: TObject);
-    procedure OnJsonNodeEditorChanged(Sender: TObject);
     procedure FOnEditorPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
     procedure UpdateNodeRegistry;
     procedure FOnItemOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
@@ -528,7 +551,8 @@ type
     OverAccentColor: TAlphaColor;
     procedure MobileMode;
     procedure DoOnSettingChange; override;
-    procedure Log(const Text: string);
+    procedure Log(const Text: string; Kind: TLogKind);
+    procedure LogClear;
   public
     { Public declarations }
   end;
@@ -539,9 +563,8 @@ var
 implementation
 
 uses
-  System.Math, System.JSON, FMX.NodeEditor.Node.Command, System.Messaging,
-  WinUI3.Dialogs, FMX.NodeEditor.Node.Engineering,
-  FMX.NodeEditor.ControlFlowNodes, WinUI3.Style;
+  System.Math, System.JSON, System.Messaging, WinUI3.Dialogs,
+  FMX.NodeEditor.Node.Engineering, FMX.NodeEditor.Node.ControlFlow, WinUI3.Style;
 
 {$R *.fmx}
 
@@ -575,6 +598,7 @@ begin
   StringGridNodeValues.AniCalculations.Animation := True;
   RadioButtonToolsHistory.IsChecked := False;
   RadioButtonToolsHistory.IsChecked := True;
+  LogClear;
   //
   ClearAllSections;
 
@@ -714,15 +738,13 @@ begin
     begin
       var Idx := NodeValueToIntDef(GetVariableValue('last_prime_check_index'), -1);
       var B := GetVariableBool('last_prime_check_value', False);
-      Result := Format('%s [index=%d, isPrime=%s]', [ANode.Title, Idx,
-          BoolToStr(B, True)]);
+      Result := Format('%s [index=%d, isPrime=%s]', [ANode.Title, Idx, BoolToStr(B, True)]);
     end
     else if ANode is TSetPrimeFlagNode then
     begin
       var Idx := NodeValueToIntDef(GetVariableValue('last_set_prime_index'), -1);
       var B := GetVariableBool('last_set_prime_value', False);
-      Result := Format('%s [index=%d, value=%s]', [ANode.Title, Idx,
-          BoolToStr(B, True)]);
+      Result := Format('%s [index=%d, value=%s]', [ANode.Title, Idx, BoolToStr(B, True)]);
     end
     else if ANode is TCollectPrimeNode then
     begin
@@ -788,7 +810,7 @@ begin
   if Assigned(FEditor) then
   begin
     FEditor.ClearAllBreakpoints;
-    Log('All breakpoints cleared');
+    Log('All breakpoints cleared', TLogKind.Info);
   end;
 end;
 
@@ -803,7 +825,7 @@ begin
   if Assigned(FEditor) then
   begin
     FEditor.PauseExecution;
-    Log('Execution paused');
+    Log('Execution paused', TLogKind.Info);
   end;
 end;
 
@@ -824,7 +846,7 @@ begin
   if Assigned(FEditor) then
   begin
     FEditor.StopExecution;
-    Log('Execution stopped');
+    Log('Execution stopped', TLogKind.Warn);
     FEditor.DebugViewMode := False;
     FEditor.CurrentDebugNode := nil;
   end;
@@ -836,7 +858,7 @@ begin
   begin
     var Node := FEditor.GetSelectedNode(0);
     FEditor.ToggleBreakpoint(Node);
-    Log('Breakpoint toggled on node: ' + Node.Title);
+    Log('Breakpoint toggled on node: ' + Node.Title, TLogKind.Info);
   end;
 end;
 
@@ -954,13 +976,14 @@ end;
 
 procedure TFormMain.ButtonRunClick(Sender: TObject);
 begin
+  LogClear;
   if FEditor.ExecuteGraph then
   begin
-    Log('Graph execution started...');
+    Log('Graph execution started...', TLogKind.Info);
     FEditor.DebugViewMode := True;
   end
   else
-    Log('Failed to start: ' + FEditor.GetLastRuntimeError);
+    Log('Failed to start: ' + FEditor.GetLastRuntimeError, TLogKind.Error);
 end;
 
 procedure TFormMain.ButtonSettingsClick(Sender: TObject);
@@ -1063,18 +1086,11 @@ begin
   FEditor.OnExecutionNodeChanged := OnEditorExecutionNodeChanged;
   FEditor.OnExecutionFinished := OnEditorExecutionFinished;
 
-  FEditor.Controller.OnChanged := OnHistoryChanged;
+  FEditor.OnGraphChanged := OnHistoryChanged;
 
-  FJsonNodeEditor := TJsonNodeEditor.Create(Self);
-  FJsonNodeEditor.NodeEditor := FEditor;
-  FJsonNodeEditor.OnChanged := OnJsonNodeEditorChanged;
+  FJsonNodeEditor := TJsonNodeEditor.Create(FEditor);
 
   CheckBoxSnapToGridChange(nil);
-end;
-
-procedure TFormMain.OnJsonNodeEditorChanged(Sender: TObject);
-begin
-  RefreshFromSelection;
 end;
 
 procedure TFormMain.RegisterCustomNodes;
@@ -1294,6 +1310,7 @@ var
   CollectPrime: TCollectPrimeNode;
   Comment: TCommentNode;
 begin
+  LogClear;
   FEditor.BeginUpdate;
   try
     FEditor.Clear;
@@ -1388,12 +1405,12 @@ begin
 
     Comment := TCommentNode.Create('Runtime-compatible sieve demo', 20, 10);
     Comment.CommentText :=
-      'Полный exec-flow:' + sLineBreak +
-      '1) очистка строки primes' + sLineBreak +
-      '2) инициализация prime_i=True для i=2..N' + sLineBreak +
-      '3) внешний цикл по p' + sLineBreak +
-      '4) если prime_p=True, то mark multiples' + sLineBreak +
-      '5) сбор результата в переменную primes';
+      'Full exec-flow:' + sLineBreak +
+      '1) Clearing the primes row' + sLineBreak +
+      '2) Initialize prime_i=True for i=2..N' + sLineBreak +
+      '3) External loop by p' + sLineBreak +
+      '4) If prime_p=True, then mark multiples' + sLineBreak +
+      '5) Collecting the result in the primes variable';
     Comment.Width := 520;
     Comment.Height := 170;
     FEditor.AddNode(Comment);
@@ -1452,8 +1469,8 @@ begin
     FEditor.EndUpdate;
   end;
 
-  FEditor.FitSome;
-  Log('Полный exec-граф решета загружен.');
+  FEditor.Fit;
+  Log('The complete exec graph of the sieve is loaded.', TLogKind.Succ);
 end;
 
 procedure TFormMain.LayoutMobileMenuResize(Sender: TObject);
@@ -1469,15 +1486,54 @@ begin
   Operation := TDragOperation.None;
 end;
 
-procedure TFormMain.Log(const Text: string);
+procedure TFormMain.Log(const Text: string; Kind: TLogKind);
 begin
   var TimeStamp := FormatDateTime('hh:nn:ss', Now);
-  LabelStat2.Text := Text;                    // старый вывод в статусбар
+  LabelStat1.Text := Text;                    // старый вывод в статусбар
 
-  MemoLog.Lines.Add(Format('[%s] %s', [TimeStamp, Text]));
-    // Автоскролл вниз
-  MemoLog.SelStart := Length(MemoLog.Text);
-  MemoLog.SelLength := 0;
+  var Item := TListBoxItem.Create(ListBoxMessages);
+  Item.StyleLookup := 'listboxitemrightdetail';
+  Item.Text := Text;
+  Item.ItemData.Detail := TimeStamp;
+  case Kind of
+    TLogKind.None:
+      begin
+        //Item.StyledSettings := Item.StyledSettings - [TStyledSetting.FontColor];
+        //Item.FontColor := TAlphaColors.White;
+      end;
+    TLogKind.Info:
+      begin
+        Item.StyledSettings := Item.StyledSettings - [TStyledSetting.FontColor];
+        Item.FontColor := $FF008DEB;
+      end;
+    TLogKind.Warn:
+      begin
+        Item.StyledSettings := Item.StyledSettings - [TStyledSetting.FontColor];
+        Item.FontColor := $FFDE7E00;
+      end;
+    TLogKind.Error:
+      begin
+        Item.StyledSettings := Item.StyledSettings - [TStyledSetting.FontColor];
+        Item.FontColor := $FFFF4117;
+      end;
+    TLogKind.Succ:
+      begin
+        Item.StyledSettings := Item.StyledSettings - [TStyledSetting.FontColor];
+        Item.FontColor := $FF00B20F;
+      end;
+  end;
+  ListBoxMessages.AddObject(Item);
+  ListBoxMessages.ItemIndex := ListBoxMessages.Count - 1;
+
+  //MemoLog.Lines.Add(Format('[%s] %s', [TimeStamp, Text]));
+  // Автоскролл вниз
+  //MemoLog.ScrollBy(0, MemoLog.ViewportSize.Height, True);
+end;
+
+procedure TFormMain.LogClear;
+begin
+  MemoLog.Lines.Clear;
+  ListBoxMessages.Clear;
 end;
 
 procedure TFormMain.MenuItemAlignmentClick(Sender: TObject);
@@ -1589,12 +1645,17 @@ begin
   end;
 end;
 
+procedure TFormMain.MenuItemGraphClearClick(Sender: TObject);
+begin
+  FEditor.Clear;
+end;
+
 procedure TFormMain.MenuItemGraphValidateClick(Sender: TObject);
 begin
   var Msgs := TStringList.Create;
   try
     if FEditor.ValidateGraphToStrings(Msgs) then
-      ShowMessage('✔ Graph is valid.' + #13#10 + #13#10 + Msgs.Text)
+      ShowMessage('Graph is valid.' + #13#10#13#10 + Msgs.Text)
     else
       ShowMessage(Msgs.Text);
   finally
@@ -1863,19 +1924,20 @@ begin
       S := FEditor.ExecutionContext.GetVariableStr('primes', '');
 
     if S <> '' then
-      Log('Execution finished. Collected: ' + S)
+      Log('Execution finished. Collected: ' + S, TLogKind.None)
     else
-      Log('Execution finished successfully');
+      Log('Execution finished successfully', TLogKind.Succ);
   end
   else
-    Log('Execution failed: ' + ErrorMessage);
+    Log('Failed: ' + ErrorMessage, TLogKind.Error);
+  Log('Elapsed time: ' + FEditor.ExecutionLastTimeElapsed.ToString, TLogKind.None);
 end;
 
 procedure TFormMain.OnEditorExecutionNodeChanged(Sender: TObject; ANode: TExecutableNode);
 begin
   UpdateStatus;
   if ANode <> nil then
-    Log('Executing: ' + GetNodeRuntimeInfo(ANode));
+    Log('Info: ' + GetNodeRuntimeInfo(ANode), TLogKind.None);
 end;
 
 procedure TFormMain.OnEditorExecutionStateChanged(Sender: TObject);
@@ -1959,12 +2021,16 @@ begin       //FF2C4361 - FF0B1E39
     // Set accent color for stylebook
     ChangeStyleBookColor(StyleBookWinUI3, OverAccentColor);
     StyleBook := StyleBookWinUI3;
+    FEditor.GridColor := $22E0E0E0;
+    FEditor.HighlightColor := $FFFFD740;
   end
   else
   begin
     // Set accent color for stylebook
     ChangeStyleBookColor(StyleBookWinUI3Light, OverAccentColor);
     StyleBook := StyleBookWinUI3Light;
+    FEditor.GridColor := $222C2C2C;
+    FEditor.HighlightColor := $FF857021;
   end;
 
   inherited;

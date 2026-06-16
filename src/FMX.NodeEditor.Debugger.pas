@@ -25,14 +25,10 @@ interface
 
 uses
   System.Generics.Collections, System.Classes, System.SysUtils, System.Rtti,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Node.Graph,
-  FMX.NodeEditor.Runtime, FMX.NodeEditor.Debug.Intf;
-
-{$SCOPEDENUMS ON}
+  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph,
+  FMX.NodeEditor.Executor.Runtime, FMX.NodeEditor.Debug.Intf;
 
 type
-  TStepMode = (None, StepOver, StepInto);
-
   TExecutionStackFrame = class
   public
     Node: TCustomNode;
@@ -84,7 +80,7 @@ type
     FTrace: TObjectList<TExecutionTraceEntry>;
 
     FIsPaused: Boolean;
-    FStepMode: TStepMode;
+    FStepMode: TDebugStepMode;
     FPauseRequested: Boolean;
     FLastSteppedNode: TCustomNode;
 
@@ -137,7 +133,7 @@ type
     function CheckPause(ANode: TCustomNode; APin: TNodePin = nil; const AContext: INodeExecutionContext = nil): Boolean;
 
     property IsPaused: Boolean read FIsPaused;
-    property StepMode: TStepMode read FStepMode;
+    property StepMode: TDebugStepMode read FStepMode;
     property PauseRequested: Boolean read FPauseRequested;
 
     property OnBreakpointHit: TDebuggerBreakpointEvent read FOnBreakpointHit write FOnBreakpointHit;
@@ -240,10 +236,7 @@ begin
     NodeType := '';
   end;
 
-  if APin <> nil then
-    PinName := APin.Name
-  else
-    PinName := '';
+  PinName := if APin <> nil then APin.Name else '';
 
   Timestamp := Now;
 end;
@@ -261,7 +254,7 @@ begin
 
   FIsPaused := False;
   FPauseRequested := False;
-  FStepMode := TStepMode.None;
+  FStepMode := TDebugStepMode.None;
   FLastSteppedNode := nil;
 
   FTraceEnabled := True;
@@ -278,43 +271,37 @@ begin
 end;
 
 procedure TGraphDebugger.ResetSession;
-var
-  BP: TBreakpoint;
 begin
   FIsPaused := False;
   FPauseRequested := False;
-  FStepMode := TStepMode.None;
+  FStepMode := TDebugStepMode.None;
   FLastSteppedNode := nil;
   FExecutionStack.Clear;
   FTrace.Clear;
 
-  for BP in FBreakpoints do
+  for var BP in FBreakpoints do
     BP.HitCount := 0;
 end;
 
 function TGraphDebugger.FindBreakpoint(ANode: TCustomNode; APin: TNodePin): TBreakpoint;
-var
-  BP: TBreakpoint;
 begin
   Result := nil;
-  for BP in FBreakpoints do
+  for var BP in FBreakpoints do
     if (BP.Node = ANode) and (BP.Pin = APin) then
       Exit(BP);
 
   if APin <> nil then
-    for BP in FBreakpoints do
+    for var BP in FBreakpoints do
       if (BP.Node = ANode) and (BP.Pin = nil) then
         Exit(BP);
 end;
 
 procedure TGraphDebugger.AddBreakpoint(ANode: TCustomNode; APin: TNodePin; const ACondition: string);
-var
-  BP: TBreakpoint;
 begin
   if ANode = nil then
     Exit;
 
-  BP := FindBreakpoint(ANode, APin);
+  var BP := FindBreakpoint(ANode, APin);
   if (BP <> nil) and (BP.Pin = APin) then
   begin
     BP.Condition := ACondition;
@@ -327,24 +314,18 @@ begin
 end;
 
 procedure TGraphDebugger.RemoveBreakpoint(ANode: TCustomNode; APin: TNodePin);
-var
-  i: Integer;
-  BP: TBreakpoint;
 begin
-  for i := FBreakpoints.Count - 1 downto 0 do
+  for var i := FBreakpoints.Count - 1 downto 0 do
   begin
-    BP := FBreakpoints[i];
+    var BP := FBreakpoints[i];
     if (BP.Node = ANode) and (BP.Pin = APin) then
       FBreakpoints.Delete(i);
   end;
 end;
 
 function TGraphDebugger.HasBreakpoint(ANode: TCustomNode; APin: TNodePin): Boolean;
-var
-  BP: TBreakpoint;
 begin
-  BP := FindBreakpoint(ANode, APin);
-  Result := BP <> nil;
+  Result := FindBreakpoint(ANode, APin) <> nil;
 end;
 
 procedure TGraphDebugger.ClearAllBreakpoints;
@@ -354,16 +335,14 @@ end;
 
 procedure TGraphDebugger.AddWatch(const Expression: string);
 begin
-  if Trim(Expression) = '' then
+  if Expression.Trim.IsEmpty then
     Exit;
   FWatches.Add(TWatchItem.Create(Expression));
 end;
 
 procedure TGraphDebugger.RemoveWatch(const Expression: string);
-var
-  i: Integer;
 begin
-  for i := FWatches.Count - 1 downto 0 do
+  for var i := FWatches.Count - 1 downto 0 do
     if SameText(FWatches[i].Expression, Expression) then
       FWatches.Delete(i);
 end;
@@ -380,20 +359,12 @@ begin
 end;
 
 procedure TGraphDebugger.AddTraceEntry(const AEventKind: string; ANode: TCustomNode; APin: TNodePin; const AContext: INodeExecutionContext);
-var
-  Entry: TExecutionTraceEntry;
-  StepNo: Integer;
 begin
   if not FTraceEnabled then
     Exit;
 
-  if AContext <> nil then
-    StepNo := AContext.StepCounter
-  else
-    StepNo := FTrace.Count + 1;
-
-  Entry := TExecutionTraceEntry.Create(StepNo, AEventKind, ANode, APin);
-  FTrace.Add(Entry);
+  var StepNo := if AContext <> nil then AContext.StepCounter else FTrace.Count + 1;
+  FTrace.Add(TExecutionTraceEntry.Create(StepNo, AEventKind, ANode, APin));
   TrimTrace;
 
   if AContext <> nil then
@@ -408,13 +379,11 @@ begin
 end;
 
 procedure TGraphDebugger.PopNode(ANode: TCustomNode);
-var
-  Last: TExecutionStackFrame;
 begin
   if FExecutionStack.Count = 0 then
     Exit;
 
-  Last := FExecutionStack[FExecutionStack.Count - 1];
+  var Last := FExecutionStack[FExecutionStack.Count - 1];
   if (ANode = nil) or (Last.Node = ANode) then
     FExecutionStack.Delete(FExecutionStack.Count - 1);
 end;
@@ -433,7 +402,7 @@ procedure TGraphDebugger.Continue;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := TStepMode.None;
+  FStepMode := TDebugStepMode.None;
   FLastSteppedNode := nil;
 end;
 
@@ -441,7 +410,7 @@ procedure TGraphDebugger.StepOver;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := TStepMode.StepOver;
+  FStepMode := TDebugStepMode.StepOver;
   FLastSteppedNode := nil;
 end;
 
@@ -449,17 +418,11 @@ procedure TGraphDebugger.StepInto;
 begin
   FPauseRequested := False;
   FIsPaused := False;
-  FStepMode := TStepMode.StepInto;
+  FStepMode := TDebugStepMode.StepInto;
   FLastSteppedNode := nil;
 end;
 
 function TGraphDebugger.EvaluateCondition(BP: TBreakpoint; AContext: INodeExecutionContext): Boolean;
-var
-  Cond, VarName, Op, ValueStr: string;
-  ActualValue: TValue;
-  ActualFloat, ExpectedFloat: Double;
-  ActualStr, ExpectedStr: string;
-  NumOk: Boolean;
 begin
   Result := True;
   if (BP = nil) or BP.Condition.Trim.IsEmpty then
@@ -468,7 +431,7 @@ begin
   if AContext = nil then
     Exit(False);
 
-  Cond := BP.Condition.Trim;
+  var Cond := BP.Condition.Trim;
 
   if Cond.StartsWith('HitCount') then
   begin
@@ -487,6 +450,7 @@ begin
     Exit(True);
   end;
 
+  var Op: string;
   if not TryExtractOperator(Cond, Op) then
     Exit(True);
 
@@ -494,15 +458,15 @@ begin
   if P <= 0 then
     Exit(True);
 
-  VarName := Trim(Copy(Cond, 1, P - 1));
-  ValueStr := Trim(Copy(Cond, P + Length(Op), MaxInt));
+  var VarName := Trim(Copy(Cond, 1, P - 1));
+  var ValueStr := Trim(Copy(Cond, P + Length(Op), MaxInt));
 
-  ActualValue := AContext.GetVariableValue(VarName);
+  var ActualValue := AContext.GetVariableValue(VarName);
+  var ExpectedFloat: Double;
 
-  NumOk := TryStrToFloat(ValueStr, ExpectedFloat, FormatSettings);
-  if NumOk then
+  if TryStrToFloat(ValueStr, ExpectedFloat, FormatSettings) then
   begin
-    ActualFloat := NodeValueToFloatDef(ActualValue, 0.0);
+    var ActualFloat := NodeValueToFloatDef(ActualValue, 0.0);
     case IndexStr(Op, CondList) of
       0:
         Result := Abs(ActualFloat - ExpectedFloat) <= 1e-12;
@@ -522,8 +486,8 @@ begin
     Exit;
   end;
 
-  ActualStr := NodeValueToStringDef(ActualValue, '');
-  ExpectedStr := ValueStr;
+  var ActualStr := NodeValueToStringDef(ActualValue, '');
+  var ExpectedStr := ValueStr;
 
   case IndexStr(Op, CondList) of
     0:
@@ -585,16 +549,16 @@ begin
     end;
   end;
 
-  if (not Result) and (FStepMode <> TStepMode.None) then
+  if (not Result) and (FStepMode <> TDebugStepMode.None) then
   begin
     case FStepMode of
-      TStepMode.StepInto:
+      TDebugStepMode.StepInto:
         begin
           Result := True;
           FIsPaused := True;
-          FStepMode := TStepMode.None;
+          FStepMode := TDebugStepMode.None;
         end;
-      TStepMode.StepOver:
+      TDebugStepMode.StepOver:
         begin
           if FLastSteppedNode = nil then
             FLastSteppedNode := ANode
@@ -602,7 +566,7 @@ begin
           begin
             Result := True;
             FIsPaused := True;
-            FStepMode := TStepMode.None;
+            FStepMode := TDebugStepMode.None;
             FLastSteppedNode := nil;
           end;
         end;
