@@ -23,7 +23,7 @@ type
 
   TNodeEditorDrawGridEvent = procedure(Sender: TObject; Canvas: TCanvas; const VisibleWorldRect: TRectF; Zoom, OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
 
-  TNodeEditorDrawSnapGuidesEvent = procedure(Sender: TObject; Canvas: TCanvas; GuideSnapXActive, GuideSnapYActive: Boolean; GuideSnapX, GuideSnapY: single; Zoom, OffsetX, OffsetY: Double; var AHandled: boolean) of object;
+  TNodeEditorDrawSnapGuidesEvent = procedure(Sender: TObject; Canvas: TCanvas; GuideSnapXActive, GuideSnapYActive: Boolean; GuideSnapX, GuideSnapY: single; Zoom, OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
 
   { Interaction Events }
 
@@ -45,7 +45,7 @@ type
 
   TEditorExecutionNodeEvent = procedure(Sender: TObject; ANode: TExecutableNode) of object;
 
-  TEditorExecutionFinishedEvent = procedure(Sender: TObject; Success: boolean; const ErrorMessage: string) of object;
+  TEditorExecutionFinishedEvent = procedure(Sender: TObject; Success: Boolean; const ErrorMessage: string) of object;
 
   TNodeEditor = class(TControl)
     const
@@ -237,6 +237,7 @@ type
   private
     FLinkVisualClass: TLinkVisualObjectClass;
     FOnGraphChanged: TNotifyEvent;
+    FLinksOverNodes: Boolean;
 
     // Internal Logic
     function GetPrimarySelectedNode: TCustomNode;
@@ -346,6 +347,11 @@ type
     procedure SetLinkColor(const Value: TAlphaColor);
     function GetLinkThickness: Single;
     procedure SetLinkThickness(const Value: Single);
+    procedure InternalShowPopup(Position: TPointF);
+    procedure OnContextBringToFront(Sender: TObject);
+    procedure OnContextSendToBack(Sender: TObject);
+    procedure OnContextFrameSelected(Sender: TObject);
+    procedure SetLinksOverNodes(const Value: Boolean);
   protected
     function GetSelectedPin(Index: integer): TNodePin;
 
@@ -451,6 +457,7 @@ type
     property SnapToGrid: Boolean read FSnapToGrid write FSnapToGrid default False;
     property SnapToNodes: Boolean read FSnapToNodes write FSnapToNodes default True;
     property NodeSnapDistance: Single read FNodeSnapDistance write FNodeSnapDistance;
+    property LinksOverNodes: Boolean read FLinksOverNodes write SetLinksOverNodes;
 
     // New Axes Properties
     property ShowAxes: Boolean read FShowAxes write FShowAxes default False;
@@ -603,6 +610,7 @@ begin
   FGuideLineColor := $FFFFD740;
   FGuideLineStyle := TStrokeDash.Dash;
   FGuideLineWidth := 1;
+  FLinksOverNodes := False;
 
   // Axes defaults
   FShowAxes := False;
@@ -626,7 +634,6 @@ begin
   FRightButtonDown := False;
 
   FPopupMenu := TPopupMenu.Create(Self);
-  BuildContextMenu;
 
   // execution
   FDebugger := TGraphDebugger.Create(FGraph);
@@ -2347,8 +2354,12 @@ begin
 
   // Nodes and links
   DrawNodes(True);
-  DrawLinks;
+  if not FLinksOverNodes then
+    DrawLinks;
   DrawNodes(False);
+  if FLinksOverNodes then
+    DrawLinks;
+
 
   // Snap guides
   if DraggingNode and FShowSnapGuides then
@@ -2403,6 +2414,7 @@ begin
   Item.StyleLookup := 'menuitemstyle_undo';
   Item.ShortCut := TextToShortCut('Ctrl+Z');
   Item.OnClick := OnContextUndo;
+  Item.Enabled := FController.CanUndo;
   FPopupMenu.AddObject(Item);
 
   Item := TMenuItem.Create(FPopupMenu);
@@ -2410,46 +2422,57 @@ begin
   Item.StyleLookup := 'menuitemstyle_redo';
   Item.ShortCut := TextToShortCut('Ctrl+Shift+Z');
   Item.OnClick := OnContextRedo;
+  Item.Enabled := FController.CanRedo;
   FPopupMenu.AddObject(Item);
 
   Sep := TMenuItem.Create(FPopupMenu);
   Sep.Text := '-';
   FPopupMenu.AddObject(Sep);
 
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Cut');
-  Item.StyleLookup := 'menuitemstyle_cut';
-  Item.ShortCut := TextToShortCut('Ctrl+X');
-  Item.OnClick := OnContextCut;
-  FPopupMenu.AddObject(Item);
+  if FController.Selection.NodeCount > 0 then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Cut');
+    Item.StyleLookup := 'menuitemstyle_cut';
+    Item.ShortCut := TextToShortCut('Ctrl+X');
+    Item.OnClick := OnContextCut;
+    FPopupMenu.AddObject(Item);
 
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Copy');
-  Item.StyleLookup := 'menuitemstyle_copy';
-  Item.ShortCut := TextToShortCut('Ctrl+C');
-  Item.OnClick := OnContextCopy;
-  FPopupMenu.AddObject(Item);
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Copy');
+    Item.StyleLookup := 'menuitemstyle_copy';
+    Item.ShortCut := TextToShortCut('Ctrl+C');
+    Item.OnClick := OnContextCopy;
+    FPopupMenu.AddObject(Item);
+  end;
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Text := Translate('Paste');
   Item.StyleLookup := 'menuitemstyle_paste';
   Item.ShortCut := TextToShortCut('Ctrl+V');
   Item.OnClick := OnContextPaste;
+  Item.Enabled := FController.CanPaste;
   FPopupMenu.AddObject(Item);
 
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Duplicate');
-  Item.StyleLookup := 'menuitemstyle_copy';
-  Item.ShortCut := TextToShortCut('Ctrl+D');
-  Item.OnClick := OnContextDuplicate;
-  FPopupMenu.AddObject(Item);
+  if FController.Selection.NodeCount > 0 then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Duplicate');
+    Item.StyleLookup := 'menuitemstyle_copy';
+    Item.ShortCut := TextToShortCut('Ctrl+D');
+    Item.OnClick := OnContextDuplicate;
+    FPopupMenu.AddObject(Item);
+  end;
 
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Delete');
-  Item.StyleLookup := 'menuitemstyle_delete';
-  Item.ShortCut := TextToShortCut('Del');
-  Item.OnClick := OnContextDelete;
-  FPopupMenu.AddObject(Item);
+  if (FController.Selection.NodeCount > 0) or (FController.Selection.LinkCount > 0) then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Delete');
+    Item.StyleLookup := 'menuitemstyle_delete';
+    Item.ShortCut := TextToShortCut('Del');
+    Item.OnClick := OnContextDelete;
+    FPopupMenu.AddObject(Item);
+  end;
 
   Sep := TMenuItem.Create(FPopupMenu);
   Sep.Text := '-';
@@ -2466,20 +2489,63 @@ begin
   Sep.Text := '-';
   FPopupMenu.AddObject(Sep);
 
-  Item := TMenuItem.Create(FPopupMenu);
-  Item.Text := Translate('Insert Reroute On Selected Link');
-  Item.OnClick := OnContextInsertReroute;
-  FPopupMenu.AddObject(Item);
+  if FController.Selection.NodeCount > 0 then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Bring to Front');
+    Item.StyleLookup := 'menuitemstyle_bringtofront';
+    Item.ShortCut := TextToShortCut('PgUp');
+    Item.OnClick := OnContextBringToFront;
+    FPopupMenu.AddObject(Item);
+
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Send to Back');
+    Item.StyleLookup := 'menuitemstyle_sendtoback';
+    Item.ShortCut := TextToShortCut('PgDn');
+    Item.OnClick := OnContextSendToBack;
+    FPopupMenu.AddObject(Item);
+
+    Sep := TMenuItem.Create(FPopupMenu);
+    Sep.Text := '-';
+    FPopupMenu.AddObject(Sep);
+  end;
+
+  if FController.Selection.LinkCount = 1 then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Split link');
+    Item.OnClick := OnContextInsertReroute;
+    FPopupMenu.AddObject(Item);
+  end;
 
   Item := TMenuItem.Create(FPopupMenu);
   Item.Text := Translate('Add Comment / Frame');
   Item.OnClick := OnContextAddComment;
   FPopupMenu.AddObject(Item);
+
+  if FController.Selection.NodeCount > 0 then
+  begin
+    Item := TMenuItem.Create(FPopupMenu);
+    Item.Text := Translate('Frame selected');
+    Item.ShortCut := TextToShortCut('Ctrl+Shift+F');
+    Item.OnClick := OnContextFrameSelected;
+    FPopupMenu.AddObject(Item);
+  end;
 end;
 
 procedure TNodeEditor.OnContextSelectAll(Sender: TObject);
 begin
   SelectAll;
+end;
+
+procedure TNodeEditor.OnContextBringToFront(Sender: TObject);
+begin
+  FController.BringNodeToFront(nil);
+end;
+
+procedure TNodeEditor.OnContextSendToBack(Sender: TObject);
+begin
+  FController.SendNodeToBack(nil);
 end;
 
 procedure TNodeEditor.OnContextUndo(Sender: TObject);
@@ -2533,6 +2599,11 @@ end;
 procedure TNodeEditor.OnContextAddComment(Sender: TObject);
 begin
   FController.AddCommentNode(SnapWorldPoint(FLastWorldMousePos));
+end;
+
+procedure TNodeEditor.OnContextFrameSelected(Sender: TObject);
+begin
+  FController.FrameSelected;
 end;
 
 procedure TNodeEditor.CopySelectionToClipboard;
@@ -3232,7 +3303,7 @@ begin
   if NodeUnderMouse = nil then
     Exit;
 
-  if NodeUnderMouse.VisualKind = TNodeVisualKind.Comment then
+  if (NodeUnderMouse.VisualKind = TNodeVisualKind.Comment) or FLinksOverNodes then
   begin
     if InternalLinkClick(X, Y, Shift, True) then
       Exit(True);
@@ -3267,6 +3338,10 @@ begin
   begin
     if Assigned(FOnLinkClick) then
       FOnLinkClick(Self, Link);
+
+    if ssRight in Shift then
+      if FController.Selection.Links.Contains(Link) then
+        Exit;
 
     if (ssCtrl in Shift) or (ssShift in Shift) then
     begin
@@ -3489,6 +3564,13 @@ begin
   FPanning := False;
   //
   FAni.MouseUp(X, Y);
+end;
+
+procedure TNodeEditor.InternalShowPopup(Position: TPointF);
+begin
+  BuildContextMenu;
+  FPopupMenu.PopupComponent := Self;
+  FPopupMenu.Popup(Position.X, Position.Y);
 end;
 
 procedure TNodeEditor.InternalPanning(X, Y: Single);
@@ -3725,9 +3807,7 @@ begin
       Exit;
     end;
 
-    var MPos := Screen.MousePos;
-    FPopupMenu.PopupComponent := Self;
-    FPopupMenu.Popup(MPos.X, MPos.Y);
+    InternalShowPopup(Screen.MousePos);
   end;
   CancelMouseOperations(False);
 end;
@@ -3813,6 +3893,7 @@ end;
 procedure TNodeEditor.SetLinkColor(const Value: TAlphaColor);
 begin
   TNodeLink.DefaultColor := Value;
+  Repaint;
 end;
 
 procedure TNodeEditor.SetLinkGradient(const Value: Boolean);
@@ -3822,9 +3903,16 @@ begin
   Repaint;
 end;
 
+procedure TNodeEditor.SetLinksOverNodes(const Value: Boolean);
+begin
+  FLinksOverNodes := Value;
+  Repaint;
+end;
+
 procedure TNodeEditor.SetLinkThickness(const Value: Single);
 begin
   TNodeLink.Thickness := Value;
+  Repaint;
 end;
 
 procedure TNodeEditor.SetLinkVisualClass(const Value: TLinkVisualObjectClass);

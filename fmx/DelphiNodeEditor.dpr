@@ -61,7 +61,8 @@ uses
   FMX.NodeEditor.Debugger in '..\src\FMX.NodeEditor.Debugger.pas',
   FMX.NodeEditor.Executor in '..\src\FMX.NodeEditor.Executor.pas',
   FMX.NodeEditor.Executor.Thread in '..\src\FMX.NodeEditor.Executor.Thread.pas',
-  FMX.NodeEditor.Node.Engineering in '..\src\FMX.NodeEditor.Node.Engineering.pas';
+  FMX.NodeEditor.Node.Engineering in '..\src\FMX.NodeEditor.Node.Engineering.pas',
+  FMX.NodeEditor.Node.Graphic in '..\src\FMX.NodeEditor.Node.Graphic.pas';
 
 {$R *.res}
 

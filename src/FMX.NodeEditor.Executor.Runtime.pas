@@ -25,7 +25,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections, System.Rtti,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph,
+  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph, FMX.Graphics,
   FMX.NodeEditor.Debug.Intf;
 
 type
@@ -113,6 +113,7 @@ type
     procedure SetVariableBool(const AName: string; const AValue: Boolean);
 
     function GetInputValue(APin: TNodePin): TValue;
+    function GetInputValueOrVar(APin: TNodePin; const VarName: string): TValue;
     procedure SetOutputValue(APin: TNodePin; const AValue: TValue);
 
     procedure RaiseEvent(const AEventName: string; const AData: TValue);
@@ -121,6 +122,7 @@ type
 
     procedure IncStep;
     procedure SelectExecOutput(APin: TNodePin);
+    procedure Print(const Text: string);
   end;
 
   TNodeGraphRuntimeHelper = class helper for TNodeGraph
@@ -151,9 +153,13 @@ function MakeBoolValue(const AValue: boolean): TValue;
 
 function MakeIntValue(const AValue: int64): TValue;
 
+function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
+
 function MakeStringValue(const AValue: string): TValue;
 
 function NodeValueToBoolDef(const AValue: TValue; const ADefault: boolean = False): boolean;
+
+function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
 
 function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64 = 0): Int64;
 
@@ -166,9 +172,6 @@ begin
   if AValue.IsEmpty then
     Exit(ADefault);
 
-  if not AValue.TryAsType<Double>(Result) then
-    Exit;
-  {
   case AValue.Kind of
     tkFloat:
       Result := AValue.AsExtended;
@@ -176,17 +179,14 @@ begin
       Result := AValue.AsInteger;
     tkInt64:
       Result := AValue.AsInt64;
-    tk:
-      if AValue.AsBoolean then
-        Result := 1.0
-      else
-        Result := 0.0;
-    tkAString, tkLString, tkWString, tkUString:
+    tkLString, tkWString, tkUString, tkString:
       begin
-        if not TryStrToFloat(AValue.AsString, Result, DefaultFormatSettings) then
+        if not TryStrToFloat(AValue.AsString, Result, FormatSettings) then
           Result := ADefault;
       end;
-  end;   }
+  else
+    Result := ADefault;
+  end;
 end;
 
 function NodeValueToStringDef(const AValue: TValue; const ADefault: string): string;
@@ -194,28 +194,26 @@ begin
   if AValue.IsEmpty then
     Exit(ADefault);
 
-  if not AValue.TryAsType<string>(Result) then
-    Exit;
-           {
   case AValue.Kind of
-    tkAString, tkLString, tkWString, tkUString:
+    tkString, tkLString, tkWString, tkUString:
       Result := AValue.AsString;
     tkInteger:
-      Result := IntToStr(AValue.AsInteger);
+      Result := AValue.AsInteger.ToString;
     tkInt64:
-      Result := IntToStr(AValue.AsInt64);
-    tkQWord:
-      Result := UIntToStr(AValue.AsUInt64);
+      Result := AValue.AsInt64.ToString;
+    tkChar:
+      Result := AValue.AsString;
     tkFloat:
-      Result := FloatToStr(AValue.AsExtended, DefaultFormatSettings);
-    tkBool:
-      if AValue.AsBoolean then
-        Result := 'True'
-      else
-        Result := 'False';
+      Result := AValue.AsExtended.ToString;
   else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      if B then
+        Exit('True')
+      else
+        Exit('False');
     Result := ADefault;
-  end;    }
+  end;
 end;
 
 function MakeFloatValue(const AValue: double): TValue;
@@ -233,40 +231,50 @@ begin
   Result := AValue;
 end;
 
+function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
+begin
+  Result := TValue.From<IBitmapNodeObject>(AValue);
+end;
+
 function MakeStringValue(const AValue: string): TValue;
 begin
   Result := AValue;
 end;
 
-function NodeValueToBoolDef(const AValue: TValue; const ADefault: boolean): boolean;
-{var
-  S: string; }
+function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
 begin
   if AValue.IsEmpty then
     Exit(ADefault);
 
-  if not AValue.TryAsType<boolean>(Result) then
-    Exit;
-         {
+  if AValue.IsType<IBitmapNodeObject>then
+    Result := AValue.AsType<IBitmapNodeObject>
+  else
+    Result := ADefault;
+end;
+
+function NodeValueToBoolDef(const AValue: TValue; const ADefault: boolean): boolean;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
   case AValue.Kind of
-    tkBool:
-      Result := AValue.AsBoolean;
     tkInteger:
       Result := AValue.AsInteger <> 0;
     tkInt64:
       Result := AValue.AsInt64 <> 0;
-    tkQWord:
-      Result := AValue.AsUInt64 <> 0;
     tkFloat:
       Result := Abs(AValue.AsExtended) > 1e-12;
-    tkAString, tkLString, tkWString, tkUString:
+    tkString, tkLString, tkWString, tkUString:
       begin
-        S := Trim(LowerCase(AValue.AsString));
+        var S := Trim(LowerCase(AValue.AsString));
         Result := (S = 'true') or (S = '1') or (S = 'yes');
       end;
   else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      Exit(B);
     Result := ADefault;
-  end; }
+  end;
 end;
 
 function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64): Int64;
@@ -274,31 +282,27 @@ begin
   if AValue.IsEmpty then
     Exit(ADefault);
 
-  if not AValue.TryAsType<Int64>(Result) then
-    Exit;
-          {
   case AValue.Kind of
     tkInteger:
       Result := AValue.AsInteger;
     tkInt64:
       Result := AValue.AsInt64;
-    tkQWord:
-      Result := AValue.AsUInt64;
     tkFloat:
       Result := Trunc(AValue.AsExtended);
-    tkBool:
-      if AValue.AsBoolean then
-        Result := 1
-      else
-        Result := 0;
-    tkAString, tkLString, tkWString, tkUString:
+    tkString, tkLString, tkWString, tkUString:
       begin
         if not TryStrToInt64(AValue.AsString, Result) then
           Result := ADefault;
       end;
   else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      if B then
+        Exit(1)
+      else
+        Exit(0);
     Result := ADefault;
-  end; }
+  end;
 end;
 
 procedure CheckThreadStopped;
@@ -496,6 +500,35 @@ begin
   Result := FGraph.GetInputPinValue(APin, Self);
 end;
 
+function TNodeExecutionContext.GetInputValueOrVar(APin: TNodePin; const VarName: string): TValue;
+begin
+  Result := TValue.Empty;
+  var FValue := GetInputValue(APin);
+  if not FValue.IsEmpty then
+    Result := FValue
+  else
+  begin
+    var VFrom := APin.OwnerNode.FindValue(VarName);
+    if VFrom <> nil then
+    begin
+      case VFrom.Kind of
+        TNodeValueKind.Null:
+          ;
+        TNodeValueKind.Float:
+          Result := VFrom.FloatValue;
+        TNodeValueKind.Integer:
+          Result := VFrom.IntegerValue;
+        TNodeValueKind.string:
+          Result := VFrom.StringValue;
+        TNodeValueKind.Boolean:
+          Result := VFrom.BooleanValue;
+        TNodeValueKind.JSON:
+          Result := VFrom.JSONValue;
+      end;
+    end;
+  end;
+end;
+
 procedure TNodeExecutionContext.SetOutputValue(APin: TNodePin; const AValue: TValue);
 begin
   if APin = nil then
@@ -540,6 +573,11 @@ begin
   Inc(FStepCounter);
   if (FMaxStepCount > 0) and (FStepCounter > FMaxStepCount) then
     raise ENodeStepLimit.CreateFmt('Execution step limit exceeded (%d)', [FMaxStepCount]);
+end;
+
+procedure TNodeExecutionContext.Print(const Text: string);
+begin
+  //
 end;
 
 procedure TNodeExecutionContext.SelectExecOutput(APin: TNodePin);
@@ -626,7 +664,7 @@ begin
       Exit(MakeBoolValue(SameText(APin.DefaultValue, 'true') or
           (APin.DefaultValue = '1')));
   end;
-
+              {
   if SameText(APin.DataType, 'float') then
     Exit(MakeFloatValue(0.0));
 
@@ -634,7 +672,7 @@ begin
     Exit(MakeBoolValue(False));
 
   if SameText(APin.DataType, 'string') then
-    Exit(MakeStringValue(''));
+    Exit(MakeStringValue(''));    }
 end;
 
 function TNodeGraphRuntimeHelper.GetInputPinValueByIndex(ANode: TCustomNode; AIndex: integer; AContext: TNodeExecutionContext): TValue;
@@ -877,21 +915,22 @@ begin
     if L.Count = 0 then
       Exit(True);
 
-    var Link := L[0];
-    if (Link <> nil) and (Link.ToPin <> nil) then
+    Result := True;
+    for var i := 0 to L.Count - 1 do
     begin
-      var NextNode := Link.ToPin.OwnerNode;
-      if NextNode <> nil then
+      var Link := L[i];
+      if (Link <> nil) and (Link.ToPin <> nil) then
       begin
-        if AContext.Debugger <> nil then
-          AContext.Debugger.AddTraceEntry('exec-in', NextNode, Link.ToPin, AContext);
-        Result := ExecuteFromNode(NextNode, AContext);
-      end
-      else
-        Result := True;
-    end
-    else
-      Result := True;
+        var NextNode := Link.ToPin.OwnerNode;
+        if NextNode <> nil then
+        begin
+          if AContext.Debugger <> nil then
+            AContext.Debugger.AddTraceEntry('exec-in', NextNode, Link.ToPin, AContext);
+          if not ExecuteFromNode(NextNode, AContext) then
+            Result := False;
+        end;
+      end;
+    end;
   finally
     L.Free;
   end;
@@ -931,9 +970,11 @@ begin
     if AContext.Debugger <> nil then
       AContext.Debugger.AddTraceEntry('executed', ANode, nil, AContext);
 
-    var NextExecPin := AContext.LastExecOutputPin;
-    if (NextExecPin = nil) or (NextExecPin.OwnerNode <> ANode) then
-      NextExecPin := FindFirstConnectedExecOutput(ANode);
+    var NextExecPin := nil;
+    if (AContext.LastExecOutputPin <> nil) and
+      (AContext.LastExecOutputPin.OwnerNode <> nil) and
+      (AContext.LastExecOutputPin.OwnerNode = ANode) then
+      NextExecPin := AContext.LastExecOutputPin;
 
     if NextExecPin <> nil then
       Result := ExecuteExecPin(NextExecPin, AContext)

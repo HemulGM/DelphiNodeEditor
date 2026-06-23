@@ -429,6 +429,7 @@
         <DCCReference Include="..\src\FMX.NodeEditor.Executor.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Executor.Thread.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Node.Engineering.pas"/>
+        <DCCReference Include="..\src\FMX.NodeEditor.Node.Graphic.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

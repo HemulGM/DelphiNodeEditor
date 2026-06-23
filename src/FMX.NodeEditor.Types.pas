@@ -4,7 +4,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Math, System.Types, System.UITypes,
-  FMX.Graphics, System.Math.Vectors;
+  FMX.Graphics, System.Math.Vectors, System.NetEncoding;
 
 {$SCOPEDENUMS ON}
 
@@ -37,7 +37,7 @@ type
 
   TNodeVisualKind = (Normal, Reroute, Comment);
 
-  TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON);
+  TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON, Bitmap);
 
   { Pins }
 
@@ -62,6 +62,23 @@ type
   { Controls }
 
   TMoveDirection = (Left, Up, Right, Down);
+
+  IBitmapNodeObject = interface
+    ['{A6EF944A-8D2D-4301-A378-9A708868A3AC}']
+    function GetBitmap: TBitmap;
+    procedure SetBitmap(Bitmap: TBitmap);
+    function GetIsEmpty: Boolean;
+  end;
+
+  TBitmapObject = class(TInterfacedObject, IBitmapNodeObject)
+  protected
+    FBitmap: TBitmap;
+  public
+    function GetBitmap: TBitmap;
+    procedure SetBitmap(Bitmap: TBitmap);
+    function GetIsEmpty: Boolean;
+    destructor Destroy; override;
+  end;
 
 function NodeValueKindToStr(AKind: TNodeValueKind): string;
 
@@ -115,6 +132,12 @@ function WorldToScreen(const Rect: TRectF; Zoom, OffsetX, OffsetY: Double): TRec
 
 function BuildTriangle(const Center: TPointF; Radius: Single; StartAngle: Single): TPolygon;
 
+//
+
+function BitmapToBase64(Bitmap: IBitmapNodeObject): string;
+
+function Base64ToBitmap(const Base64: string): IBitmapNodeObject;
+
 var
   CachePathObject: TPathData;
 
@@ -122,6 +145,34 @@ implementation
 
 uses
   FMX.Types;
+//
+
+function BitmapToBase64(Bitmap: IBitmapNodeObject): string;
+begin
+  if not Assigned(Bitmap) or Bitmap.GetIsEmpty then
+    Exit('');
+  var Stream := TBytesStream.Create;
+  try
+    Bitmap.GetBitmap.SaveToStream(Stream);
+    Result := TNetEncoding.Base64String.EncodeBytesToString(Stream.Bytes);
+  finally
+    Stream.Free;
+  end;
+end;
+
+function Base64ToBitmap(const Base64: string): IBitmapNodeObject;
+begin
+  if Base64.IsEmpty then
+    Exit(nil);
+  var Stream := TBytesStream.Create(TNetEncoding.Base64.DecodeStringToBytes(Base64));
+  try
+    Stream.Position := 0;
+    Result := TBitmapObject.Create;
+    Result.SetBitmap(TBitmap.CreateFromStream(Stream));
+  finally
+    Stream.Free;
+  end;
+end;
 
 procedure Log(const Text: string);
 begin
@@ -234,6 +285,8 @@ begin
       Result := 'boolean';
     TNodeValueKind.JSON:
       Result := 'json';
+    TNodeValueKind.Bitmap:
+      Result := 'bitmap';
   else
     Result := 'null';
   end;
@@ -251,6 +304,8 @@ begin
     Result := TNodeValueKind.Boolean
   else if SameText(S, 'json') then
     Result := TNodeValueKind.JSON
+  else if SameText(S, 'bitmap') then
+    Result := TNodeValueKind.Bitmap
   else
     Result := TNodeValueKind.Null;
 end;
@@ -379,6 +434,30 @@ begin
   Canvas.Stroke.Color := MakeColor(Color, 1.0);
   Canvas.Stroke.Thickness := 1;
   Canvas.DrawLine(P1, P2, 1);   }
+end;
+
+{ TBitmapObject }
+
+destructor TBitmapObject.Destroy;
+begin
+  FBitmap.Free;
+  inherited;
+end;
+
+function TBitmapObject.GetBitmap: TBitmap;
+begin
+  Result := FBitmap;
+end;
+
+function TBitmapObject.GetIsEmpty: Boolean;
+begin
+  Result := not Assigned(FBitmap);
+end;
+
+procedure TBitmapObject.SetBitmap(Bitmap: TBitmap);
+begin
+  FBitmap.Free;
+  FBitmap := Bitmap;
 end;
 
 initialization

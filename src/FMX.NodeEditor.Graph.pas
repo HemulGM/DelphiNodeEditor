@@ -227,26 +227,26 @@ begin
   FRegistry := TNodeRegistry.Create;
   FUndoStack := TObjectList<TGraphCommand>.Create;
   FRedoStack := TObjectList<TGraphCommand>.Create;
-
+                    {
   FRegistry.RegisterNodeEx('default', 'Default Node', 'Basic',
     'Generic test node.', 'default,test',
     'M5.73 15.885h12.54v-1H5.73zm0-3.385h12.54v-1H5.73zm0-3.384h8.77v-1H5.73zM4.616 19q-.69 0-1.153-.462T3 17.384V6.616q0-.691.463-1.153T4.615 5h14.77q.69 0 1.152.463T21 6.616v10.769q0 .69-.463 1.153T19.385 19zm0-1h14.77q.23 0 .423-.192t.192-.424V6.616q0-.231-.192-.424T19.385 6H4.615q-.23 0-.423.192T4 6.616v10.769q0 .23.192.423t.423.192M4 18V6z',
-    TDefaultNode, $FF1D8EA7);
-
-  FRegistry.RegisterNodeEx('float', 'Float Value', 'Values',
-    'Constant float value.', 'float,number,value,const',
-    'm5.79 21.61l-1.58-1.22l14-18l1.58 1.22zM4 2v2h2v8h2V2zm11 10v2h4v2h-2c-1.1 0-2 .9-2 2v4h6v-2h-4v-2h2c1.11 0 2-.89 2-2v-2a2 2 0 0 0-2-2z',
-    TFloatNode, $FF00C080);
-
-  FRegistry.RegisterNodeEx('add', 'Add Float', 'Math',
-    'Adds two float values.', 'add,plus,math,float',
-    'M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z',
-    TAddNode, $FF4080FF);
+    TDefaultNode, $FF1D8EA7);    }
 
   FRegistry.RegisterNodeEx('reroute', 'Reroute', 'Utility',
     'Reroute connection wire.', 'reroute,wire',
     'M5 12c0 3.859 3.14 7 7 7s7-3.141 7-7s-3.141-7-7-7s-7 3.141-7 7m12 0c0 2.757-2.243 5-5 5s-5-2.243-5-5s2.243-5 5-5s5 2.243 5 5',
     TRerouteNode, $FF646464);
+
+  FRegistry.RegisterNodeEx('reroute_data', 'Reroute Data', 'Utility',
+    'Reroute connection wire.', 'reroute,wire',
+    'M5 12c0 3.859 3.14 7 7 7s7-3.141 7-7s-3.141-7-7-7s-7 3.141-7 7m12 0c0 2.757-2.243 5-5 5s-5-2.243-5-5s2.243-5 5-5s5 2.243 5 5',
+    TRerouteDataNode, $FF646464);
+
+  FRegistry.RegisterNodeEx('reroute_exec', 'Reroute Exec', 'Utility',
+    'Reroute connection wire.', 'reroute,wire',
+    'M5 12c0 3.859 3.14 7 7 7s7-3.141 7-7s-3.141-7-7-7s-7 3.141-7 7m12 0c0 2.757-2.243 5-5 5s-5-2.243-5-5s2.243-5 5-5s5 2.243 5 5',
+    TRerouteExecNode, $FF646464);
 
   FRegistry.RegisterNodeEx('comment', 'Comment / Frame', 'Utility',
     'Visual comment frame.', 'comment,frame,group',
@@ -1365,8 +1365,16 @@ begin
 
   OldFrom := ALink.FromPin;
   OldTo := ALink.ToPin;
+  N := nil;
+  case OldFrom.Kind of
+    TPinKind.Data:
+      N := FRegistry.CreateNode('reroute_data', Position);
+    TPinKind.Exec:
+      N := FRegistry.CreateNode('reroute_exec', Position);
+  end;
+  if not Assigned(N) then
+    Exit;
 
-  N := FRegistry.CreateNode('reroute', Position);
   N.X := N.X - N.Width / 2;
   N.Y := N.Y - N.Height / 2;
 
@@ -1477,12 +1485,27 @@ begin
   It.Category := ACategory;
   It.Description := ADescription;
   It.NodeClass := AClass;
-  It.Color := AColor;
   It.Hidden := AHidden;
   It.IsDeprecated := ADeprecated;
   It.Version := AVersion;
   It.Tags.AddStrings(ATags.Split([',']));
-  It.IconPath := AIconPath;
+  if AIconPath.IsEmpty or (AColor = TAlphaColors.Null) then
+  begin
+    var TMP := AClass.Create;
+    try
+      if AIconPath.IsEmpty then
+        It.IconPath := TMP.IconPath;
+      if AColor = TAlphaColors.Null then
+        It.Color := TMP.HeaderColor;
+    finally
+      TMP.Free;
+    end;
+  end
+  else
+  begin
+    It.IconPath := AIconPath;
+    It.Color := AColor;
+  end;
   Add(It);
 end;
 
@@ -1512,11 +1535,13 @@ begin
   if It <> nil then
   begin
     Result := It.NodeClass.Create;
-    Result.Title := It.Caption;
+    if not It.Caption.IsEmpty then
+      Result.Title := It.Caption;
     Result.X := Position.X;
     Result.Y := Position.Y;
     Result.NodeType := It.NodeType;
-    Result.IconPath := It.IconPath;
+    if not It.IconPath.IsEmpty then
+      Result.IconPath := It.IconPath;
     Result.SetupPins;
   end
   else

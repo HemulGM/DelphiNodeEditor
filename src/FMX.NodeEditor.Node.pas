@@ -39,9 +39,11 @@ type
     StringValue: string;
     BooleanValue: boolean;
     JSONValue: string;
+    Bitmap: IBitmapNodeObject;
 
     constructor Create(const AName: string = ''; AKind: TNodeValueKind = TNodeValueKind.Null);
 
+    destructor Destroy; override;
     procedure SaveToJSON(AObj: TJSONObject);
     procedure LoadFromJSON(AObj: TJSONValue);
   end;
@@ -118,7 +120,7 @@ type
       ZoomDetailLimitExt = 0.15;
       TextFontSize = 12;
       DrawShadow = True;
-  private
+  protected
     FInputs: TObjectList<TNodePin>;
     FOutputs: TObjectList<TNodePin>;
     FValues: TObjectList<TNodeValue>;
@@ -133,8 +135,8 @@ type
     procedure SetWidth(const Value: Integer); virtual;
     function GetDefaultHeaderColor: TAlphaColor; virtual;
     function GetDefaultBodyColor: TAlphaColor; virtual;
-  private
-    function GetHeight: Integer;
+  protected
+    function GetHeight: Integer; virtual;
   public
     Id: string;
     NodeType: string;
@@ -177,6 +179,7 @@ type
     function GetInput(Index: integer): TNodePin;
     function GetOutput(Index: integer): TNodePin;
     function FindPinById(const AId: string): TNodePin;
+    function FindPinByName(const AName: string): TNodePin;
     function OutputsIsBusy: Boolean; inline;
     function InputsIsBusy: Boolean; inline;
 
@@ -256,7 +259,7 @@ function NodeOrderCompare(const Item1, Item2: TCustomNode): Integer; inline;
 implementation
 
 uses
-  System.Math.Vectors;
+  System.Math.Vectors, System.NetEncoding;
 
 function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
 begin
@@ -701,6 +704,19 @@ begin
 
   for var Item in FOutputs do
     if Item.Id = AId then
+      Exit(Item);
+
+  Result := nil;
+end;
+
+function TCustomNode.FindPinByName(const AName: string): TNodePin;
+begin
+  for var Item in FInputs do
+    if Item.Name = AName then
+      Exit(Item);
+
+  for var Item in FOutputs do
+    if Item.Name = AName then
       Exit(Item);
 
   Result := nil;
@@ -1407,9 +1423,17 @@ begin
       AObj.AddPair('value', BooleanValue);
     TNodeValueKind.JSON:
       AObj.AddPair('value', JSONValue);
+    TNodeValueKind.Bitmap:
+      AObj.AddPair('value', BitmapToBase64(Bitmap));
   else
     AObj.AddPair('value', '');
   end;
+end;
+
+destructor TNodeValue.Destroy;
+begin
+  Bitmap := nil;
+  inherited;
 end;
 
 procedure TNodeValue.LoadFromJSON(AObj: TJSONValue);
@@ -1431,6 +1455,8 @@ begin
       BooleanValue := AObj.GetValue('value', BooleanValue);
     TNodeValueKind.JSON:
       JSONValue := AObj.GetValue('value', JSONValue);
+    TNodeValueKind.Bitmap:
+      Bitmap := Base64ToBitmap(AObj.GetValue('value', ''));
   end;
 end;
 
@@ -1449,7 +1475,7 @@ begin
 
   Id := NewId;
   Name := AName;
-  DisplayName := AName;
+  DisplayName := '';
 
   Direction := ADir;
   Kind := AKind;
@@ -1487,6 +1513,7 @@ begin
     Result := DisplayName
   else
     Result := Name;
+  Result := Result + if Kind = TPinKind.Data then ': ' + DataType else '';
 end;
 
 procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single);

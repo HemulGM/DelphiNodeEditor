@@ -34,6 +34,8 @@ type
     procedure Undo;
     procedure Redo;
     procedure ClearUndoRedo;
+    function CanUndo: Boolean;
+    function CanRedo: Boolean;
 
     procedure AddNode(ANode: TCustomNode; Silent: Boolean = False);
     procedure RemoveNode(ANode: TCustomNode);
@@ -59,6 +61,7 @@ type
     procedure CutSelectionToClipboard;
     procedure CopySelectionToClipboard;
     procedure PasteFromClipboard(const Position: TPointF);
+    function CanPaste: Boolean;
     procedure DuplicateSelection(const Position: TPointF);
 
     function SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
@@ -648,6 +651,41 @@ begin
     Exit;
 
   Result := FGraph.CanConnect(P1, P2);
+end;
+
+function TNodeEditorController.CanPaste: Boolean;
+begin
+  Result := False;
+  var Clipboard: IFMXExtendedClipboardService;
+  if TPlatformServices.Current.SupportsPlatformService(IFMXExtendedClipboardService, Clipboard) then
+  begin
+    var ClipboardText := Clipboard.GetText;
+    if ClipboardText.Trim.IsEmpty then
+      Exit;
+    try
+      var Root := TJSONObject.ParseJSONValue(ClipboardText);
+      if Assigned(Root) then
+      try
+        var NodesArr := Root.GetValue<TJSONArray>('nodes', nil);
+        if NodesArr <> nil then
+          Exit(True);
+      finally
+        Root.Free;
+      end;
+    except
+      Exit;
+    end;
+  end;
+end;
+
+function TNodeEditorController.CanRedo: Boolean;
+begin
+  Result := FGraph.RedoStack.Count > 0;
+end;
+
+function TNodeEditorController.CanUndo: Boolean;
+begin
+  Result := FGraph.UndoStack.Count > 0;
 end;
 
 procedure TNodeEditorController.SyncNodesFlags;
