@@ -4,8 +4,9 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.UITypes, System.Types, System.JSON,
-  System.Math, System.Generics.Collections, System.Generics.Defaults, FMX.Types,
-  FMX.Graphics, FMX.NodeEditor.Types, FMX.TextLayout, FMX.NodeEditor.VisualLink;
+  System.Rtti, System.Math, System.Generics.Collections, System.UIConsts,
+  System.Generics.Defaults, FMX.Types, FMX.Graphics, FMX.NodeEditor.Types,
+  FMX.TextLayout, FMX.NodeEditor.VisualLink;
 
 type
   TCustomNode = class;
@@ -34,18 +35,24 @@ type
   public
     Name: string;
     Kind: TNodeValueKind;
-    FloatValue: double;
-    IntegerValue: int64;
+    FloatValue: Double;
+    IntegerValue: Int64;
     StringValue: string;
-    BooleanValue: boolean;
+    BooleanValue: Boolean;
+    ColorValue: TAlphaColor;
     JSONValue: string;
-    Bitmap: IBitmapNodeObject;
+    BitmapValue: IBitmapNodeObject;
+    PointValue: TPointF;
+    Min: Double;
+    Max: Double;
+    Default: TValue;
 
     constructor Create(const AName: string = ''; AKind: TNodeValueKind = TNodeValueKind.Null);
 
     destructor Destroy; override;
     procedure SaveToJSON(AObj: TJSONObject);
     procedure LoadFromJSON(AObj: TJSONValue);
+    function IsHaveMinMax: Boolean;
   end;
 
   TNodePin = class
@@ -195,7 +202,8 @@ type
     function AddValue(const AName: string; AKind: TNodeValueKind): TNodeValue;
     function FindValue(const AName: string): TNodeValue;
     function ValueCount: integer;
-    function GetValue(Index: integer): TNodeValue;
+    function GetValue(Index: integer): TNodeValue; overload;
+    function GetValue(const Name: string): TNodeValue; overload;
 
     property Width: Integer read FWidth write SetWidth;
     property Height: Integer read GetHeight write SetHeight;
@@ -854,6 +862,14 @@ begin
     Result := nil;
 end;
 
+function TCustomNode.GetValue(const Name: string): TNodeValue;
+begin
+  for var Item in FValues do
+    if Item.Name = Name then
+      Exit(Item);
+  Result := nil;
+end;
+
 procedure TCustomNode.FillText(Canvas: TCanvas; ALayout: TTextLayout; AZoom: Double; const ARect: TRectF; const AText: string; const WordWrap: Boolean; const AOpacity: Single; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
 begin        //Exit;
   if //(ALayout.TopLeft <> ARect.TopLeft) or
@@ -1421,17 +1437,32 @@ begin
 
   case Kind of
     TNodeValueKind.Float:
-      AObj.AddPair('value', FloatValue);
+      begin
+        AObj.AddPair('value', FloatValue);
+        AObj.AddPair('min', Min);
+        AObj.AddPair('max', Max);
+      end;
     TNodeValueKind.Integer:
-      AObj.AddPair('value', IntegerValue);
+      begin
+        AObj.AddPair('value', IntegerValue);
+        AObj.AddPair('min', Min);
+        AObj.AddPair('max', Max);
+      end;
     TNodeValueKind.string:
       AObj.AddPair('value', StringValue);
     TNodeValueKind.Boolean:
       AObj.AddPair('value', BooleanValue);
     TNodeValueKind.JSON:
       AObj.AddPair('value', JSONValue);
+    TNodeValueKind.Color:
+      AObj.AddPair('value', AlphaColorToString(ColorValue));
+    TNodeValueKind.Point:
+      begin
+        AObj.AddPair('valueX', PointValue.X);
+        AObj.AddPair('valueY', PointValue.Y);
+      end;
     TNodeValueKind.Bitmap:
-      AObj.AddPair('value', BitmapToBase64(Bitmap));
+      AObj.AddPair('value', BitmapToBase64(BitmapValue));
   else
     AObj.AddPair('value', '');
   end;
@@ -1439,8 +1470,13 @@ end;
 
 destructor TNodeValue.Destroy;
 begin
-  Bitmap := nil;
+  BitmapValue := nil;
   inherited;
+end;
+
+function TNodeValue.IsHaveMinMax: Boolean;
+begin
+  Result := Max <> Min;
 end;
 
 procedure TNodeValue.LoadFromJSON(AObj: TJSONValue);
@@ -1453,17 +1489,36 @@ begin
 
   case Kind of
     TNodeValueKind.Float:
-      FloatValue := AObj.GetValue('value', FloatValue);
+      begin
+        FloatValue := AObj.GetValue('value', FloatValue);
+        Min := AObj.GetValue<Double>('min', 0.0);
+        Max := AObj.GetValue<Double>('max', 0.0);
+      end;
     TNodeValueKind.Integer:
-      IntegerValue := AObj.GetValue('value', IntegerValue);
+      begin
+        IntegerValue := AObj.GetValue('value', IntegerValue);
+        Min := AObj.GetValue<Double>('min', 0.0);
+        Max := AObj.GetValue<Double>('max', 0.0);
+      end;
     TNodeValueKind.string:
       StringValue := AObj.GetValue('value', StringValue);
     TNodeValueKind.Boolean:
       BooleanValue := AObj.GetValue('value', BooleanValue);
     TNodeValueKind.JSON:
       JSONValue := AObj.GetValue('value', JSONValue);
+    TNodeValueKind.Color:
+      try
+        ColorValue := StringToAlphaColor(AObj.GetValue('value', AlphaColorToString(ColorValue)));
+      except
+        //
+      end;
+    TNodeValueKind.Point:
+      begin
+        PointValue.X := AObj.GetValue('valueX', PointValue.X);
+        PointValue.Y := AObj.GetValue('valueY', PointValue.Y);
+      end;
     TNodeValueKind.Bitmap:
-      Bitmap := Base64ToBitmap(AObj.GetValue('value', ''));
+      BitmapValue := Base64ToBitmap(AObj.GetValue('value', ''));
   end;
 end;
 

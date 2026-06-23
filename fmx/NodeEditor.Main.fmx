@@ -454,7 +454,7 @@ object FormMain: TFormMain
           Position.X = 25.000000000000000000
           Position.Y = 443.000000000000000000
           Size.Width = 230.000000000000000000
-          Size.Height = 161.000000000000000000
+          Size.Height = 302.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           object Layout20: TLayout
@@ -529,35 +529,175 @@ object FormMain: TFormMain
             StyleLookup = 'panelstyle_divider'
             TabOrder = 2
           end
-          object StringGridNodeValues: TStringGrid
-            Align = Top
-            CanFocus = True
-            ClipChildren = True
-            Position.Y = 49.000000000000000000
-            Size.Width = 230.000000000000000000
-            Size.Height = 112.000000000000000000
+          object VertScrollBoxProps: TVertScrollBox
+            Align = Client
+            Margins.Left = -2.000000000000000000
+            Margins.Right = -2.000000000000000000
+            Size.Width = 234.000000000000000000
+            Size.Height = 253.000000000000000000
             Size.PlatformDefault = False
-            StyleLookup = 'gridstyle_alt'
             TabOrder = 9
-            RowHeight = 32.000000000000000000
-            Options = [Editing, ColumnResize, ColumnMove, ColLines, RowLines, RowSelect, Header, HeaderClick, AutoDisplacement]
-            OnSelectCell = StringGridNodeValuesSelectCell
-            Viewport.Width = 216.000000000000000000
-            Viewport.Height = 77.000000000000000000
-            object StringColumnVName: TStringColumn
-              Header = 'Name'
-              HeaderSettings.TextSettings.WordWrap = False
-              Size.Width = 65.000000000000000000
+            Viewport.Width = 234.000000000000000000
+            Viewport.Height = 253.000000000000000000
+            inline FrameInspectorItemBitmap1: TFrameInspectorItemBitmap
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutDesc: TLayout
+                Size.Width = 100.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 80.000000000000000000
+                end
+                inherited PathLabelIcon: TPathLabel
+                  Position.X = 8.000000000000000000
+                end
+              end
+              inherited LayoutControl: TLayout
+                Padding.Right = 4.000000000000000000
+                Position.X = 100.000000000000000000
+                inherited ButtonChoose: TButton
+                  Size.Width = 82.000000000000000000
+                end
+              end
+              inherited OpenDialogImage: TOpenDialog [2]
+              end
+              inherited PanelBG: TPanel [3]
+                Size.Width = 230.000000000000000000
+              end
             end
-            object StringColumnVKind: TStringColumn
-              Header = 'Kind'
-              HeaderSettings.TextSettings.WordWrap = False
-              Size.Width = 65.000000000000000000
+            inline FrameInspectorItemColor1: TFrameInspectorItemColor
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Position.Y = 40.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutDesc: TLayout
+                Size.Width = 100.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 80.000000000000000000
+                end
+                inherited PathLabelIcon: TPathLabel
+                  Position.X = 8.000000000000000000
+                end
+              end
+              inherited LayoutControl: TLayout
+                Padding.Right = 4.000000000000000000
+                Position.X = 100.000000000000000000
+                inherited ComboColorBoxValue: TComboColorBox
+                  Size.Width = 122.000000000000000000
+                end
+              end
+              inherited PanelBG: TPanel
+                Size.Width = 230.000000000000000000
+              end
             end
-            object StringColumnVValue: TStringColumn
-              Header = 'Value'
-              HeaderSettings.TextSettings.WordWrap = False
-              Size.Width = 65.000000000000000000
+            inline FrameInspectorItemFloat1: TFrameInspectorItemFloat
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Position.Y = 80.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutDesc: TLayout
+                Size.Width = 100.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 80.000000000000000000
+                end
+                inherited PathLabelIcon: TPathLabel
+                  Position.X = 8.000000000000000000
+                end
+              end
+              inherited LayoutControl: TLayout
+                Padding.Right = 4.000000000000000000
+                Position.X = 100.000000000000000000
+                inherited SpinBoxValue: TSpinBox
+                  Size.Width = 122.000000000000000000
+                end
+              end
+              inherited PanelBG: TPanel
+                Size.Width = 230.000000000000000000
+              end
+            end
+            inline FrameInspectorItemText1: TFrameInspectorItemText
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Position.Y = 120.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutDesc: TLayout
+                Size.Width = 100.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 80.000000000000000000
+                end
+                inherited PathLabelIcon: TPathLabel
+                  Position.X = 8.000000000000000000
+                end
+              end
+              inherited LayoutControl: TLayout
+                Padding.Right = 4.000000000000000000
+                Position.X = 100.000000000000000000
+                inherited EditValue: TEdit
+                  Size.Width = 122.000000000000000000
+                end
+              end
+              inherited PanelBG: TPanel
+                Size.Width = 230.000000000000000000
+              end
+            end
+            inline FrameInspectorItemInt1: TFrameInspectorItemInt
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Position.Y = 160.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutControl: TLayout [0]
+                Padding.Right = 4.000000000000000000
+                Position.X = 100.000000000000000000
+                inherited SpinBoxValue: TSpinBox
+                  Size.Width = 122.000000000000000000
+                end
+              end
+              inherited LayoutDesc: TLayout [1]
+                Size.Width = 100.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 80.000000000000000000
+                end
+                inherited PathLabelIcon: TPathLabel
+                  Position.X = 8.000000000000000000
+                end
+              end
+              inherited PanelBG: TPanel
+                Size.Width = 230.000000000000000000
+              end
+            end
+            inline FrameInspectorItemBool1: TFrameInspectorItemBool
+              Align = Top
+              Padding.Right = 4.000000000000000000
+              Position.Y = 200.000000000000000000
+              Size.Width = 234.000000000000000000
+              Size.Height = 40.000000000000000000
+              Size.PlatformDefault = False
+              inherited LayoutDesc: TLayout
+                Size.Width = 175.000000000000000000
+                inherited LabelPropName: TLabel
+                  Size.Width = 155.000000000000000000
+                end
+              end
+              inherited LayoutControl: TLayout
+                Padding.Right = 8.000000000000000000
+                Position.X = 175.000000000000000000
+                inherited CheckBoxValue: TCheckBox
+                  Position.X = 7.000000000000000000
+                end
+              end
+              inherited PanelBG: TPanel
+                Size.Width = 230.000000000000000000
+              end
             end
           end
         end

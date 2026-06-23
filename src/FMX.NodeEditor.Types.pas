@@ -37,7 +37,7 @@ type
 
   TNodeVisualKind = (Normal, Reroute, Comment);
 
-  TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON, Bitmap);
+  TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON, Bitmap, Color, Point);
 
   { Pins }
 
@@ -287,6 +287,10 @@ begin
       Result := 'json';
     TNodeValueKind.Bitmap:
       Result := 'bitmap';
+    TNodeValueKind.Color:
+      Result := 'color';
+    TNodeValueKind.Point:
+      Result := 'point';
   else
     Result := 'null';
   end;
@@ -306,6 +310,10 @@ begin
     Result := TNodeValueKind.JSON
   else if SameText(S, 'bitmap') then
     Result := TNodeValueKind.Bitmap
+  else if SameText(S, 'color') then
+    Result := TNodeValueKind.Color
+  else if SameText(S, 'point') then
+    Result := TNodeValueKind.Point
   else
     Result := TNodeValueKind.Null;
 end;

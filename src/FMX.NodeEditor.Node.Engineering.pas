@@ -56,6 +56,16 @@ type
     procedure Execute(AContext: TNodeExecutionContext); override;
   end;
 
+  TColorConstNode = class(TExecutableNode)
+  private
+    FValueOut: TNodePin;
+  protected
+  public
+    procedure SetupPins; override;
+    constructor Create; override;
+    procedure Execute(AContext: TNodeExecutionContext); override;
+  end;
+
   TBoolConstNode = class(TExecutableNode)
   private
     FValueOut: TNodePin;
@@ -574,6 +584,39 @@ begin
   begin
     var V := AddValue('value', TNodeValueKind.Float);
     V.FloatValue := 0;
+  end;
+end;
+
+{ TColorConstNode }
+
+constructor TColorConstNode.Create;
+begin
+  inherited;
+  Width := 180;
+  Height := 110;
+  NodeType := 'colorconst';
+  HeaderColor := $FFA73E84;
+  IconPath := 'M276.625 384v-36.938q52.688-48.375 80.25-78.937q25.313-27.938 34.875-44.813q9.75-16.875 9.75-33.187q0-17.25-11.813-27.563q-13.312-11.436-33.562-11.437q-27.75 0-63.75 20.063l-11.25-38.626q39.562-18.561 80.062-18.562q39.375 0 62.25 17.812q24.938 19.5 24.938 55.688q0 24.375-11.438 46.5q-11.437 22.125-40.687 54q-25.688 28.313-58.313 58.5h112.5V384zm-155.167 0V169.875L72.896 202.5L53.02 165.938l73.5-47.626h40.125V384zm117.209-41.667q-7.5-7.666-18.834-7.666q-11.166 0-18.833 7.5q-7.5 7.5-7.5 18.666q0 11.834 7.333 19.5q7.5 7.5 19.167 7.5q11.166 0 18.667-7.5q7.5-7.667 7.5-19.166q0-11.334-7.5-18.834';
+end;
+
+procedure TColorConstNode.Execute(AContext: TNodeExecutionContext);
+begin
+  var V := FindValue('value');
+  if V <> nil then
+    AContext.SetOutputValue(FValueOut, MakeColorValue(V.ColorValue))
+  else
+    AContext.SetOutputValue(FValueOut, MakeColorValue(TAlphaColors.Null));
+end;
+
+procedure TColorConstNode.SetupPins;
+begin
+  ClearPins;
+  FValueOut := AddOutputPin('Value', 'color', TPinKind.Data);
+
+  if FindValue('value') = nil then
+  begin
+    var V := AddValue('value', TNodeValueKind.Color);
+    V.ColorValue := TAlphaColors.Null;
   end;
 end;
 
@@ -1737,6 +1780,8 @@ begin
     'Boolean constant node', 'bool,constant,logic', '', TBoolConstNode, TAlphaColors.Null);
   ARegistry.RegisterNodeEx('stringconst', 'String Constant', 'Variable',
     'String constant node', 'string,text,constant', '', TStringConstNode, TAlphaColors.Null);
+  ARegistry.RegisterNodeEx('colorconst', 'Color Constant', 'Variable',
+    'Color constant node', 'color,constant', '', TColorConstNode, TAlphaColors.Null);
 
   ARegistry.RegisterNodeEx('intrandom', 'Int Random', 'Variable',
     'Integer random node', 'int,random,number', '', TIntRandomNode, TAlphaColors.Null);

@@ -128,7 +128,7 @@ end;
 
 procedure TBitmapFilterNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var Original := NodeValueToBitmapDef(AContext.GetInputValue(FValueIn), nil);
+  var Original := NodeValueToBitmapDef(AContext.GetInputValueOrVar(FValueIn, 'Original'), nil);
   FResult := nil;
   if (Original <> nil) and (not Original.GetIsEmpty) then
   begin
@@ -152,7 +152,7 @@ begin
           TFilterValueType.Color:
             begin
               var Color: TAlphaColor := FilterAttr.Default.AsType<TAlphaColor>;
-              Color := StringToAlphaColor(NodeValueToStringDef(AContext.GetInputValueOrVar(Pin, FilterAttr.Name), AlphaColorToString(Color)));
+              Color := NodeValueToColorDef(AContext.GetInputValueOrVar(Pin, FilterAttr.Name), Color);
               FFilter.ValuesAsColor[FilterAttr.Name] := Color;
             end;
           TFilterValueType.Bitmap:
@@ -316,6 +316,12 @@ begin
   FValueIn := AddInputPin('Original', 'bitmap', TPinKind.Data);
   FValueOut := AddOutputPin('Result', 'bitmap', TPinKind.Data);
 
+  if FindValue('Original') = nil then
+  begin
+    var V := AddValue('Original', TNodeValueKind.Bitmap);
+    V.BitmapValue := nil;
+  end;
+
   for var FilterAttr in FFilter.FilterAttr.Values do
   begin
     case FilterAttr.ValueType of
@@ -326,6 +332,8 @@ begin
           begin
             var V := AddValue(FilterAttr.Name, TNodeValueKind.Float);
             V.FloatValue := FilterAttr.Default.AsExtended;
+            V.Min := FilterAttr.Min.AsExtended;
+            V.Max := FilterAttr.Max.AsExtended;
           end;
         end;
       TFilterValueType.Point:
@@ -333,12 +341,12 @@ begin
           AddInputPin(FilterAttr.Name + '.X', 'float');
           if FindValue(FilterAttr.Name + '.X') = nil then
           begin
-            var V := AddValue(FilterAttr.Name + '.V', TNodeValueKind.Float);
+            var V := AddValue(FilterAttr.Name + '.X', TNodeValueKind.Float);
             var X := FilterAttr.Default.AsType<TPointF>.X;
             V.FloatValue := X;
           end;
-          AddInputPin(FilterAttr.Name + '.Y', 'float');
 
+          AddInputPin(FilterAttr.Name + '.Y', 'float');
           if FindValue(FilterAttr.Name + '.Y') = nil then
           begin
             var V := AddValue(FilterAttr.Name + '.Y', TNodeValueKind.Float);
@@ -348,11 +356,11 @@ begin
         end;
       TFilterValueType.Color:
         begin
-          AddInputPin(FilterAttr.Name, 'string');
+          AddInputPin(FilterAttr.Name, 'color');
           if FindValue(FilterAttr.Name) = nil then
           begin
-            var V := AddValue(FilterAttr.Name, TNodeValueKind.string);
-            V.StringValue := AlphaColorToString(FilterAttr.Default.AsType<TAlphaColor>);
+            var V := AddValue(FilterAttr.Name, TNodeValueKind.Color);
+            V.ColorValue := FilterAttr.Default.AsType<TAlphaColor>;
           end;
         end;
       TFilterValueType.Bitmap:
@@ -361,7 +369,7 @@ begin
           if FindValue(FilterAttr.Name) = nil then
           begin
             var V := AddValue(FilterAttr.Name, TNodeValueKind.Bitmap);
-            V.Bitmap := nil;
+            V.BitmapValue := nil;
           end;
         end;
     end;
@@ -435,7 +443,7 @@ procedure TBitmapValueNode.Execute(AContext: TNodeExecutionContext);
 begin
   var V := FindValue('value');
   if V <> nil then
-    AContext.SetOutputValue(FValueOut, MakeBitmapValue(V.Bitmap))
+    AContext.SetOutputValue(FValueOut, MakeBitmapValue(V.BitmapValue))
   else
     AContext.SetOutputValue(FValueOut, MakeBitmapValue(nil));
 end;
@@ -448,15 +456,15 @@ begin
   var NodeBody := RectF(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
 
   var V := FindValue('value');
-  if (V <> nil) and (V.Bitmap <> nil) and (not V.Bitmap.GetIsEmpty) then
+  if (V <> nil) and (V.BitmapValue <> nil) and (not V.BitmapValue.GetIsEmpty) then
   begin
     NodeBody.Inflate(-20 * Zoom, -20 * Zoom);
     NodeBody.Top := NodeBody.Top + Max(FInputs.Count, FOutputs.Count) * 30 * Zoom;
     if NodeBody.Bottom <= NodeBody.Top then
       Exit;
-    var R := V.Bitmap.GetBitmap.BoundsF;
+    var R := V.BitmapValue.GetBitmap.BoundsF;
     R := R.FitInto(NodeBody);
-    Canvas.DrawBitmap(V.Bitmap.GetBitmap, V.Bitmap.GetBitmap.BoundsF, R, 1);
+    Canvas.DrawBitmap(V.BitmapValue.GetBitmap, V.BitmapValue.GetBitmap.BoundsF, R, 1);
   end;
 end;
 
@@ -468,7 +476,7 @@ begin
   if FindValue('value') = nil then
   begin
     var V := AddValue('value', TNodeValueKind.Bitmap);
-    V.Bitmap := nil;
+    V.BitmapValue := nil;
   end;
 end;
 

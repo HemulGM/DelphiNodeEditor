@@ -62,7 +62,14 @@ uses
   FMX.NodeEditor.Executor in '..\src\FMX.NodeEditor.Executor.pas',
   FMX.NodeEditor.Executor.Thread in '..\src\FMX.NodeEditor.Executor.Thread.pas',
   FMX.NodeEditor.Node.Engineering in '..\src\FMX.NodeEditor.Node.Engineering.pas',
-  FMX.NodeEditor.Node.Graphic in '..\src\FMX.NodeEditor.Node.Graphic.pas';
+  FMX.NodeEditor.Node.Graphic in '..\src\FMX.NodeEditor.Node.Graphic.pas',
+  NodeEditor.Inspector.Item in 'NodeEditor.Inspector.Item.pas' {FrameInspectorItem: TFrame},
+  NodeEditor.Inspector.Item.Float in 'NodeEditor.Inspector.Item.Float.pas' {FrameInspectorItemFloat: TFrame},
+  NodeEditor.Inspector.Item.Text in 'NodeEditor.Inspector.Item.Text.pas' {FrameInspectorItemText: TFrame},
+  NodeEditor.Inspector.Item.Int in 'NodeEditor.Inspector.Item.Int.pas' {FrameInspectorItemInt: TFrame},
+  NodeEditor.Inspector.Item.Bitmap in 'NodeEditor.Inspector.Item.Bitmap.pas' {FrameInspectorItemBitmap: TFrame},
+  NodeEditor.Inspector.Item.Color in 'NodeEditor.Inspector.Item.Color.pas' {FrameInspectorItemColor: TFrame},
+  NodeEditor.Inspector.Item.Bool in 'NodeEditor.Inspector.Item.Bool.pas' {FrameInspectorItemBool: TFrame};
 
 {$R *.res}
 

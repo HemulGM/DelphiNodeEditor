@@ -4,8 +4,8 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections, System.Rtti,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Graph, FMX.Graphics,
-  FMX.NodeEditor.Debug.Intf;
+  System.UITypes, FMX.NodeEditor.Types, FMX.NodeEditor.Node,
+  FMX.NodeEditor.Graph, FMX.Graphics, FMX.NodeEditor.Debug.Intf;
 
 type
   TNodeExecutionContext = class;
@@ -126,7 +126,11 @@ function NodeValueToFloatDef(const AValue: TValue; const ADefault: double = 0.0)
 
 function NodeValueToStringDef(const AValue: TValue; const ADefault: string = ''): string;
 
+function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
+
 function MakeFloatValue(const AValue: double): TValue;
+
+function MakeColorValue(const AValue: TAlphaColor): TValue;
 
 function MakeBoolValue(const AValue: boolean): TValue;
 
@@ -145,6 +149,17 @@ function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64 = 0): Int
 procedure CheckThreadStopped;
 
 implementation
+
+function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  if AValue.IsType<TAlphaColor>then
+    Result := AValue.AsType<TAlphaColor>
+  else
+    Result := ADefault;
+end;
 
 function NodeValueToFloatDef(const AValue: TValue; const ADefault: double): double;
 begin
@@ -196,6 +211,11 @@ begin
 end;
 
 function MakeFloatValue(const AValue: double): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakeColorValue(const AValue: TAlphaColor): TValue;
 begin
   Result := AValue;
 end;
@@ -503,6 +523,12 @@ begin
           Result := VFrom.BooleanValue;
         TNodeValueKind.JSON:
           Result := VFrom.JSONValue;
+        TNodeValueKind.Color:
+          Result := VFrom.ColorValue;
+        TNodeValueKind.Bitmap:
+          Result := TValue.From<IBitmapNodeObject>(VFrom.BitmapValue);
+        TNodeValueKind.Point:
+          Result := TValue.From(VFrom.PointValue);
       end;
     end;
   end;

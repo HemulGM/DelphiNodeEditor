@@ -430,6 +430,41 @@
         <DCCReference Include="..\src\FMX.NodeEditor.Executor.Thread.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Node.Engineering.pas"/>
         <DCCReference Include="..\src\FMX.NodeEditor.Node.Graphic.pas"/>
+        <DCCReference Include="NodeEditor.Inspector.Item.pas">
+            <Form>FrameInspectorItem</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Float.pas">
+            <Form>FrameInspectorItemFloat</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Text.pas">
+            <Form>FrameInspectorItemText</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Int.pas">
+            <Form>FrameInspectorItemInt</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Bitmap.pas">
+            <Form>FrameInspectorItemBitmap</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Color.pas">
+            <Form>FrameInspectorItemColor</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="NodeEditor.Inspector.Item.Bool.pas">
+            <Form>FrameInspectorItemBool</Form>
+            <FormType>fmx</FormType>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

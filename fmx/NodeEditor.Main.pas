@@ -13,7 +13,11 @@ uses
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
   FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors,
   System.ImageList, FMX.ImgList, NodeEditor.LegendItem,
-  FMX.NodeEditor.Executor.Runtime, System.Actions, FMX.ActnList;
+  FMX.NodeEditor.Executor.Runtime, System.Actions, FMX.ActnList,
+  NodeEditor.Inspector.Item.Float, NodeEditor.Inspector.Item.Color,
+  NodeEditor.Inspector.Item, NodeEditor.Inspector.Item.Bitmap,
+  NodeEditor.Inspector.Item.Text, NodeEditor.Inspector.Item.Int,
+  NodeEditor.Inspector.Item.Bool;
 
 type
   {$SCOPEDENUMS ON}
@@ -115,10 +119,6 @@ type
     Label7: TLabel;
     Button8: TButton;
     Panel10: TPanel;
-    StringGridNodeValues: TStringGrid;
-    StringColumnVName: TStringColumn;
-    StringColumnVKind: TStringColumn;
-    StringColumnVValue: TStringColumn;
     PopupMenuZoom: TPopupMenu;
     MenuItem7: TMenuItem;
     MenuItem8: TMenuItem;
@@ -405,6 +405,13 @@ type
     CheckBoxLockedAll: TCheckBox;
     PathLabel19: TPathLabel;
     ActionList1: TActionList;
+    VertScrollBoxProps: TVertScrollBox;
+    FrameInspectorItemBitmap1: TFrameInspectorItemBitmap;
+    FrameInspectorItemColor1: TFrameInspectorItemColor;
+    FrameInspectorItemFloat1: TFrameInspectorItemFloat;
+    FrameInspectorItemText1: TFrameInspectorItemText;
+    FrameInspectorItemInt1: TFrameInspectorItemInt;
+    FrameInspectorItemBool1: TFrameInspectorItemBool;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -423,7 +430,6 @@ type
     procedure MenuItemEditToBackClick(Sender: TObject);
     procedure SpinBoxSizeChange(Sender: TObject);
     procedure ButtonNodeApplyClick(Sender: TObject);
-    procedure StringGridNodeValuesSelectCell(Sender: TObject; const ACol, ARow: Integer; var CanSelect: Boolean);
     procedure ButtonNodeRevertClick(Sender: TObject);
     procedure MenuItemJSONLoadClick(Sender: TObject);
     procedure MenuItemJSONSaveClick(Sender: TObject);
@@ -562,7 +568,6 @@ begin
   IconControl := ImageIcon;
   HideTitleBar := True;
   //
-  StringGridNodeValues.AniCalculations.Animation := True;
   RadioButtonToolsLibrary.IsChecked := False;
   RadioButtonToolsLibrary.IsChecked := True;
   LogClear;
@@ -895,6 +900,41 @@ begin
 
   N.CommentText := MemoNodeComment.Text;
 
+  for var Control in VertScrollBoxProps.Content.Controls do
+    if Control is TFrameInspectorItem then
+    begin
+      var Item := TFrameInspectorItem(Control);
+      if not Item.IsChanged then
+        Continue;
+      var V := N.GetValue(Item.PropName);
+      if not Assigned(V) then
+        Continue;
+      case V.Kind of
+        TNodeValueKind.Float:
+          V.FloatValue := Item.Value.AsExtended;
+        TNodeValueKind.Integer:
+          V.IntegerValue := Item.Value.AsInteger;
+        TNodeValueKind.string:
+          V.StringValue := Item.Value.AsString;
+        TNodeValueKind.Boolean:
+          V.BooleanValue := Item.Value.AsBoolean;
+        TNodeValueKind.JSON:
+          V.JSONValue := Item.Value.AsString;
+        TNodeValueKind.Bitmap:
+          begin
+            var BO := TBitmapObject.Create;
+            V.BitmapValue := BO;
+            var BMP := TBitmap.Create;
+            BO.SetBitmap(BMP);
+            BMP.Assign(Item.Value.AsType<TBitmap>);
+          end;
+        TNodeValueKind.Color:
+          V.ColorValue := Item.Value.AsType<TAlphaColor>;
+        TNodeValueKind.Point:
+          V.PointValue := Item.Value.AsType<TPointF>;
+      end;
+    end;
+       {
   for var i := 0 to N.ValueCount - 1 do
   begin
     if i >= StringGridNodeValues.RowCount then
@@ -920,12 +960,12 @@ begin
           if TFile.Exists(VStr) then
           begin
             var BMP := TBitmap.CreateFromFile(VStr);
-            V.Bitmap := TBitmapObject.Create;
-            V.Bitmap.SetBitmap(BMP);
+            V.BitmapValue := TBitmapObject.Create;
+            V.BitmapValue.SetBitmap(BMP);
           end;
         end;
     end;
-  end;
+  end;      }
   N.AutoLayoutPins;
 
   var NewObj := TJSONObject.Create;
@@ -1090,15 +1130,6 @@ begin
     FEditor.GridSize := V;
     UpdateStatus;
   end;
-end;
-
-procedure TFormMain.StringGridNodeValuesSelectCell(Sender: TObject; const ACol, ARow: Integer; var CanSelect: Boolean);
-begin
-  if ACol = 2 then
-    StringGridNodeValues.Options := StringGridNodeValues.Options + [TGridOption.Editing]
-  else
-    StringGridNodeValues.Options := StringGridNodeValues.Options - [TGridOption.Editing];
-  CanSelect := True;
 end;
 
 procedure TFormMain.InitDemoGraphExec;
@@ -1544,6 +1575,9 @@ procedure TFormMain.ClearAllSections;
 begin
   FNodeUpdating := True;
   try
+    while VertScrollBoxProps.Content.ControlsCount > 0 do
+      VertScrollBoxProps.Content.Controls[0].Free;
+    LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
     LabelNodeType.Text := 'Node (no selection)';
     EditNodeTitle.Text := '';
     SpinBoxNodeX.Value := 0;
@@ -1553,9 +1587,6 @@ begin
     ComboColorBoxNodeHeadColor.Color := TAlphaColors.Null;
     CheckBoxNodeCollapsed.IsChecked := False;
     MemoNodeComment.Text := '';
-    StringGridNodeValues.RowCount := 0;
-    StringGridNodeValues.Height := StringGridNodeValues.RowCount * StringGridNodeValues.RowHeight + (32 + 8);
-    LayoutNodeData.Height := StringGridNodeValues.Height + 40 + 10;
     ButtonNodeApply.Enabled := False;
     PanelInspector.Enabled := False;
     ButtonNodeRevert.Enabled := False;
@@ -1621,11 +1652,6 @@ begin
 end;
 
 procedure TFormMain.RefreshFromSelection;
-var
-  N: TCustomNode;
-  i: integer;
-  V: TNodeValue;
-  VStr: string;
 begin
   UpdateStatus;
   if (FEditor = nil) or (FEditor.SelectedNodeCount <> 1) then
@@ -1636,7 +1662,7 @@ begin
     Exit;
   end;
 
-  N := FEditor.GetSelectedNode(0);
+  var N := FEditor.GetSelectedNode(0);
   if N = nil then
   begin
     ClearAllSections;
@@ -1647,60 +1673,114 @@ begin
   try
     ClearAllSections;
 
-    // --- Info ---
+    // Info
     LabelNodeType.Text := Format('Node (%s)', [N.NodeType]);
 
-    // --- Basic ---
+    // Basic
     EditNodeTitle.Text := N.Title;
     SpinBoxNodeX.Value := N.X;
     SpinBoxNodeY.Value := N.Y;
     SpinBoxNodeWidth.Value := N.Width;
     SpinBoxNodeHeight.Value := N.Height;
 
-    // --- Visual ---
+    // Visual
     ComboColorBoxNodeHeadColor.Color := N.HeaderColor;
     CheckBoxNodeCollapsed.IsChecked := N.Collapsed;
 
-    // --- Comment ---
+    // Comment
     MemoNodeComment.Text := N.CommentText;
 
-    // --- Values ---
+    // Values
     if N.ValueCount > 0 then
     begin
-      StringGridNodeValues.RowCount := N.ValueCount;
-      for i := 0 to N.ValueCount - 1 do
+      for var i := 0 to N.ValueCount - 1 do
       begin
-        V := N.GetValue(i);
+        var V := N.GetValue(i);
         if V = nil then
           Continue;
-        StringGridNodeValues.Cells[0, i] := V.Name;
-        StringGridNodeValues.Cells[1, i] := NodeValueKindToStr(V.Kind);
 
         case V.Kind of
           TNodeValueKind.Float:
-            VStr := FormatFloat('0.######', V.FloatValue);
+            begin
+              var Frame := TFrameInspectorItemFloat.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.FloatValue;
+              if V.IsHaveMinMax then
+              begin
+                Frame.Min := V.Min;
+                Frame.Max := V.Max;
+              end;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
           TNodeValueKind.Integer:
-            VStr := V.IntegerValue.ToString;
+            begin
+              var Frame := TFrameInspectorItemInt.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.IntegerValue;
+              if V.IsHaveMinMax then
+              begin
+                Frame.Min := V.Min;
+                Frame.Max := V.Max;
+              end;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
           TNodeValueKind.string:
-            VStr := V.StringValue;
+            begin
+              var Frame := TFrameInspectorItemText.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.StringValue;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
+          TNodeValueKind.Color:
+            begin
+              var Frame := TFrameInspectorItemColor.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.ColorValue;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
           TNodeValueKind.Boolean:
-            VStr := if V.BooleanValue then 'true' else 'false';
+            begin
+              var Frame := TFrameInspectorItemBool.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.BooleanValue;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
           TNodeValueKind.JSON:
-            VStr := V.JSONValue;
+            begin
+              var Frame := TFrameInspectorItemText.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              Frame.Value := V.StringValue;
+              VertScrollBoxProps.AddObject(Frame);
+            end;
           TNodeValueKind.Bitmap:
-            VStr := 'Bitmap';
-        else
-          VStr := '';
+            begin
+              var Frame := TFrameInspectorItemBitmap.Create(VertScrollBoxProps);
+              Frame.Position.Y := 100000;
+              Frame.Align := TAlignLayout.Top;
+              Frame.PropName := V.Name;
+              if Assigned(V.BitmapValue) and not V.BitmapValue.GetIsEmpty then
+                Frame.Value := TValue.From<TBitmap>(V.BitmapValue.GetBitmap)
+              else
+                Frame.Value := TValue.From<TBitmap>(nil);
+              VertScrollBoxProps.AddObject(Frame);
+            end;
         end;
-
-        StringGridNodeValues.Cells[2, i] := VStr;
       end;
-    end
-    else
-      StringGridNodeValues.RowCount := 0;
+    end;
 
-    StringGridNodeValues.Height := StringGridNodeValues.RowCount * StringGridNodeValues.RowHeight + (32 + 8);
-    LayoutNodeData.Height := StringGridNodeValues.Height + 40 + 10;
+    LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
     PanelInspector.Enabled := True;
     ButtonNodeApply.Enabled := True;
     ButtonNodeRevert.Enabled := True;
