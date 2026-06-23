@@ -78641,7 +78641,7 @@ object FormMain: TFormMain
           Size.Height = 641.000000000000000000
           Size.PlatformDefault = False
           TabHeight = 48.000000000000000000
-          TabIndex = 0
+          TabIndex = 1
           TabOrder = 0
           TabPosition = None
           Sizes = (
@@ -78657,7 +78657,7 @@ object FormMain: TFormMain
             CustomIcon = <
               item
               end>
-            IsSelected = True
+            IsSelected = False
             Size.Width = 16.000000000000000000
             Size.Height = 16.000000000000000000
             Size.PlatformDefault = False
@@ -78798,7 +78798,7 @@ object FormMain: TFormMain
             CustomIcon = <
               item
               end>
-            IsSelected = False
+            IsSelected = True
             Size.Width = 16.000000000000000000
             Size.Height = 16.000000000000000000
             Size.PlatformDefault = False
@@ -79338,7 +79338,7 @@ object FormMain: TFormMain
                   Size.PlatformDefault = False
                   StyleLookup = 'labelstyle_bodystrong'
                   Text = 'Selecting'
-                  TabOrder = 7
+                  TabOrder = 8
                 end
                 object Panel19: TPanel
                   Align = Top
@@ -79351,7 +79351,7 @@ object FormMain: TFormMain
                   Size.Height = 1.000000000000000000
                   Size.PlatformDefault = False
                   StyleLookup = 'panelstyle_divider'
-                  TabOrder = 27
+                  TabOrder = 28
                 end
                 object Label37: TLabel
                   Align = Top
@@ -79420,7 +79420,7 @@ object FormMain: TFormMain
                     inherited Label3: TLabel
                       Size.Width = 92.000000000000000000
                       Text = 'Movement'
-                      TabOrder = 9
+                      TabOrder = 10
                     end
                     object Button11: TButton
                       Align = Left
@@ -80624,7 +80624,6 @@ object FormMain: TFormMain
           object RadioButtonToolsHistory: TRadioButton
             Align = Right
             GroupName = 'tools'
-            IsChecked = True
             Position.X = 116.000000000000000000
             Position.Y = 8.000000000000000000
             Size.Width = 57.000000000000000000
@@ -80790,6 +80789,7 @@ object FormMain: TFormMain
           object RadioButtonToolsLibrary: TRadioButton
             Align = Client
             GroupName = 'tools'
+            IsChecked = True
             Size.Width = 59.000000000000000000
             Size.Height = 32.000000000000000000
             Size.PlatformDefault = False

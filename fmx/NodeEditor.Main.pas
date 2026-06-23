@@ -563,8 +563,8 @@ begin
   HideTitleBar := True;
   //
   StringGridNodeValues.AniCalculations.Animation := True;
-  RadioButtonToolsHistory.IsChecked := False;
-  RadioButtonToolsHistory.IsChecked := True;
+  RadioButtonToolsLibrary.IsChecked := False;
+  RadioButtonToolsLibrary.IsChecked := True;
   LogClear;
   //
   ClearAllSections;

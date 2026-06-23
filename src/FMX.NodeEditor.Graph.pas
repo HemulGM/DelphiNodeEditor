@@ -1493,6 +1493,7 @@ begin
   begin
     var TMP := AClass.Create;
     try
+      TMP.NodeType := ANodeType;
       if AIconPath.IsEmpty then
         It.IconPath := TMP.IconPath;
       if AColor = TAlphaColors.Null then

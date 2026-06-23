@@ -130,6 +130,7 @@ type
     FIconPathData: TPathData;
     FTextLayout: TTextLayout;
     FTextLayoutComment: TTextLayout;
+    FNodeType: string;
   protected
     procedure SetHeight(const Value: Integer); virtual;
     procedure SetWidth(const Value: Integer); virtual;
@@ -139,7 +140,6 @@ type
     function GetHeight: Integer; virtual;
   public
     Id: string;
-    NodeType: string;
     Title: string;
     X, Y: Single;
     MinWidth, MinHeight: Integer;
@@ -214,6 +214,7 @@ type
     procedure LoadPinsFromJSON(APinsArr: TJSONArray); virtual;
     procedure LoadValuesFromJSON(AValuesArr: TJSONArray); virtual;
     procedure RebindPins; virtual;
+    procedure SetNodeType(const Value: string); virtual;
   private
     procedure DrawGrip(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single = 1.0);
     procedure SetIconPath(const Value: string);
@@ -225,6 +226,7 @@ type
   public
     procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); virtual;
     property IconPath: string read FIconPath write SetIconPath;
+    property NodeType: string read FNodeType write SetNodeType;
   end;
 
   TDefaultNode = class(TCustomNode)
@@ -509,6 +511,11 @@ procedure TCustomNode.SetIconPath(const Value: string);
 begin
   FIconPath := Value;
   UpdateIconPath;
+end;
+
+procedure TCustomNode.SetNodeType(const Value: string);
+begin
+  FNodeType := Value;
 end;
 
 procedure TCustomNode.SetupPins;
