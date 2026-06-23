@@ -1,6 +1,4 @@
-﻿//{$include Old/FMX.NodeEditor.Node.Graph.pas}
-
-unit FMX.NodeEditor.Graph;
+﻿unit FMX.NodeEditor.Graph;
 
 interface
 
