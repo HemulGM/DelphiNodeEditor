@@ -14,3 +14,5 @@ fmx/Linux64/*
 /fmx/Android64/*
 *.delphilsp.json
 *.rsm
+/fmx/OSX64/*
+/fmx/Win64/Release/*

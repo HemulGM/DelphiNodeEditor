@@ -416,6 +416,8 @@ type
     Panel1: TPanel;
     Layout1: TLayout;
     ButtonClosePopupFindNode: TButton;
+    CheckBoxPanAnimation: TCheckBox;
+    PathLabel4: TPathLabel;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -1653,6 +1655,7 @@ begin
   FEditor.LockedAll := CheckBoxLockedAll.IsChecked;
   FEditor.LinkGradient := CheckBoxLinkGradient.IsChecked;
   FEditor.LinksOverNodes := CheckBoxLinksOverNodes.IsChecked;
+  FEditor.PanAnimation := CheckBoxPanAnimation.IsChecked;
   UpdateStatus;
 end;
 
