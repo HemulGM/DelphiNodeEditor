@@ -14,7 +14,7 @@ type
     procedure SetupPins; override;
     procedure AutoLayoutPins; override;
   public
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
   TRerouteDataNode = class(TExecutableNode)
@@ -25,7 +25,7 @@ type
     procedure AutoLayoutPins; override;
   public
     procedure Execute(AContext: TNodeExecutionContext); override;
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
 implementation
@@ -43,7 +43,7 @@ begin
   Result := Rect(0, 0, Width, Height).CenterPoint;
 end;
 
-procedure TRerouteExecNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TRerouteExecNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   if Zoom < ZoomDetailLimitExt then
     Exit;
@@ -61,7 +61,7 @@ begin
     Canvas.Fill.Color := TAlphaColors.White;
     var SelRect := NodeBounds;
     SelRect.Inflate(3 * Zoom, 3 * Zoom);
-    Canvas.FillEllipse(SelRect, 0.3);
+    Canvas.FillEllipse(SelRect, Opacity * 0.3);
   end;
 
   // Body
@@ -96,11 +96,11 @@ begin
   var BodyRect := RectF(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
 
   // Highlight frame
-  Canvas.DrawEllipse(BodyRect, 1);
+  Canvas.DrawEllipse(BodyRect, Opacity);
 
   // Body
   BodyRect.Inflate(-Radius * 0.4, -Radius * 0.4);
-  Canvas.FillEllipse(BodyRect, 1);
+  Canvas.FillEllipse(BodyRect, Opacity);
 
   case HoveredPinCompatible of
     TPinCompatible.Undefined:
@@ -111,7 +111,7 @@ begin
         Canvas.Fill.Color := TAlphaColors.White;
         CachePathObject.Data := 'M9.765 3.205a.75.75 0 0 1 .03 1.06l-4.25 4.5a.75.75 0 0 1-1.075.015L2.22 6.53a.75.75 0 0 1 1.06-1.06l1.705 1.704l3.72-3.939a.75.75 0 0 1 1.06-.03';
         CachePathObject.FitToRect(BodyRect);
-        Canvas.FillPath(CachePathObject, 1);
+        Canvas.FillPath(CachePathObject, Opacity);
       end;
     TPinCompatible.False:
       begin
@@ -119,7 +119,7 @@ begin
         Canvas.Fill.Color := TAlphaColors.White;
         CachePathObject.Data := 'm1.897 2.054l.073-.084a.75.75 0 0 1 .976-.073l.084.073L6 4.939l2.97-2.97a.75.75 0 1 1 1.06 1.061L7.061 6l2.97 2.97a.75.75 0 0 1 .072.976l-.073.084a.75.75 0 0 1-.976.073l-.084-.073L6 7.061l-2.97 2.97A.75.75 0 1 1 1.97 8.97L4.939 6l-2.97-2.97a.75.75 0 0 1-.072-.976l.073-.084z';
         CachePathObject.FitToRect(BodyRect);
-        Canvas.FillPath(CachePathObject, 1);
+        Canvas.FillPath(CachePathObject, Opacity);
       end;
   end;
 end;
@@ -171,7 +171,7 @@ begin
   Result := Rect(0, 0, Width, Height).CenterPoint;
 end;
 
-procedure TRerouteDataNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TRerouteDataNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   if Zoom < ZoomDetailLimitExt then
     Exit;
@@ -189,7 +189,7 @@ begin
     Canvas.Fill.Color := TAlphaColors.White;
     var SelRect := NodeBounds;
     SelRect.Inflate(3 * Zoom, 3 * Zoom);
-    Canvas.FillEllipse(SelRect, 0.3);
+    Canvas.FillEllipse(SelRect, Opacity * 0.3);
   end;
 
   // Body
@@ -224,11 +224,11 @@ begin
   var BodyRect := RectF(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
 
   // Highlight frame
-  Canvas.DrawEllipse(BodyRect, 1);
+  Canvas.DrawEllipse(BodyRect, Opacity);
 
   // Body
   BodyRect.Inflate(-Radius * 0.4, -Radius * 0.4);
-  Canvas.FillEllipse(BodyRect, 1);
+  Canvas.FillEllipse(BodyRect, Opacity);
 
   case HoveredPinCompatible of
     TPinCompatible.Undefined:
@@ -239,7 +239,7 @@ begin
         Canvas.Fill.Color := TAlphaColors.White;
         CachePathObject.Data := 'M9.765 3.205a.75.75 0 0 1 .03 1.06l-4.25 4.5a.75.75 0 0 1-1.075.015L2.22 6.53a.75.75 0 0 1 1.06-1.06l1.705 1.704l3.72-3.939a.75.75 0 0 1 1.06-.03';
         CachePathObject.FitToRect(BodyRect);
-        Canvas.FillPath(CachePathObject, 1);
+        Canvas.FillPath(CachePathObject, Opacity);
       end;
     TPinCompatible.False:
       begin
@@ -247,7 +247,7 @@ begin
         Canvas.Fill.Color := TAlphaColors.White;
         CachePathObject.Data := 'm1.897 2.054l.073-.084a.75.75 0 0 1 .976-.073l.084.073L6 4.939l2.97-2.97a.75.75 0 1 1 1.06 1.061L7.061 6l2.97 2.97a.75.75 0 0 1 .072.976l-.073.084a.75.75 0 0 1-.976.073l-.084-.073L6 7.061l-2.97 2.97A.75.75 0 1 1 1.97 8.97L4.939 6l-2.97-2.97a.75.75 0 0 1-.072-.976l.073-.084z';
         CachePathObject.FitToRect(BodyRect);
-        Canvas.FillPath(CachePathObject, 1);
+        Canvas.FillPath(CachePathObject, Opacity);
       end;
   end;
 end;

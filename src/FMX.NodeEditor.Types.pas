@@ -104,9 +104,11 @@ function NewId: string;
 
 //
 
-procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single); inline;
+procedure DrawPlus(const Canvas: TCanvas; const PositionCenter: TPointF; const Size: Single; const Opacity: Single);
 
-procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor); inline;
+procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom, Opacity: Single); inline;
+
+procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor; Opacity: Single); inline;
 
 function ScaleRectFFromCenter(const R: TRectF; const ScaleX, ScaleY: Single): TRectF; inline;
 
@@ -385,7 +387,26 @@ begin
   Result.Offset := Offset;
 end;
 
-procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom: Single);
+procedure DrawPlus(const Canvas: TCanvas; const PositionCenter: TPointF; const Size: Single; const Opacity: Single);
+begin
+  var HalfSize := Size * 0.5;
+
+  // Horz
+  Canvas.DrawLine(
+    PointF(PositionCenter.X - HalfSize, PositionCenter.Y),
+    PointF(PositionCenter.X + HalfSize, PositionCenter.Y),
+    Opacity
+  );
+
+  // Vert
+  Canvas.DrawLine(
+    PointF(PositionCenter.X, PositionCenter.Y - HalfSize),
+    PointF(PositionCenter.X, PositionCenter.Y + HalfSize),
+    Opacity
+  );
+end;
+
+procedure DrawShadowedRect(Canvas: TCanvas; const R: TRectF; Radius, Zoom, Opacity: Single);
 const
   sL = 6;
   sM = 3;
@@ -399,7 +420,7 @@ begin
 
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := $10000000;
-  Canvas.FillRect(S, Radius + sL * Zoom, Radius + sL * Zoom, AllCorners, 1);
+  Canvas.FillRect(S, Radius + sL * Zoom, Radius + sL * Zoom, AllCorners, Opacity);
 
   // Mid
   S := R;
@@ -407,36 +428,36 @@ begin
   OffsetRect(S, 0, sS * Zoom);
 
   Canvas.Fill.Color := $18000000;
-  Canvas.FillRect(S, Radius + sM * Zoom, Radius + sM * Zoom, AllCorners, 1);
+  Canvas.FillRect(S, Radius + sM * Zoom, Radius + sM * Zoom, AllCorners, Opacity);
 
   // Small
   S := R;
   OffsetRect(S, 0, sR * Zoom);
 
   Canvas.Fill.Color := $30000000;
-  Canvas.FillRect(S, Radius, Radius, AllCorners, 1);
+  Canvas.FillRect(S, Radius, Radius, AllCorners, Opacity);
 
   // Rect
   Canvas.Fill.Color := $FF2B2B2B;
-  Canvas.FillRect(R, Radius, Radius, AllCorners, 1);
+  Canvas.FillRect(R, Radius, Radius, AllCorners, Opacity);
 end;
 
-procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor);
+procedure DrawGlowLine(Canvas: TCanvas; const P1, P2: TPointF; Color: TAlphaColor; Opacity: Single);
 begin
   // outer glow
   Canvas.Stroke.Kind := TBrushKind.Solid;
 
   Canvas.Stroke.Color := MakeColor(Color, 0.08);
   Canvas.Stroke.Thickness := 10;
-  Canvas.DrawLine(P1, P2, 1);
+  Canvas.DrawLine(P1, P2, Opacity);
 
   Canvas.Stroke.Color := MakeColor(Color, 0.15);
   Canvas.Stroke.Thickness := 6;
-  Canvas.DrawLine(P1, P2, 1);
+  Canvas.DrawLine(P1, P2, Opacity);
 
   Canvas.Stroke.Color := MakeColor(Color, 0.25);
   Canvas.Stroke.Thickness := 3;
-  Canvas.DrawLine(P1, P2, 1);
+  Canvas.DrawLine(P1, P2, Opacity);
               {
   // core line
   Canvas.Stroke.Color := MakeColor(Color, 1.0);

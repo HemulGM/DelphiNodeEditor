@@ -15,15 +15,15 @@ uses
 type
   { Custom Draw Events }
 
-  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRectF; Zoom: Double; OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
+  TNodeEditorDrawNodeEvent = procedure(Sender: TObject; Canvas: TCanvas; ANode: TCustomNode; const ARect: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single; var AHandled: Boolean) of object;
 
-  TNodeEditorDrawPinEvent = procedure(Sender: TObject; Canvas: TCanvas; APin: TNodePin; const ACenter: TPoint; ARadius: Integer; ASelected, AHovered, AHighlighted: Boolean; var AHandled: Boolean) of object;
+  TNodeEditorDrawPinEvent = procedure(Sender: TObject; Canvas: TCanvas; APin: TNodePin; const ACenter: TPoint; ARadius: Integer; ASelected, AHovered, AHighlighted: Boolean; Opacity: Single; var AHandled: Boolean) of object;
 
-  TNodeEditorDrawLinkEvent = procedure(Sender: TObject; Canvas: TCanvas; ALink: TNodeLink; ASelected, AHovered: Boolean; var AHandled: Boolean) of object;
+  TNodeEditorDrawLinkEvent = procedure(Sender: TObject; Canvas: TCanvas; ALink: TNodeLink; ASelected, AHovered: Boolean; Opacity: Single; var AHandled: Boolean) of object;
 
-  TNodeEditorDrawGridEvent = procedure(Sender: TObject; Canvas: TCanvas; const VisibleWorldRect: TRectF; Zoom, OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
+  TNodeEditorDrawGridEvent = procedure(Sender: TObject; Canvas: TCanvas; const VisibleWorldRect: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single; var AHandled: Boolean) of object;
 
-  TNodeEditorDrawSnapGuidesEvent = procedure(Sender: TObject; Canvas: TCanvas; GuideSnapXActive, GuideSnapYActive: Boolean; GuideSnapX, GuideSnapY: single; Zoom, OffsetX, OffsetY: Double; var AHandled: Boolean) of object;
+  TNodeEditorDrawSnapGuidesEvent = procedure(Sender: TObject; Canvas: TCanvas; GuideSnapXActive, GuideSnapYActive: Boolean; GuideSnapX, GuideSnapY: Single; Zoom, OffsetX, OffsetY: Double; Opacity: Single; var AHandled: Boolean) of object;
 
   { Interaction Events }
 
@@ -36,6 +36,8 @@ type
   TEditorConnectPinsEvent = procedure(Sender: TObject; AFromPin, AToPin: TNodePin; var AAllow: Boolean) of object;
 
   TEditorPinsConnectedEvent = procedure(Sender: TObject; AFromPin, AToPin: TNodePin) of object;
+
+  TEditorCompatibleNodeRequestEvent = procedure(Sender: TObject; ASourcePin: TNodePin; const Position: TPointF) of object;
 
   TNodeSelectionChangedEvent = procedure(Sender: TObject) of object;
 
@@ -102,6 +104,7 @@ type
     FLastMousePos: TPointF;
     FLastMouseDownPos: TPointF;
     FDraggingLink: Boolean;
+    FTempToPinAccepted: Boolean;
     FTempStartMousePos: TPointF;
 
     FBoxSelecting: Boolean;
@@ -174,6 +177,7 @@ type
     FOnLinkClick: TNodeLinkEvent;
     FOnBeforeConnectPins: TEditorConnectPinsEvent;
     FOnAfterConnectPins: TEditorPinsConnectedEvent;
+    FOnCompatibleNodeRequest: TEditorCompatibleNodeRequestEvent;
     FShowGrid: Boolean;
     FShowFrameTime: Boolean;
     FLockedAll: Boolean;
@@ -352,6 +356,7 @@ type
     procedure OnContextSendToBack(Sender: TObject);
     procedure OnContextFrameSelected(Sender: TObject);
     procedure SetLinksOverNodes(const Value: Boolean);
+    function FindCompatiblePinInNode(FromPin: TNodePin; TargetNode: TCustomNode): TNodePin;
   protected
     function GetSelectedPin(Index: integer): TNodePin;
 
@@ -494,6 +499,7 @@ type
     property OnLinkClick: TNodeLinkEvent read FOnLinkClick write FOnLinkClick;
     property OnBeforeConnectPins: TEditorConnectPinsEvent read FOnBeforeConnectPins write FOnBeforeConnectPins;
     property OnAfterConnectPins: TEditorPinsConnectedEvent read FOnAfterConnectPins write FOnAfterConnectPins;
+    property OnCompatibleNodeRequest: TEditorCompatibleNodeRequestEvent read FOnCompatibleNodeRequest write FOnCompatibleNodeRequest;
 
     { IRotatedControl }
     property RotationAngle;
@@ -1383,7 +1389,7 @@ begin
   if Assigned(FOnDrawSnapGuides) then
     FOnDrawSnapGuides(Self, Canvas,
       FGuideSnapXActive, FGuideSnapYActive, FGuideSnapX, FGuideSnapY,
-      FZoom, FOffsetX, FOffsetY, Handled);
+      FZoom, FOffsetX, FOffsetY, FAbsoluteOpacity, Handled);
 
   if Handled then
     Exit;
@@ -1407,7 +1413,7 @@ begin
     Canvas.Stroke.Gradient.StopPosition.Point := PointF(0.5, 1);
 
     var SX := FGuideSnapX * FZoom + FOffsetX;
-    Canvas.DrawLine(PointF(Round(SX) + 0.5, 0 + 0.5), PointF(Round(SX) + 0.5, Round(Height) + 0.5), 1);
+    Canvas.DrawLine(PointF(Round(SX) + 0.5, 0 + 0.5), PointF(Round(SX) + 0.5, Round(Height) + 0.5), FAbsoluteOpacity);
   end;
 
   if FGuideSnapYActive then
@@ -1416,7 +1422,7 @@ begin
     Canvas.Stroke.Gradient.StopPosition.Point := PointF(1, 0.5);
 
     var SY := FGuideSnapY * FZoom + FOffsetY;
-    Canvas.DrawLine(PointF(0 + 0.5, Round(SY) + 0.5), PointF(Round(Width) + 0.5, Round(SY) + 0.5), 1);
+    Canvas.DrawLine(PointF(0 + 0.5, Round(SY) + 0.5), PointF(Round(Width) + 0.5, Round(SY) + 0.5), FAbsoluteOpacity);
   end;
 
   // Reset
@@ -1805,11 +1811,11 @@ begin
   // Override drawing
   var Handled := False;
   if Assigned(FOnDrawNode) then
-    FOnDrawNode(Self, Canvas, ANode, NodeBounds, FZoom, FOffsetX, FOffsetY, Handled);
+    FOnDrawNode(Self, Canvas, ANode, NodeBounds, FZoom, FOffsetX, FOffsetY, FAbsoluteOpacity, Handled);
 
   // Draw node
   if not Handled then
-    ANode.Paint(Canvas, NodeBounds, FZoom, FOffsetX, FOffsetY);
+    ANode.Paint(Canvas, NodeBounds, FZoom, FOffsetX, FOffsetY, FAbsoluteOpacity);
 end;
 
 function TNodeEditor.SnapWorldPoint(const P: TPointF): TPointF;
@@ -2023,7 +2029,7 @@ begin
   // Override draw
   var Handled := False;
   if Assigned(FOnDrawGrid) then
-    FOnDrawGrid(Self, Canvas, WR, FZoom, FOffsetX, FOffsetY, Handled);
+    FOnDrawGrid(Self, Canvas, WR, FZoom, FOffsetX, FOffsetY, FAbsoluteOpacity, Handled);
   if Handled then
     Exit;
 
@@ -2042,9 +2048,9 @@ begin
       Canvas.Stroke.Thickness := 1 * FZoom;
 
     if SameValue(Round(Canvas.Stroke.Thickness), Canvas.Stroke.Thickness, TEpsilon.Position) and (Round(Canvas.Stroke.Thickness) mod 2 <> 0) then
-      Canvas.DrawLine(PointF(Round(ScreenX) + 0.5, 0 + 0.5), PointF(Round(ScreenX) + 0.5, Round(Height) + 0.5), AbsoluteOpacity)
+      Canvas.DrawLine(PointF(Round(ScreenX) + 0.5, 0 + 0.5), PointF(Round(ScreenX) + 0.5, Round(Height) + 0.5), FAbsoluteOpacity)
     else
-      Canvas.DrawLine(PointF(ScreenX, 0), PointF(ScreenX, Height), AbsoluteOpacity);
+      Canvas.DrawLine(PointF(ScreenX, 0), PointF(ScreenX, Height), FAbsoluteOpacity);
 
     WorldX := WorldX + FGridSize;
   end;
@@ -2061,9 +2067,9 @@ begin
       Canvas.Stroke.Thickness := 1 * FZoom;
 
     if SameValue(Round(Canvas.Stroke.Thickness), Canvas.Stroke.Thickness, TEpsilon.Position) and (Round(Canvas.Stroke.Thickness) mod 2 <> 0) then
-      Canvas.DrawLine(PointF(0 + 0.5, Round(ScreenY) + 0.5), PointF(Round(Width) + 0.5, Round(ScreenY) + 0.5), AbsoluteOpacity)
+      Canvas.DrawLine(PointF(0 + 0.5, Round(ScreenY) + 0.5), PointF(Round(Width) + 0.5, Round(ScreenY) + 0.5), FAbsoluteOpacity)
     else
-      Canvas.DrawLine(PointF(0, ScreenY), PointF(Width, ScreenY), AbsoluteOpacity);
+      Canvas.DrawLine(PointF(0, ScreenY), PointF(Width, ScreenY), FAbsoluteOpacity);
 
     WorldY := WorldY + FGridSize;
   end;
@@ -2080,12 +2086,12 @@ begin
   if (WR.Left <= 0) and (WR.Right >= 0) then
   begin
     var SX := WorldToScreen(0, 0).X;
-    Canvas.DrawLine(Canvas.AlignToPixel(PointF(SX, 0)), Canvas.AlignToPixel(PointF(SX, Height)), 1);
+    Canvas.DrawLine(Canvas.AlignToPixel(PointF(SX, 0)), Canvas.AlignToPixel(PointF(SX, Height)), FAbsoluteOpacity);
   end;
   if (WR.Top <= 0) and (WR.Bottom >= 0) then
   begin
     var SY := WorldToScreen(0, 0).Y;
-    Canvas.DrawLine(Canvas.AlignToPixel(PointF(0, SY)), Canvas.AlignToPixel(PointF(Width, SY)), 1);
+    Canvas.DrawLine(Canvas.AlignToPixel(PointF(0, SY)), Canvas.AlignToPixel(PointF(Width, SY)), FAbsoluteOpacity);
   end;
 end;
 
@@ -2109,10 +2115,10 @@ begin
     Link.OnScreen := True;
     var Handled := False;
     if Assigned(FOnDrawLink) then
-      FOnDrawLink(Self, Canvas, Link, IsSelected, IsHovered, Handled);
+      FOnDrawLink(Self, Canvas, Link, IsSelected, IsHovered, FAbsoluteOpacity, Handled);
 
     if not Handled then
-      Link.Paint(Canvas, FZoom, FOffsetX, FOffsetY, IsSelected, IsHovered, AbsoluteOpacity);
+      Link.Paint(Canvas, FZoom, FOffsetX, FOffsetY, IsSelected, IsHovered, FAbsoluteOpacity);
   end;
 end;
 
@@ -2151,7 +2157,23 @@ begin
   Canvas.Stroke.Thickness := TNodeLink.Thickness * FZoom;
   Canvas.Stroke.Dash := TStrokeDash.Dot;
 
-  TNodeLink.VisualClass.DrawLink(Canvas, W0, W3, FZoom, FOffsetX, FOffsetY, 1, StartPin.Direction = TPinDirection.Input);
+  TNodeLink.VisualClass.DrawLink(Canvas, W0, W3, FZoom, FOffsetX, FOffsetY, FAbsoluteOpacity, StartPin.Direction = TPinDirection.Input);
+  if not FTempToPinAccepted then
+  begin
+    var PP := FTempMousePos;
+    PP.Offset(-10.5, -10.5);
+
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Dash := TStrokeDash.Solid;
+
+    Canvas.Stroke.Color := TAlphaColors.Black;
+    Canvas.Stroke.Thickness := 2;
+    DrawPlus(Canvas, PP, 10, FAbsoluteOpacity);
+
+    Canvas.Stroke.Color := TAlphaColors.White;
+    Canvas.Stroke.Thickness := 1;
+    DrawPlus(Canvas, PP, 8, FAbsoluteOpacity);
+  end;
 end;
 
 procedure TNodeEditor.DrawBoxSelect;
@@ -2165,8 +2187,8 @@ begin
   Canvas.Stroke.Color := FHighlightColor;
   Canvas.Stroke.Dash := TStrokeDash.Dash;
   Canvas.Stroke.Thickness := Max(1, Round(1 * FZoom));
-  Canvas.FillRect(R, 0.05);
-  Canvas.DrawRect(R, 1);
+  Canvas.FillRect(R, FAbsoluteOpacity * 0.05);
+  Canvas.DrawRect(R, FAbsoluteOpacity);
 end;
 
 procedure TNodeEditor.DrawMoveHint;
@@ -2199,22 +2221,22 @@ begin
 
   // Shadow
   Canvas.Fill.Color := $20000000;
-  Canvas.FillRect(RectF(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, 1);
+  Canvas.FillRect(RectF(R.Left, R.Top + 3, R.Right, R.Bottom + 3), 10, 10, AllCorners, FAbsoluteOpacity);
 
   // Background
   Canvas.Fill.Color := $CC2B2D30;
-  Canvas.FillRect(R, 10, 10, AllCorners, 1);
+  Canvas.FillRect(R, 10, 10, AllCorners, FAbsoluteOpacity);
 
   // Border
   Canvas.Stroke.Kind := TBrushKind.Solid;
   Canvas.Stroke.Dash := TStrokeDash.Solid;
   Canvas.Stroke.Thickness := 1;
   Canvas.Stroke.Color := $30FFFFFF;
-  Canvas.DrawRect(R, 10, 10, AllCorners, 1);
+  Canvas.DrawRect(R, 10, 10, AllCorners, FAbsoluteOpacity);
 
   // Top inner highlight
   Canvas.Stroke.Color := $18FFFFFF;
-  Canvas.DrawLine(PointF(R.Left + 10, R.Top + 1), PointF(R.Right - 10, R.Top + 1), 1);
+  Canvas.DrawLine(PointF(R.Left + 10, R.Top + 1), PointF(R.Right - 10, R.Top + 1), FAbsoluteOpacity);
 
   // Arrow
   if Pos = OldPos then
@@ -2227,12 +2249,12 @@ begin
     Canvas.Fill.Color := $EE2B2D30;
     Canvas.FillPolygon(Arrow, 1);
     Canvas.Stroke.Color := $30FFFFFF;
-    Canvas.DrawPolygon(Arrow, 1);
+    Canvas.DrawPolygon(Arrow, FAbsoluteOpacity);
   end;
 
   // Text
   Canvas.Fill.Color := $FFF2F2F2;
-  Canvas.FillText(R, Text, False, 1, [], TTextAlign.Center, TTextAlign.Center);
+  Canvas.FillText(R, Text, False, FAbsoluteOpacity, [], TTextAlign.Center, TTextAlign.Center);
 end;
 
 procedure TNodeEditor.DrawNodes(FirstLevel: Boolean);
@@ -2330,8 +2352,8 @@ begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := TAlphaColors.Black;
     Canvas.Stroke.Thickness := 2;
-    Canvas.DrawPath(Path, 1);
-    Canvas.FillPath(Path, 1);
+    Canvas.DrawPath(Path, FAbsoluteOpacity);
+    Canvas.FillPath(Path, FAbsoluteOpacity);
   finally
     Path.Free;
   end;
@@ -2879,10 +2901,6 @@ begin
 end;
 
 procedure TNodeEditor.UpdateHoverStates(SX, SY: Single; HitLinks: Boolean);
-var
-  N: TCustomNode;
-  P: TNodePin;
-  L: TNodeLink;
 begin
   var CurUpdated := False;
 
@@ -2897,7 +2915,10 @@ begin
   FHoveredNode := nil;
   FHoveredPin := nil;
   FHoveredLink := nil;
+  FTempToPinAccepted := False;
 
+  var N: TCustomNode;
+  var P: TNodePin;
   if GetPinUnderMouse(SX, SY, N, P) then
   begin
     FHoveredNode := N;
@@ -2910,6 +2931,7 @@ begin
     if TestPin <> nil then
     begin
       if (TestPin <> P) then
+      begin
         if ((TestPin.CanAcceptMoreConnections or FReconnectingLink) and P.CanAcceptMoreConnections) and
           not (Assigned(FReconnectLink) and ((FReconnectLink.FromPin = P) or (FReconnectLink.ToPin = P))) and
           FController.CanConnect(TestPin, P)
@@ -2917,6 +2939,8 @@ begin
           N.HoveredPinCompatible := TPinCompatible.True
         else
           N.HoveredPinCompatible := TPinCompatible.False;
+        FTempToPinAccepted := True;
+      end;
       N.Highlighted := True;
     end
     else
@@ -2924,6 +2948,7 @@ begin
   end
   else
   begin
+    var L: TNodeLink;
     N := GetNodeUnderMouse(SX, SY);
     if N <> nil then
     begin
@@ -3429,6 +3454,32 @@ begin
   UpdateHoverStates(X, Y, False);
 end;
 
+function TNodeEditor.FindCompatiblePinInNode(FromPin: TNodePin; TargetNode: TCustomNode): TNodePin;
+begin
+  if FromPin.Direction = TPinDirection.Output then
+  begin
+    for var i := 0 to TargetNode.InputCount - 1 do
+    begin
+      var TargetPin := TargetNode.GetInput(i);
+      if FromPin.CanAcceptMoreConnections and
+        TargetPin.CanAcceptMoreConnections and
+        FController.CanConnect(FromPin, TargetPin)
+        then
+        Exit(TargetPin);
+    end;
+  end
+  else
+  begin
+    for var i := 0 to TargetNode.OutputCount - 1 do
+    begin
+      var TargetPin := TargetNode.GetOutput(i);
+      if FController.CanConnect(TargetPin, FromPin) then
+        Exit(TargetPin);
+    end;
+  end;
+  Result := nil;
+end;
+
 function TNodeEditor.InternalPinConnectingTry(X, Y: Single): Boolean;
 begin
   Result := False;
@@ -3476,7 +3527,15 @@ begin
           end;
         end;
       end;
-    end;
+    end
+    else
+    if Assigned(FOnCompatibleNodeRequest) then
+    begin
+      FController.RemoveLink(FReconnectLink);
+      FOnCompatibleNodeRequest(Self, FReconnectFixedPin, SnapWorldPoint(ScreenToWorld(X, Y)));
+    end
+    else
+      ShowNodeSearchPopup(Screen.MousePos, FLastWorldMousePos);
   end  // Connect to pin
   else if GetPinUnderMouse(X, Y, TargetNode, TargetPin) then
   begin
@@ -3493,57 +3552,34 @@ begin
   end  // Connect to void (create node from pin)
   else if FDraggingLink then
   begin
+    // Auto choose first compatible node by pin type
     TargetNode := FController.CreateCompatibleNodeForPin(FTempFromPin, SnapWorldPoint(ScreenToWorld(X, Y)));
     if TargetNode <> nil then
     begin
       FController.AddNode(TargetNode);
-
-      if FTempFromPin.Direction = TPinDirection.Output then
-      begin
-        // Find compatible pin
-        for var i := 0 to TargetNode.InputCount - 1 do
+      TargetPin := FindCompatiblePinInNode(FTempFromPin, TargetNode);
+      if Assigned(TargetPin) then
+        if FTempFromPin.Direction = TPinDirection.Output then
         begin
-          TargetPin := TargetNode.GetInput(i);
-          if FTempFromPin.CanAcceptMoreConnections and
-            TargetPin.CanAcceptMoreConnections and
-            FController.CanConnect(FTempFromPin, TargetPin)
-            then
-          begin
-            Result := AddLink(FTempFromPin, TargetPin);
-            // Fix node position reletive pin
-            if Result then
-            begin
-              TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
-              Break;
-            end;
-          end;
-        end;
-      end
-      else
-      begin
-        // Find compatible pin
-        for var i := 0 to TargetNode.OutputCount - 1 do
+          Result := AddLink(FTempFromPin, TargetPin);
+          // Fix node position reletive pin
+          TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
+        end
+        else
         begin
-          TargetPin := TargetNode.GetOutput(i);
-          if FController.CanConnect(TargetPin, FTempFromPin) then
-          begin
-            Result := AddLink(TargetPin, FTempFromPin);
-            // Fix node position reletive pin
-            if Result then
-            begin
-              TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
-              TargetNode.X := TargetNode.X - TargetNode.Width;
-              Break;
-            end;
-          end;
+          Result := AddLink(TargetPin, FTempFromPin);
+          // Fix node position reletive pin
+          TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
+          TargetNode.X := TargetNode.X - TargetNode.Width;
         end;
-      end;
-
       SelectNodeInternal(TargetNode, False);
     end
     else
     begin
-      ShowNodeSearchPopup(Screen.MousePos, FLastWorldMousePos);
+      if Assigned(FOnCompatibleNodeRequest) then
+        FOnCompatibleNodeRequest(Self, FTempFromPin, SnapWorldPoint(ScreenToWorld(X, Y)))
+      else
+        ShowNodeSearchPopup(Screen.MousePos, FLastWorldMousePos);
     end;
   end;
 
@@ -4192,7 +4228,9 @@ begin
   else if (Key = vkF) and (Shift = [ssCtrl, ssShift]) then
     FController.FrameSelected
   else if (Key = vkA) and (Shift = [ssCtrl, ssAlt]) then
-    FController.AutoLayoutSelected;
+    FController.AutoLayoutSelected
+  else
+    Exit;
 
   Key := 0;
   KeyChar := #0;

@@ -38,10 +38,14 @@ type
     function CanRedo: Boolean;
 
     procedure AddNode(ANode: TCustomNode; Silent: Boolean = False);
+    function CreateNode(const NodeType: string; const Position: TPointF): TCustomNode;
     procedure RemoveNode(ANode: TCustomNode);
     procedure AddLink(FromPin, ToPin: TNodePin);
     procedure RemoveLink(ALink: TNodeLink);
     function CanConnect(P1, P2: TNodePin): Boolean;
+    function CreateNodeForLinkPin(const NodeType, FromPinId: string; const Position: TPointF; const TargetPinName: string = ''): TCustomNode;
+    function FindCompatiblePinInNode(FromPin: TNodePin; TargetNode: TCustomNode; TargetPinName: string = ''): TNodePin;
+    function FindPinById(const Id: string): TNodePin;
     procedure ReconnectLink(ALink: TNodeLink; AOldPin, ANewPin: TNodePin);
     procedure ResizeNode(ANode: TCustomNode; AOldWidth, AOldHeight, ANewWidth, ANewHeight: Integer);
     procedure MoveNodes(ANodes: TList<TCustomNode>; const AOldPositions, ANewPositions: TArray<TPointF>);
@@ -398,17 +402,13 @@ begin
   if APin = nil then
     Exit;
 
-  var NeedDir: TPinDirection;
-  if APin.Direction = TPinDirection.Output then
-    NeedDir := TPinDirection.Input
-  else
-    NeedDir := TPinDirection.Output;
+  var NeedDir :=
+    if APin.Direction = TPinDirection.Output
+    then TPinDirection.Input
+    else TPinDirection.Output;
 
   if APin.OwnerNode.VisualKind = TNodeVisualKind.Reroute then
-  begin
-    Result := FGraph.Registry.CreateNode(APin.OwnerNode.NodeType, Position);
-    Exit;
-  end;
+    Exit(FGraph.Registry.CreateNode(APin.OwnerNode.NodeType, Position));
 
   for var It in FGraph.Registry do
   begin
@@ -422,8 +422,17 @@ begin
         for var j := 0 to TestNode.InputCount - 1 do
         begin
           var TestPin := TestNode.GetInput(j);
-          if FGraph.CanConnect(APin, TestPin) then
-            Exit(FGraph.Registry.CreateNode(It.NodeType, Position));
+          if FGraph.CanConnect(APin, TestPin) and (TestPin.DataType <> 'any') then
+            if Result = nil then
+            begin
+              Result := FGraph.Registry.CreateNode(It.NodeType, Position);
+              Break;
+            end
+            else
+            begin
+              Result.Free;
+              Exit(nil);  // More then one compatible
+            end;
         end;
       end
       else
@@ -431,14 +440,103 @@ begin
         for var j := 0 to TestNode.OutputCount - 1 do
         begin
           var TestPin := TestNode.GetOutput(j);
-          if FGraph.CanConnect(TestPin, APin) then
-            Exit(FGraph.Registry.CreateNode(It.NodeType, Position));
+          if FGraph.CanConnect(TestPin, APin) and (TestPin.DataType <> 'any') then
+            if Result = nil then
+            begin
+              Result := FGraph.Registry.CreateNode(It.NodeType, Position);
+              Break;
+            end
+            else
+            begin
+              Result.Free;
+              Exit(nil);  // More then one compatible
+            end;
         end;
       end;
     finally
       TestNode.Free;
     end;
   end;
+end;
+
+function TNodeEditorController.CreateNode(const NodeType: string; const Position: TPointF): TCustomNode;
+begin
+  Result := FGraph.Registry.CreateNode(NodeType, Position);
+end;
+
+function TNodeEditorController.FindCompatiblePinInNode(FromPin: TNodePin; TargetNode: TCustomNode; TargetPinName: string): TNodePin;
+begin
+  if FromPin.Direction = TPinDirection.Output then
+  begin
+    for var i := 0 to TargetNode.InputCount - 1 do
+    begin
+      var TargetPin := TargetNode.GetInput(i);
+      if FromPin.CanAcceptMoreConnections and
+        TargetPin.CanAcceptMoreConnections and
+        CanConnect(FromPin, TargetPin) and
+        (TargetPinName.IsEmpty or (TargetPin.Name = TargetPinName))
+        then
+        Exit(TargetPin);
+    end;
+  end
+  else
+  begin
+    for var i := 0 to TargetNode.OutputCount - 1 do
+    begin
+      var TargetPin := TargetNode.GetOutput(i);
+      if CanConnect(TargetPin, FromPin) and
+        (TargetPinName.IsEmpty or (TargetPin.Name = TargetPinName))
+        then
+        Exit(TargetPin);
+    end;
+  end;
+  Result := nil;
+end;
+
+function TNodeEditorController.FindPinById(const Id: string): TNodePin;
+begin
+  for var i := 0 to FGraph.Nodes.Count - 1 do
+  begin
+    Result := FGraph.Nodes[i].FindPinById(Id);
+    if Result <> nil then
+      Exit;
+  end;
+  Result := nil;
+end;
+
+function TNodeEditorController.CreateNodeForLinkPin(const NodeType, FromPinId: string; const Position: TPointF; const TargetPinName: string): TCustomNode;
+begin
+  Result := nil;
+  if NodeType.IsEmpty then
+    Exit;
+
+  if FromPinId.IsEmpty then
+    Exit;
+
+  var TargetNode := CreateNode(NodeType, Position);
+  // The node was not found
+  if TargetNode = nil then
+    Exit;
+
+  var FromPin := FindPinById(FromPinId);
+  AddNode(TargetNode);
+  var TargetPin := FindCompatiblePinInNode(FromPin, TargetNode, TargetPinName);
+  if Assigned(TargetPin) then
+    if FromPin.Direction = TPinDirection.Output then
+    begin
+      AddLink(FromPin, TargetPin);
+      // Fix node position reletive pin
+      TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
+    end
+    else
+    begin
+      AddLink(TargetPin, FromPin);
+      // Fix node position reletive pin
+      TargetNode.Y := TargetNode.Y - TargetPin.LocalY;
+      TargetNode.X := TargetNode.X - TargetNode.Width;
+    end;
+  Selection.SelectNode(TargetNode, False);
+  Result := TargetNode;
 end;
 
 function TNodeEditorController.InsertRerouteOnLink(ALink: TNodeLink; const Position: TPointF): TCustomNode;

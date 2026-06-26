@@ -91,7 +91,7 @@ type
     function EffectiveDisplayName: string; inline;
     function GetPinWorldPosition: TPointF; inline;
     procedure SetTypeId(const ATypeId: string); inline;
-    procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single); virtual;
+    procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single; Opacity: Single); virtual;
   end;
 
   TNodeLink = class
@@ -232,7 +232,7 @@ type
     procedure DrawNodePins(Canvas: TCanvas; Zoom, OffsetX, OffsetY: Double; const AOpacity: Single);
     procedure MeasureText(Canvas: TCanvas; var ARect: TRectF; const AText: string; const WordWrap: Boolean; const Flags: TFillTextFlags; const ATextAlign, AVTextAlign: TTextAlign);
   public
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); virtual;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); virtual;
     property IconPath: string read FIconPath write SetIconPath;
     property NodeType: string read FNodeType write SetNodeType;
   end;
@@ -250,7 +250,7 @@ type
     procedure SetupPins; override;
     procedure AutoLayoutPins; override;
   public
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
   TCommentNode = class(TCustomNode)
@@ -259,7 +259,7 @@ type
     procedure SetupPins; override;
     procedure AutoLayoutPins; override;
   public
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
 function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
@@ -635,7 +635,7 @@ begin
   var ItemH := 26;
 
   for var i := 0 to FInputs.Count - 1 do
-    if FInputs[i].Kind = TPinKind.Exec then
+    //if FInputs[i].Kind = TPinKind.Exec then
     begin
       FInputs[i].LocalY := Top + CntInExec * ItemH + 16;
       TopData := Max(TopData, FInputs[i].LocalY);
@@ -643,13 +643,13 @@ begin
     end;
 
   for var i := 0 to FOutputs.Count - 1 do
-    if FOutputs[i].Kind = TPinKind.Exec then
+    //if FOutputs[i].Kind = TPinKind.Exec then
     begin
       FOutputs[i].LocalY := Top + CntOutExec * ItemH + 16;
       TopData := Max(TopData, FOutputs[i].LocalY);
       Inc(CntOutExec);
     end;
-
+         {
   var WorkH := Height - TopData - BottomPad;
 
   var c := 0;
@@ -666,7 +666,7 @@ begin
     begin
       FOutputs[i].LocalY := TopData + (c + 1) * WorkH div (FOutputs.Count + 1 - CntOutExec);
       Inc(c);
-    end;
+    end; }
 end;
 
 function TCustomNode.InputCount: integer;
@@ -958,7 +958,7 @@ begin
   FTextLayoutComment := TTextLayoutManager.TextLayoutByCanvas(Canvas.ClassType).Create(Canvas);
 end;
 
-procedure TCustomNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double);
+procedure TCustomNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single);
 begin
   if Zoom < 0.05 then
   begin
@@ -966,7 +966,7 @@ begin
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := HeaderColor;
     Canvas.Stroke.Kind := TBrushKind.None;
-    Canvas.FillRect(NodeBounds, 0, 0, [], 1);
+    Canvas.FillRect(NodeBounds, 0, 0, [], Opacity * 0.5);
     Exit;
   end;
 
@@ -989,22 +989,22 @@ begin
 
   // Shadow
   if DrawShadow and (Zoom > ZoomDetailLimit) then
-    DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom);
+    DrawShadowedRect(Canvas, NodeBounds, CornerRadius, Zoom, Opacity * 0.9);
 
   // Fill Body
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := $FF1E2125;  //BodyColor
   Canvas.Stroke.Kind := TBrushKind.None;
-  Canvas.FillRect(NodeBody, CornerRadius, CornerRadius, [TCorner.BottomLeft, TCorner.BottomRight], 1);
+  Canvas.FillRect(NodeBody, CornerRadius, CornerRadius, [TCorner.BottomLeft, TCorner.BottomRight], Opacity * 0.9);
 
   // Fill Head
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := HeaderColor;
   Canvas.Stroke.Kind := TBrushKind.None;
   if Collapsed then
-    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, Opacity * 0.9)
   else
-    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], Opacity * 0.9);
 
   // Frame
   Canvas.Fill.Kind := TBrushKind.None;
@@ -1031,7 +1031,7 @@ begin
     Canvas.Stroke.Thickness := 1 * Zoom;
   end;
 
-  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, Opacity);
 
   if Zoom < TCustomNode.ZoomDetailLimitExt then
     Exit;
@@ -1051,12 +1051,12 @@ begin
     LocalRect.Inflate(-7 * Zoom, -7 * Zoom);
     if Zoom < ZoomDetailLimit then
     begin
-      Canvas.FillEllipse(LocalRect, 0.5);
+      Canvas.FillEllipse(LocalRect, Opacity * 0.5);
     end
     else
     begin
       FIconPathData.FitToRect(LocalRect);
-      Canvas.FillPath(FIconPathData, 1);
+      Canvas.FillPath(FIconPathData, Opacity);
     end;
     NodeHeadText.Left := NodeHeadText.Left + NodeHeadText.Height;
   end;
@@ -1065,15 +1065,15 @@ begin
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Font.Size := TextFontSize * Zoom;
-  FillText(Canvas, FTextLayout, Zoom, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, FTextLayout, Zoom, NodeHeadText, Title, False, Opacity, [], TTextAlign.Leading, TTextAlign.Center);
 
   // Pins
   if (not Collapsed) and (VisualKind = TNodeVisualKind.Normal) then
-    DrawNodePins(Canvas, Zoom, OffsetX, OffsetY, 1);
+    DrawNodePins(Canvas, Zoom, OffsetX, OffsetY, Opacity);
 
   // Size grip
   if (Selected or Hovered) and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
-    DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
+    DrawGrip(Canvas, Zoom, OffsetX, OffsetY, Opacity * 0.9);
 end;
 
 function TCustomNode.GetResizeHandleRect(Zoom, OffsetX, OffsetY: Double): TRectF;
@@ -1132,7 +1132,7 @@ begin
     var PY := (Y + P.LocalY) * Zoom + OffsetY;
     var Center := PointF(PX, PY);
 
-    P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
+    P.Paint(Canvas, Zoom, Center, PinRadiusScaled, AOpacity);
 
     // Text
     Canvas.Fill.Kind := TBrushKind.Solid;
@@ -1155,7 +1155,7 @@ begin
 
     var Center := PointF((X + Width) * Zoom + OffsetX, (Y + P.LocalY) * Zoom + OffsetY);
 
-    P.Paint(Canvas, Zoom, Center, PinRadiusScaled);
+    P.Paint(Canvas, Zoom, Center, PinRadiusScaled, AOpacity);
 
     // Text
     Canvas.Fill.Kind := TBrushKind.Solid;
@@ -1578,7 +1578,7 @@ begin
   Result := Result + if Kind = TPinKind.Data then ': ' + DataType else '';
 end;
 
-procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single);
+procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single; Opacity: Single);
 begin
   if FTextLayout = nil then
     CreateTextLayout(Canvas);
@@ -1641,9 +1641,9 @@ begin
   var RE := RectF(Center.X - SRadius, Center.Y - SRadius, Center.X + SRadius, Center.Y + SRadius);
   case Kind of
     TPinKind.Data:
-      Canvas.DrawEllipse(RE, 1);
+      Canvas.DrawEllipse(RE, Opacity);
     TPinKind.Exec:
-      Canvas.DrawRect(RE, 1);
+      Canvas.DrawRect(RE, Opacity);
   end;
 
   // Body
@@ -1653,9 +1653,9 @@ begin
     RE.Inflate(-SRadius * 0.2, -SRadius * 0.2);
   case Kind of
     TPinKind.Data:
-      Canvas.FillEllipse(RE, 1);
+      Canvas.FillEllipse(RE, Opacity);
     TPinKind.Exec:
-      Canvas.FillRect(RE, 1);
+      Canvas.FillRect(RE, Opacity);
   end;
 
   if Id = OwnerNode.HoveredPinId then
@@ -1668,7 +1668,7 @@ begin
           Canvas.Fill.Color := TAlphaColors.White;
           CachePathObject.Data := 'M9.765 3.205a.75.75 0 0 1 .03 1.06l-4.25 4.5a.75.75 0 0 1-1.075.015L2.22 6.53a.75.75 0 0 1 1.06-1.06l1.705 1.704l3.72-3.939a.75.75 0 0 1 1.06-.03';
           CachePathObject.FitToRect(RE);
-          Canvas.FillPath(CachePathObject, 1);
+          Canvas.FillPath(CachePathObject, Opacity);
         end;
       TPinCompatible.False:
         begin
@@ -1676,7 +1676,7 @@ begin
           Canvas.Fill.Color := TAlphaColors.White;
           CachePathObject.Data := 'm1.897 2.054l.073-.084a.75.75 0 0 1 .976-.073l.084.073L6 4.939l2.97-2.97a.75.75 0 1 1 1.06 1.061L7.061 6l2.97 2.97a.75.75 0 0 1 .072.976l-.073.084a.75.75 0 0 1-.976.073l-.084-.073L6 7.061l-2.97 2.97A.75.75 0 1 1 1.97 8.97L4.939 6l-2.97-2.97a.75.75 0 0 1-.072-.976l.073-.084z';
           CachePathObject.FitToRect(RE);
-          Canvas.FillPath(CachePathObject, 1);
+          Canvas.FillPath(CachePathObject, Opacity);
         end;
     end;
 
@@ -1689,12 +1689,12 @@ begin
       TPinDirection.Input:
         begin
           C.Offset(-SRadius * 2, 0);
-          Canvas.FillPolygon(BuildTriangle(C, SRadius, 0), 1);
+          Canvas.FillPolygon(BuildTriangle(C, SRadius, 0), Opacity);
         end;
       TPinDirection.Output:
         begin
           C.Offset(+SRadius * 2, 0);
-          Canvas.FillPolygon(BuildTriangle(C, SRadius, 180), 1);
+          Canvas.FillPolygon(BuildTriangle(C, SRadius, 180), Opacity);
         end;
     end;
   end;
@@ -1893,7 +1893,7 @@ begin
   Result := Rect(0, 0, Width, Height).CenterPoint;
 end;
 
-procedure TRerouteNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TRerouteNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   if Zoom < ZoomDetailLimitExt then
     Exit;
@@ -1913,7 +1913,7 @@ begin
     Canvas.Fill.Color := TAlphaColors.White;
     var SelRect := NodeBounds;
     SelRect.Inflate(3 * Zoom, 3 * Zoom);
-    Canvas.FillEllipse(SelRect, 0.3);
+    Canvas.FillEllipse(SelRect, Opacity * 0.3);
   end;
 
   // Body
@@ -1939,11 +1939,11 @@ begin
   var BodyRect := RectF(Center.X - Radius, Center.Y - Radius, Center.X + Radius, Center.Y + Radius);
 
   // Highlight frame
-  Canvas.DrawEllipse(BodyRect, 1);
+  Canvas.DrawEllipse(BodyRect, Opacity);
 
   // Body
   BodyRect.Inflate(-Radius * 0.4, -Radius * 0.4);
-  Canvas.FillEllipse(BodyRect, 1);
+  Canvas.FillEllipse(BodyRect, Opacity);
 end;
 
 procedure TRerouteNode.AutoLayoutPins;
@@ -2002,7 +2002,7 @@ begin
   Height := 200;
 end;
 
-procedure TCommentNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TCommentNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   if Zoom < 0.05 then
   begin
@@ -2010,7 +2010,7 @@ begin
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := HeaderColor;
     Canvas.Stroke.Kind := TBrushKind.None;
-    Canvas.FillRect(NodeBounds, 0, 0, [], 1);
+    Canvas.FillRect(NodeBounds, 0, 0, [], Opacity);
     Exit;
   end;
 
@@ -2034,15 +2034,15 @@ begin
   // Fill
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := $FF1E2125; //BodyColor;
-  Canvas.FillRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+  Canvas.FillRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, Opacity);
 
   // Head
   Canvas.Fill.Kind := TBrushKind.Solid;
   Canvas.Fill.Color := HeaderColor;
   if Collapsed then
-    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, 1)
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, AllCorners, Opacity)
   else
-    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], 1);
+    Canvas.FillRect(NodeHead, CornerRadius, CornerRadius, [TCorner.TopLeft, TCorner.TopRight], Opacity);
 
   // Frame
   if Selected then
@@ -2066,7 +2066,7 @@ begin
     Canvas.Stroke.Thickness := 1 * Zoom;
   end;
 
-  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, 1);
+  Canvas.DrawRect(NodeBounds, CornerRadius, CornerRadius, AllCorners, Opacity);
 
   if Zoom < TCustomNode.ZoomDetailLimitExt then
     Exit;
@@ -2086,12 +2086,12 @@ begin
     LocalRect.Inflate(-7 * Zoom, -7 * Zoom);
     if Zoom < ZoomDetailLimit then
     begin
-      Canvas.FillEllipse(LocalRect, 0.5);
+      Canvas.FillEllipse(LocalRect, Opacity * 0.5);
     end
     else
     begin
       FIconPathData.FitToRect(LocalRect);
-      Canvas.FillPath(FIconPathData, 1);
+      Canvas.FillPath(FIconPathData, Opacity);
     end;
     NodeHeadText.Left := NodeHeadText.Left + NodeHeadText.Height;
   end;
@@ -2100,15 +2100,15 @@ begin
   Canvas.Fill.Color := TAlphaColors.White;
   Canvas.Font.Size := TextFontSize * Zoom;
   Canvas.Fill.Kind := TBrushKind.Solid;
-  FillText(Canvas, FTextLayout, Zoom, NodeHeadText, Title, False, 1, [], TTextAlign.Leading, TTextAlign.Center);
+  FillText(Canvas, FTextLayout, Zoom, NodeHeadText, Title, False, Opacity, [], TTextAlign.Leading, TTextAlign.Center);
 
   // Text Body
   if (CommentText <> '') and (not Collapsed) then
-    FillText(Canvas, FTextLayoutComment, Zoom, NodeBodyText, CommentText, True, 1, [], TTextAlign.Leading, TTextAlign.Leading);
+    FillText(Canvas, FTextLayoutComment, Zoom, NodeBodyText, CommentText, True, Opacity, [], TTextAlign.Leading, TTextAlign.Leading);
 
   // Size grip
   if (Selected or Hovered) and (VisualKind <> TNodeVisualKind.Reroute) and (not Collapsed) and (not FixedSize) then
-    DrawGrip(Canvas, Zoom, OffsetX, OffsetY, 1);
+    DrawGrip(Canvas, Zoom, OffsetX, OffsetY, Opacity);
 end;
 
 procedure TCommentNode.SetupPins;

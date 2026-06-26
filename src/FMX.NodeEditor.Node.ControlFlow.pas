@@ -41,7 +41,7 @@ type
     procedure SetupPins; override;
     constructor Create; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
   TLoopNode = class(TExecutableNode)
@@ -763,7 +763,7 @@ begin
   AContext.SetVariableBool('PrintBool_' + Id, Value);
 end;
 
-procedure TPrintLogicNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TPrintLogicNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   inherited;
   var ScaledHeaderHeight := HeaderHeight * Zoom;
@@ -779,7 +779,7 @@ begin
     Canvas.Fill.Color := TAlphaColors.Red
   else
     Canvas.Fill.Color := TAlphaColors.White;
-  Canvas.FillEllipse(R, 1);
+  Canvas.FillEllipse(R, Opacity);
 end;
 
 procedure TPrintLogicNode.SetupPins;

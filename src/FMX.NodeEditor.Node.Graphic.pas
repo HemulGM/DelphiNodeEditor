@@ -17,7 +17,7 @@ type
     constructor Create; override;
     procedure AutoLayoutPins; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
   TBitmapPrintNode = class(TExecutableNode)
@@ -31,7 +31,7 @@ type
     procedure SetupPins; override;
     constructor Create; override;
     procedure Execute(AContext: TNodeExecutionContext); override;
-    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
   TBitmapSaveToFileNode = class(TExecutableNode)
@@ -448,7 +448,7 @@ begin
     AContext.SetOutputValue(FValueOut, MakeBitmapValue(nil));
 end;
 
-procedure TBitmapValueNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TBitmapValueNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   inherited;
   var ScaledHeaderHeight := HeaderHeight * Zoom;
@@ -464,7 +464,7 @@ begin
       Exit;
     var R := V.BitmapValue.GetBitmap.BoundsF;
     R := R.FitInto(NodeBody);
-    Canvas.DrawBitmap(V.BitmapValue.GetBitmap, V.BitmapValue.GetBitmap.BoundsF, R, 1);
+    Canvas.DrawBitmap(V.BitmapValue.GetBitmap, V.BitmapValue.GetBitmap.BoundsF, R, Opacity);
   end;
 end;
 
@@ -526,7 +526,7 @@ begin
   FExecutedValue := Value;
 end;
 
-procedure TBitmapPrintNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double);
+procedure TBitmapPrintNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
 begin
   inherited;
   var ScaledHeaderHeight := HeaderHeight * Zoom;
@@ -541,7 +541,7 @@ begin
       Exit;
     var R := FExecutedValue.GetBitmap.BoundsF;
     R := R.FitInto(NodeBody);
-    Canvas.DrawBitmap(FExecutedValue.GetBitmap, FExecutedValue.GetBitmap.BoundsF, R, 1);
+    Canvas.DrawBitmap(FExecutedValue.GetBitmap, FExecutedValue.GetBitmap.BoundsF, R, Opacity);
   end;
 end;
 

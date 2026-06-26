@@ -6,9 +6,9 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.NodeEditor, FMX.Edit,
-  FMX.Grid.Style, FMX.Layouts, FMX.Menus, FMX.EditBox, FMX.SpinBox,
-  FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo,
-  System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
+  FMX.Edit.Style.New, FMX.Grid.Style, FMX.Layouts, FMX.Menus, FMX.EditBox,
+  FMX.SpinBox, FMX.Filter.Effects, FMX.Colors, FMX.Memo.Types, FMX.ScrollBox,
+  FMX.Memo, System.Rtti, FMX.Grid, FMX.Objects, FMX.NodeEditor.Node,
   FMX.NodeEditor.Node.Defaults, FMX.NodeEditor.Parser.JSON, FMX.NodeEditor.Types,
   FMX.Ani, FMX.ExtCtrls, FMX.TabControl, FMX.ComboTrackBar, FMX.ListBox,
   FMX.ComboEdit, WinUI3.Form, FMX.SearchBox, System.Math.Vectors,
@@ -59,30 +59,14 @@ type
     Layout15: TLayout;
     PathLabel1: TPathLabel;
     Label2: TLabel;
-    Button1: TButton;
+    ButtonColNavi: TButton;
     Panel3: TPanel;
-    LayoutLayers: TLayout;
-    Layout16: TLayout;
-    PathLabel2: TPathLabel;
-    Label13: TLabel;
-    Button2: TButton;
-    Panel4: TPanel;
-    Layout3: TLayout;
-    Layout17: TLayout;
-    RadioButton1: TRadioButton;
-    RadioButton2: TRadioButton;
-    RadioButton3: TRadioButton;
-    RadioButton4: TRadioButton;
-    PathLabel3: TPathLabel;
-    PathLabel4: TPathLabel;
-    PathLabel5: TPathLabel;
-    PathLabel6: TPathLabel;
     PanelEditor: TPanel;
-    Layout11: TLayout;
+    LayoutTransform: TLayout;
     Layout12: TLayout;
     PathLabel8: TPathLabel;
     Label11: TLabel;
-    Button5: TButton;
+    ButtonColTransform: TButton;
     Panel7: TPanel;
     Layout18: TLayout;
     SpinBoxNodeX: TSpinBox;
@@ -90,34 +74,22 @@ type
     SpinBoxNodeY: TSpinBox;
     Label5: TLabel;
     Layout19: TLayout;
-    Layout5: TLayout;
+    LayoutNodeInfo: TLayout;
     Layout6: TLayout;
     PathLabel9: TPathLabel;
     LabelNodeType: TLabel;
-    Button6: TButton;
+    ButtonNodeInfo: TButton;
     Panel8: TPanel;
     Layout4: TLayout;
     EditNodeTitle: TEdit;
     CheckBoxNodeCollapsed: TCheckBox;
     ComboColorBoxNodeHeadColor: TComboColorBox;
     Label9: TLabel;
-    Layout7: TLayout;
-    Layout8: TLayout;
-    PathLabel10: TPathLabel;
-    Label1: TLabel;
-    Button7: TButton;
-    Panel9: TPanel;
-    SpinBoxSize: TSpinBox;
-    Label14: TLabel;
-    CheckBoxShowFrameTime: TCheckBox;
-    CheckBoxShowGrid: TCheckBox;
-    CheckBoxShowAxes: TCheckBox;
-    CheckBoxShowSnapGuides: TCheckBox;
     LayoutNodeData: TLayout;
     Layout20: TLayout;
     PathLabel11: TPathLabel;
     Label7: TLabel;
-    Button8: TButton;
+    ButtonNodeData: TButton;
     Panel10: TPanel;
     PopupMenuZoom: TPopupMenu;
     MenuItem7: TMenuItem;
@@ -129,38 +101,6 @@ type
     MenuItem13: TMenuItem;
     MenuItem14: TMenuItem;
     MemoNodeComment: TMemo;
-    PathLabel14: TPathLabel;
-    PathLabel15: TPathLabel;
-    PathLabel16: TPathLabel;
-    PathLabel17: TPathLabel;
-    PathLabel18: TPathLabel;
-    Layout28: TLayout;
-    Layout23: TLayout;
-    Layout24: TLayout;
-    PathLabel21: TPathLabel;
-    Label17: TLabel;
-    ButtonHideNodeLibrary: TButton;
-    Panel16: TPanel;
-    Layout9: TLayout;
-    Label8: TLabel;
-    Label10: TLabel;
-    PathLabel20: TPathLabel;
-    ListBoxRegistry: TListBox;
-    ListBoxGroupHeader1: TListBoxGroupHeader;
-    ListBoxItem1: TListBoxItem;
-    ListBoxItem4: TListBoxItem;
-    ListBoxItem3: TListBoxItem;
-    ListBoxItem2: TListBoxItem;
-    ListBoxGroupHeader2: TListBoxGroupHeader;
-    ListBoxItem5: TListBoxItem;
-    ListBoxItem6: TListBoxItem;
-    ListBoxItem7: TListBoxItem;
-    ListBoxItem8: TListBoxItem;
-    ListBoxGroupHeader3: TListBoxGroupHeader;
-    ListBoxItem9: TListBoxItem;
-    ListBoxItem10: TListBoxItem;
-    ListBoxItem11: TListBoxItem;
-    ListBoxItem12: TListBoxItem;
     LayoutHead: TLayout;
     LayoutCaption: TLayout;
     ButtonSettings: TButton;
@@ -168,7 +108,7 @@ type
     ButtonWinMax: TButton;
     ButtonWinClose: TButton;
     LabelTitle: TLabel;
-    Layout42: TLayout;
+    LayoutHeadIcon: TLayout;
     ImageIcon: TImage;
     MenuBarMain: TMenuBar;
     MenuItemFile: TMenuItem;
@@ -191,12 +131,11 @@ type
     MenuItemEditToBack: TMenuItem;
     MenuItem3: TMenuItem;
     MenuItemEditDeselect: TMenuItem;
-    MenuItemView: TMenuItem;
     MenuItemGraph: TMenuItem;
     MenuItemGraphValidate: TMenuItem;
     MenuItemJSONLoad: TMenuItem;
     MenuItemJSONSave: TMenuItem;
-    Layout2: TLayout;
+    LayoutHeadZoom: TLayout;
     Panel5: TPanel;
     PathLabel7: TPathLabel;
     ButtonZoomIn2: TButton;
@@ -226,8 +165,6 @@ type
     Label124: TLabel;
     CheckBoxCustomTitle: TCheckBox;
     CheckBoxCustomAccent: TCheckBox;
-    MenuItemNodeLibrary: TMenuItem;
-    SearchBox1: TSearchBox;
     LayoutMobileMenu: TLayout;
     RadioButtonMenuProjects: TRadioButton;
     RadioButtonMenuSettings: TRadioButton;
@@ -244,115 +181,11 @@ type
     MenuItem17: TMenuItem;
     ButtonZoomReset: TButton;
     ButtonZoomToSelect: TButton;
-    ComboBoxVisualLinkType: TComboBox;
-    Label16: TLabel;
-    PathLabel24: TPathLabel;
-    CheckBoxLinkGradient: TCheckBox;
-    PathLabel25: TPathLabel;
-    LayoutToolPanel: TLayout;
-    Panel1: TPanel;
-    Layout26: TLayout;
-    Layout27: TLayout;
-    PathLabel27: TPathLabel;
-    Label20: TLabel;
-    ButtonCloseWorkHistory: TButton;
-    Panel6: TPanel;
-    ListBoxExecutedCommands: TListBox;
-    ListBoxItem13: TListBoxItem;
-    MenuItemWorkHistory: TMenuItem;
-    TabControlTools: TTabControl;
-    TabItemHistory: TTabItem;
-    TabItemLegend: TTabItem;
-    Layout14: TLayout;
-    Layout22: TLayout;
-    PathLabel35: TPathLabel;
-    Label18: TLabel;
-    Button9: TButton;
-    Panel15: TPanel;
-    Layout25: TLayout;
-    RadioButtonToolsHistory: TRadioButton;
-    PathLabel36: TPathLabel;
-    RadioButtonToolsAlign: TRadioButton;
-    PathLabel37: TPathLabel;
-    RadioButtonToolsLegend: TRadioButton;
-    PathLabel38: TPathLabel;
-    TabItemAlign: TTabItem;
-    Layout29: TLayout;
-    Layout30: TLayout;
-    PathLabel39: TPathLabel;
-    Label19: TLabel;
-    Button10: TButton;
-    Panel17: TPanel;
-    VertScrollBox2: TVertScrollBox;
-    ButtonAlignLeft: TButton;
-    PathLabel40: TPathLabel;
-    ButtonAlignVert: TButton;
-    PathLabel41: TPathLabel;
-    ButtonAlignHorz: TButton;
-    PathLabel42: TPathLabel;
-    ButtonAlignBottom: TButton;
-    PathLabel43: TPathLabel;
-    ButtonAlignRight: TButton;
-    PathLabel44: TPathLabel;
-    ButtonAlignTop: TButton;
-    PathLabel45: TPathLabel;
     ImageListDummy: TImageList;
-    Label21: TLabel;
-    Label22: TLabel;
-    ButtonMatchHeight: TButton;
-    PathLabel46: TPathLabel;
-    ButtonMatchBoth: TButton;
-    PathLabel47: TPathLabel;
-    Label23: TLabel;
-    ButtonDistrHorz: TButton;
-    PathLabel48: TPathLabel;
-    ButtonDistrVert: TButton;
-    PathLabel49: TPathLabel;
-    ButtonMatchWidth: TButton;
-    PathLabel50: TPathLabel;
-    Label24: TLabel;
-    Label25: TLabel;
-    Label26: TLabel;
-    Label27: TLabel;
-    Label28: TLabel;
-    Label29: TLabel;
-    Label30: TLabel;
-    Label31: TLabel;
-    Label32: TLabel;
-    Label33: TLabel;
-    Label34: TLabel;
     ButtonUndo: TButton;
     ButtonRedo: TButton;
     PathLabel26: TPathLabel;
     PathLabel28: TPathLabel;
-    Panel18: TPanel;
-    VertScrollBox3: TVertScrollBox;
-    FrameLegendItem1: TFrameLegendItem;
-    FrameLegendItem2: TFrameLegendItem;
-    FrameLegendItem3: TFrameLegendItem;
-    FrameLegendItem4: TFrameLegendItem;
-    FrameLegendItem5: TFrameLegendItem;
-    FrameLegendItem6: TFrameLegendItem;
-    FrameLegendItem7: TFrameLegendItem;
-    Label35: TLabel;
-    FrameLegendItem9: TFrameLegendItem;
-    FrameLegendItem10: TFrameLegendItem;
-    FrameLegendItem11: TFrameLegendItem;
-    FrameLegendItem12: TFrameLegendItem;
-    FrameLegendItem13: TFrameLegendItem;
-    FrameLegendItem14: TFrameLegendItem;
-    FrameLegendItem15: TFrameLegendItem;
-    Label36: TLabel;
-    Panel19: TPanel;
-    Label37: TLabel;
-    Panel20: TPanel;
-    FrameLegendItem8: TFrameLegendItem;
-    Button11: TButton;
-    RadioButtonToolsLibrary: TRadioButton;
-    PathLabel29: TPathLabel;
-    TabItemToolsLibrary: TTabItem;
-    MenuItemAlignment: TMenuItem;
-    MenuItemLegend: TMenuItem;
     MenuItem4: TMenuItem;
     MenuItemDemoExec: TMenuItem;
     LayoutDebug: TLayout;
@@ -396,22 +229,193 @@ type
     MemoLog: TMemo;
     LayoutOverlay: TLayout;
     ListBoxMessages: TListBox;
+    ActionList1: TActionList;
+    VertScrollBoxProps: TVertScrollBox;
+    MenuItem20: TMenuItem;
+    Panel18: TPanel;
+    Layout25: TLayout;
+    RadioButtonToolsHistory: TRadioButton;
+    PathLabel36: TPathLabel;
+    RadioButtonToolsAlign: TRadioButton;
+    PathLabel37: TPathLabel;
+    RadioButtonToolsLegend: TRadioButton;
+    PathLabel38: TPathLabel;
+    RadioButtonToolsLibrary: TRadioButton;
+    PathLabel29: TPathLabel;
+    TabControlTools: TTabControl;
+    TabItemHistory: TTabItem;
+    Layout26: TLayout;
+    Layout27: TLayout;
+    PathLabel27: TPathLabel;
+    Label20: TLabel;
+    Panel6: TPanel;
+    ListBoxExecutedCommands: TListBox;
+    ListBoxItem13: TListBoxItem;
+    TabItemLegend: TTabItem;
+    Layout14: TLayout;
+    Layout22: TLayout;
+    PathLabel35: TPathLabel;
+    Label18: TLabel;
+    Panel15: TPanel;
+    VertScrollBox3: TVertScrollBox;
+    FrameLegendItem1: TFrameLegendItem;
+    FrameLegendItem2: TFrameLegendItem;
+    FrameLegendItem3: TFrameLegendItem;
+    FrameLegendItem4: TFrameLegendItem;
+    FrameLegendItem5: TFrameLegendItem;
+    FrameLegendItem6: TFrameLegendItem;
+    FrameLegendItem7: TFrameLegendItem;
+    Label35: TLabel;
+    FrameLegendItem9: TFrameLegendItem;
+    FrameLegendItem10: TFrameLegendItem;
+    FrameLegendItem11: TFrameLegendItem;
+    FrameLegendItem12: TFrameLegendItem;
+    FrameLegendItem13: TFrameLegendItem;
+    FrameLegendItem14: TFrameLegendItem;
+    FrameLegendItem15: TFrameLegendItem;
+    Label36: TLabel;
+    Panel19: TPanel;
+    Label37: TLabel;
+    Panel20: TPanel;
+    FrameLegendItem8: TFrameLegendItem;
+    Button11: TButton;
+    TabItemAlign: TTabItem;
+    Layout29: TLayout;
+    Layout30: TLayout;
+    PathLabel39: TPathLabel;
+    Label19: TLabel;
+    Panel17: TPanel;
+    VertScrollBox2: TVertScrollBox;
+    ButtonAlignLeft: TButton;
+    PathLabel40: TPathLabel;
+    Label24: TLabel;
+    ButtonAlignVert: TButton;
+    PathLabel41: TPathLabel;
+    Label29: TLabel;
+    ButtonAlignHorz: TButton;
+    PathLabel42: TPathLabel;
+    Label28: TLabel;
+    ButtonAlignBottom: TButton;
+    PathLabel43: TPathLabel;
+    Label27: TLabel;
+    ButtonAlignRight: TButton;
+    PathLabel44: TPathLabel;
+    Label26: TLabel;
+    ButtonAlignTop: TButton;
+    PathLabel45: TPathLabel;
+    Label25: TLabel;
+    Label21: TLabel;
+    Label22: TLabel;
+    ButtonMatchHeight: TButton;
+    PathLabel46: TPathLabel;
+    Label32: TLabel;
+    ButtonMatchBoth: TButton;
+    PathLabel47: TPathLabel;
+    Label34: TLabel;
+    Label23: TLabel;
+    ButtonDistrHorz: TButton;
+    PathLabel48: TPathLabel;
+    Label30: TLabel;
+    ButtonDistrVert: TButton;
+    PathLabel49: TPathLabel;
+    Label31: TLabel;
+    ButtonMatchWidth: TButton;
+    PathLabel50: TPathLabel;
+    Label33: TLabel;
+    TabItemToolsLibrary: TTabItem;
+    Layout23: TLayout;
+    Layout24: TLayout;
+    PathLabel21: TPathLabel;
+    Label17: TLabel;
+    Panel16: TPanel;
+    ListBoxRegistry: TListBox;
+    ListBoxGroupHeader1: TListBoxGroupHeader;
+    ListBoxItem1: TListBoxItem;
+    ListBoxItem4: TListBoxItem;
+    ListBoxItem3: TListBoxItem;
+    ListBoxItem2: TListBoxItem;
+    ListBoxGroupHeader2: TListBoxGroupHeader;
+    ListBoxItem5: TListBoxItem;
+    ListBoxItem6: TListBoxItem;
+    ListBoxItem7: TListBoxItem;
+    ListBoxItem8: TListBoxItem;
+    ListBoxGroupHeader3: TListBoxGroupHeader;
+    ListBoxItem9: TListBoxItem;
+    ListBoxItem10: TListBoxItem;
+    ListBoxItem11: TListBoxItem;
+    ListBoxItem12: TListBoxItem;
+    SearchBox1: TSearchBox;
+    Layout28: TLayout;
+    Layout9: TLayout;
+    PathLabel20: TPathLabel;
+    Label8: TLabel;
+    Label10: TLabel;
+    TabItemSettings: TTabItem;
+    LayoutSettingsView: TLayout;
+    Layout8: TLayout;
+    PathLabel10: TPathLabel;
+    Label1: TLabel;
+    Button7: TButton;
+    Panel9: TPanel;
+    SpinBoxSize: TSpinBox;
+    Label14: TLabel;
+    PathLabel15: TPathLabel;
+    CheckBoxShowFrameTime: TCheckBox;
+    PathLabel16: TPathLabel;
+    CheckBoxShowGrid: TCheckBox;
+    PathLabel14: TPathLabel;
+    CheckBoxShowAxes: TCheckBox;
+    PathLabel17: TPathLabel;
+    CheckBoxShowSnapGuides: TCheckBox;
+    PathLabel18: TPathLabel;
+    ComboBoxVisualLinkType: TComboBox;
+    Label16: TLabel;
+    PathLabel24: TPathLabel;
+    CheckBoxLinkGradient: TCheckBox;
+    PathLabel25: TPathLabel;
     CheckBoxLinksOverNodes: TCheckBox;
     PathLabel53: TPathLabel;
+    LayoutSettingsBehaviour: TLayout;
+    Layout16: TLayout;
+    PathLabel2: TPathLabel;
+    Label13: TLabel;
+    Button2: TButton;
+    Panel4: TPanel;
     CheckBoxSnapToGrid: TCheckBox;
     PathLabel12: TPathLabel;
     CheckBoxSnapToNodes: TCheckBox;
     PathLabel13: TPathLabel;
     CheckBoxLockedAll: TCheckBox;
     PathLabel19: TPathLabel;
-    ActionList1: TActionList;
-    VertScrollBoxProps: TVertScrollBox;
-    FrameInspectorItemBitmap1: TFrameInspectorItemBitmap;
-    FrameInspectorItemColor1: TFrameInspectorItemColor;
-    FrameInspectorItemFloat1: TFrameInspectorItemFloat;
-    FrameInspectorItemText1: TFrameInspectorItemText;
-    FrameInspectorItemInt1: TFrameInspectorItemInt;
-    FrameInspectorItemBool1: TFrameInspectorItemBool;
+    RadioButtonToolsSettings: TRadioButton;
+    PathLabel3: TPathLabel;
+    VertScrollBoxSettings: TVertScrollBox;
+    Button12: TButton;
+    Button10: TButton;
+    Button9: TButton;
+    Button13: TButton;
+    LabelNoData: TLabel;
+    PopupLinkNode: TPopup;
+    ListBoxFindNode: TListBox;
+    ListBoxGroupHeader4: TListBoxGroupHeader;
+    ListBoxItem14: TListBoxItem;
+    ListBoxItem15: TListBoxItem;
+    ListBoxItem16: TListBoxItem;
+    ListBoxItem17: TListBoxItem;
+    ListBoxGroupHeader5: TListBoxGroupHeader;
+    ListBoxItem18: TListBoxItem;
+    ListBoxItem19: TListBoxItem;
+    ListBoxItem20: TListBoxItem;
+    ListBoxItem21: TListBoxItem;
+    ListBoxGroupHeader6: TListBoxGroupHeader;
+    ListBoxItem22: TListBoxItem;
+    ListBoxItem23: TListBoxItem;
+    ListBoxItem24: TListBoxItem;
+    ListBoxItem25: TListBoxItem;
+    SearchBoxSearchNode: TSearchBox;
+    Panel1: TPanel;
+    Layout1: TLayout;
+    ButtonClosePopupFindNode: TButton;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -450,8 +454,6 @@ type
     procedure PopupBoxStyleChange(Sender: TObject);
     procedure Button309Click(Sender: TObject);
     procedure ListBoxRegistryDragOver(Sender: TObject; const Data: TDragObject; const Point: TPointF; var Operation: TDragOperation);
-    procedure ButtonHideNodeLibraryClick(Sender: TObject);
-    procedure MenuItemNodeLibraryClick(Sender: TObject);
     procedure LayoutMobileMenuResize(Sender: TObject);
     procedure CornerButtonMenuAddClick(Sender: TObject);
     procedure RadioButtonMenuSettingsChange(Sender: TObject);
@@ -459,7 +461,6 @@ type
     procedure ButtonZoomToSelectClick(Sender: TObject);
     procedure ComboBoxVisualLinkTypeChange(Sender: TObject);
     procedure ButtonCloseWorkHistoryClick(Sender: TObject);
-    procedure MenuItemWorkHistoryClick(Sender: TObject);
     procedure ChangeToolsTab(Sender: TObject);
     procedure ButtonAlignLeftClick(Sender: TObject);
     procedure ButtonAlignTopClick(Sender: TObject);
@@ -474,8 +475,6 @@ type
     procedure ButtonMatchBothClick(Sender: TObject);
     procedure ButtonUndoClick(Sender: TObject);
     procedure ButtonRedoClick(Sender: TObject);
-    procedure MenuItemAlignmentClick(Sender: TObject);
-    procedure MenuItemLegendClick(Sender: TObject);
     procedure MenuItemDemoExecClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -488,6 +487,12 @@ type
     procedure ButtonDebugPauseClick(Sender: TObject);
     procedure ButtonDebugClearBreaksClick(Sender: TObject);
     procedure MenuItemGraphClearClick(Sender: TObject);
+    procedure ButtonColTransformClick(Sender: TObject);
+    procedure ButtonNodeInfoClick(Sender: TObject);
+    procedure ButtonNodeDataClick(Sender: TObject);
+    procedure ButtonColNaviClick(Sender: TObject);
+    procedure PopupLinkNodePopup(Sender: TObject);
+    procedure ButtonClosePopupFindNodeClick(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -496,6 +501,8 @@ type
 
     FDidInitialFrame: Boolean;
     FNodeUpdating: Boolean;
+    FAppendSourcePinId: string;
+    FAppendPosition: TPointF;
 
     procedure BuildEditorArea;
     procedure RegisterCustomNodes;
@@ -516,8 +523,10 @@ type
     procedure OnEditorExecutionStateChanged(Sender: TObject);
     procedure OnEditorExecutionNodeChanged(Sender: TObject; ANode: TExecutableNode);
     procedure OnEditorExecutionFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
+    procedure OnEditorCompatibleNodeRequest(Sender: TObject; ASourcePin: TNodePin; const Position: TPointF);
     function GetNodeRuntimeInfo(ANode: TExecutableNode): string;
     procedure InitDemoGraphExec;
+    procedure FOnSelectNewNodeForPin(Sender: TObject);
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
@@ -566,7 +575,14 @@ begin
   OffsetControls := [LayoutHead];
   TitleControls := [LabelTitle];
   IconControl := ImageIcon;
+  {$IFDEF MSWINDOWS}
   HideTitleBar := True;
+  {$ELSE}
+  HideTitleBar := False;
+  LayoutCaption.Visible := False;
+  LabelTitle.Visible := False;
+  LayoutHeadIcon.Visible := False;
+  {$ENDIF}
   //
   RadioButtonToolsLibrary.IsChecked := False;
   RadioButtonToolsLibrary.IsChecked := True;
@@ -612,7 +628,6 @@ begin
   LayoutZoomMobile.Visible := True;
   LayoutLeft.Visible := False;
   LayoutRight.Visible := False;
-  LayoutToolPanel.Visible := False;
   LayoutHead.Visible := False;
   Constraints.MinHeight := 0;
   Constraints.MinWidth := 400;
@@ -674,6 +689,47 @@ begin
   finally
     ListBoxRegistry.EndUpdate;
   end;
+  ListBoxFindNode.BeginUpdate;
+  try
+    ListBoxFindNode.Clear;
+    ListBoxFindNode.HitTest := False;
+    FEditor.Graph.Registry.SortByCategory;
+    var CurCategory := '';
+    for var Item in FEditor.Graph.Registry do
+    begin
+      if CurCategory <> Item.Category then
+      begin
+        var Header := TListBoxGroupHeader.Create(ListBoxFindNode);
+        Header.Text := Item.Category;
+        Header.HitTest := True;
+        Header.OnDragOver := FOnItemOver;
+        ListBoxFindNode.AddObject(Header);
+        CurCategory := Item.Category;
+      end;
+      var ListItem := TListBoxItem.Create(ListBoxFindNode);
+      ListItem.HitTest := True;
+      ListItem.StyleLookup := 'listboxitemstyle_node';
+      ListItem.OnClick := FOnSelectNewNodeForPin;
+      ListItem.Text := Item.Caption;
+      ListItem.TagString := Item.NodeType;
+      ListItem.StylesData['background.Fill.Color'] := ChangeAlpha(Item.Color, $64);
+      ListItem.StylesData['background.Stroke.Color'] := Item.Color;
+      ListItem.StylesData['icon_bg.Fill.Color'] := Item.Color;
+      ListItem.StylesData['path.Data.Data'] := Item.IconPath;
+      ListBoxFindNode.AddObject(ListItem);
+    end;
+  finally
+    ListBoxFindNode.EndUpdate;
+  end;
+end;
+
+procedure TFormMain.FOnSelectNewNodeForPin(Sender: TObject);
+begin
+  if Sender is not TListBoxItem then
+    Exit;
+  PopupLinkNode.ModalResult := mrOk;
+  PopupLinkNode.IsOpen := False;
+  FEditor.Controller.CreateNodeForLinkPin(TListBoxItem(Sender).TagString, FAppendSourcePinId, FAppendPosition);
 end;
 
 procedure TFormMain.FormResize(Sender: TObject);
@@ -744,6 +800,34 @@ begin
   DoOnSettingChange;
 end;
 
+procedure TFormMain.ButtonColNaviClick(Sender: TObject);
+begin
+  if LayoutNavigator.Height = 45 then
+  begin
+    LayoutNavigator.Height := LayoutNavigator.Tag;
+    ButtonColNavi.StylesData['icon.RotationAngle'] := 0;
+  end
+  else
+  begin
+    LayoutNavigator.Height := 45;
+    ButtonColNavi.StylesData['icon.RotationAngle'] := 180;
+  end;
+end;
+
+procedure TFormMain.ButtonColTransformClick(Sender: TObject);
+begin
+  if LayoutTransform.Height = 45 then
+  begin
+    LayoutTransform.Height := LayoutTransform.Tag;
+    ButtonColTransform.StylesData['icon.RotationAngle'] := 0;
+  end
+  else
+  begin
+    LayoutTransform.Height := 45;
+    ButtonColTransform.StylesData['icon.RotationAngle'] := 180;
+  end;
+end;
+
 procedure TFormMain.ButtonAlignBottomClick(Sender: TObject);
 begin
   FEditor.Controller.AlignSelectedNodes(TAlignMode.Bottom);
@@ -775,9 +859,13 @@ begin
   FEditor.Controller.AlignSelectedNodes(TAlignMode.CenterVertical);
 end;
 
+procedure TFormMain.ButtonClosePopupFindNodeClick(Sender: TObject);
+begin
+  PopupLinkNode.IsOpen := False;
+end;
+
 procedure TFormMain.ButtonCloseWorkHistoryClick(Sender: TObject);
 begin
-  LayoutToolPanel.Visible := False;
   PanelMobileOverlay.Visible := False;
 end;
 
@@ -846,11 +934,6 @@ end;
 procedure TFormMain.ButtonDistrVertClick(Sender: TObject);
 begin
   FEditor.Controller.DistributeSelectedNodes(TDistributeMode.Vertical);
-end;
-
-procedure TFormMain.ButtonHideNodeLibraryClick(Sender: TObject);
-begin
-  LayoutToolPanel.Visible := False;
 end;
 
 procedure TFormMain.ButtonMatchBothClick(Sender: TObject);
@@ -984,6 +1067,35 @@ begin
   RefreshFromSelection;
 end;
 
+procedure TFormMain.ButtonNodeDataClick(Sender: TObject);
+begin
+  if LayoutNodeData.Height = 45 then
+  begin
+    LayoutNodeData.Height := LayoutNodeData.Tag;
+    ButtonNodeData.StylesData['icon.RotationAngle'] := 0;
+  end
+  else
+  begin
+    LayoutNodeData.Height := 45;
+    ButtonNodeData.StylesData['icon.RotationAngle'] := 180;
+  end;
+end;
+
+procedure TFormMain.ButtonNodeInfoClick(Sender: TObject);
+begin
+  if LayoutNodeInfo.Height = 45 then
+  begin
+    LayoutNodeInfo.Height := LayoutNodeInfo.Tag;
+    ButtonNodeInfo.StylesData['icon.RotationAngle'] := 0;
+  end
+  else
+  begin
+    LayoutNodeInfo.Height := 45;
+    ButtonNodeInfo.StylesData['icon.RotationAngle'] := 180;
+  end;
+  LayoutNodeInfo.Repaint;
+end;
+
 procedure TFormMain.ButtonNodeRevertClick(Sender: TObject);
 begin
   RefreshFromSelection;
@@ -1103,6 +1215,7 @@ begin
   FEditor.OnSelectionChanged := OnSelectionChanged;
   FEditor.OnNodeChanged := OnNodeChanged;
   FEditor.OnUpdatedStatus := OnUpdatedStatus;
+  FEditor.OnCompatibleNodeRequest := OnEditorCompatibleNodeRequest;
 
   FEditor.OnExecutionStateChanged := OnEditorExecutionStateChanged;
   FEditor.OnExecutionNodeChanged := OnEditorExecutionNodeChanged;
@@ -1375,12 +1488,6 @@ begin
   ListBoxMessages.Clear;
 end;
 
-procedure TFormMain.MenuItemAlignmentClick(Sender: TObject);
-begin
-  LayoutToolPanel.Visible := True;
-  RadioButtonToolsAlign.IsChecked := True;
-end;
-
 procedure TFormMain.MenuItemDemoExecClick(Sender: TObject);
 begin
   InitDemoGraphExec;
@@ -1509,27 +1616,8 @@ begin
     FJsonNodeEditor.SaveToFile(SaveDialogJSON.FileName);
 end;
 
-procedure TFormMain.MenuItemLegendClick(Sender: TObject);
-begin
-  LayoutToolPanel.Visible := True;
-  RadioButtonToolsLegend.IsChecked := True;
-end;
-
-procedure TFormMain.MenuItemNodeLibraryClick(Sender: TObject);
-begin
-  LayoutToolPanel.Visible := True;
-  RadioButtonToolsLibrary.IsChecked := True;
-end;
-
-procedure TFormMain.MenuItemWorkHistoryClick(Sender: TObject);
-begin
-  LayoutToolPanel.Visible := True;
-  RadioButtonToolsHistory.IsChecked := True;
-end;
-
 procedure TFormMain.ChangeToolsTab(Sender: TObject);
 begin
-  LayoutToolPanel.Visible := True;
   if RadioButtonToolsHistory.IsChecked then
     TabControlTools.ActiveTab := TabItemHistory
   else if RadioButtonToolsLegend.IsChecked then
@@ -1537,7 +1625,9 @@ begin
   else if RadioButtonToolsAlign.IsChecked then
     TabControlTools.ActiveTab := TabItemAlign
   else if RadioButtonToolsLibrary.IsChecked then
-    TabControlTools.ActiveTab := TabItemToolsLibrary;
+    TabControlTools.ActiveTab := TabItemToolsLibrary
+  else if RadioButtonToolsSettings.IsChecked then
+    TabControlTools.ActiveTab := TabItemSettings;
 end;
 
 procedure TFormMain.CheckBoxCustomAccentChange(Sender: TObject);
@@ -1575,8 +1665,10 @@ procedure TFormMain.ClearAllSections;
 begin
   FNodeUpdating := True;
   try
+    LabelNoData.Parent := nil;
     while VertScrollBoxProps.Content.ControlsCount > 0 do
       VertScrollBoxProps.Content.Controls[0].Free;
+    LabelNoData.Parent := VertScrollBoxProps;
     LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
     LabelNodeType.Text := 'Node (no selection)';
     EditNodeTitle.Text := '';
@@ -1621,10 +1713,6 @@ procedure TFormMain.CornerButtonMenuAddClick(Sender: TObject);
 begin
   for var Control in LayoutMobileOverlay.Controls do
     Control.Visible := False;
-  LayoutToolPanel.Parent := LayoutMobileOverlay;
-  LayoutToolPanel.Align := TAlignLayout.Client;
-  LayoutToolPanel.Visible := True;
-  LayoutToolPanel.Margins.Left := 0;
   PanelMobileOverlay.Visible := True;
   PanelMobileOverlay.BringToFront;
 end;
@@ -1672,6 +1760,7 @@ begin
   FNodeUpdating := True;
   try
     ClearAllSections;
+    LabelNoData.Parent := nil;
 
     // Info
     LabelNodeType.Text := Format('Node (%s)', [N.NodeType]);
@@ -1780,6 +1869,8 @@ begin
       end;
     end;
 
+    if VertScrollBoxProps.Content.ControlsCount <= 0 then
+      LabelNoData.Parent := VertScrollBoxProps;
     LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
     PanelInspector.Enabled := True;
     ButtonNodeApply.Enabled := True;
@@ -1797,6 +1888,16 @@ end;
 procedure TFormMain.OnUpdatedStatus(Sender: TObject);
 begin
   UpdateStatus;
+end;
+
+procedure TFormMain.OnEditorCompatibleNodeRequest(Sender: TObject; ASourcePin: TNodePin; const Position: TPointF);
+begin
+  FAppendSourcePinId := ASourcePin.Id;
+  FAppendPosition := Position;
+  SearchBoxSearchNode.Text := '';
+  PopupLinkNode.Placement := TPlacement.Mouse;
+  PopupLinkNode.Popup(True);
+  BringToFront;
 end;
 
 procedure TFormMain.OnEditorExecutionFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
@@ -1948,6 +2049,11 @@ begin
       end;
   end;
   UpdateSystemBackdropType;
+end;
+
+procedure TFormMain.PopupLinkNodePopup(Sender: TObject);
+begin
+  SearchBoxSearchNode.SetFocus;
 end;
 
 procedure TFormMain.UpdateStatus;
