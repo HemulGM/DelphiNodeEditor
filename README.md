@@ -1,5 +1,7 @@
 **DelphiNodeEditor** — Powerful visual node graph editor component for Delphi FMX
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/HemulGM/DelphiNodeEditor)
+
 <img src="https://github.com/HemulGM/DelphiNodeEditor/blob/main/image/windows.png?raw=true" alt="DelphiNodeEditor Demo">
 
 A full-featured, cross-platform node-based visual programming / dataflow editor component for Delphi (works on **Windows** and **Linux** and **MacOS**).
