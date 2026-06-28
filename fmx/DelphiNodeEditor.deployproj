@@ -52,7 +52,7 @@
         </DeployFile>
     </ItemGroup>
     <ItemGroup Condition="'$(Platform)'=='OSX64'">
-        <DeployFile Include="$(BDS)\bin\delphi_PROJECTICNS.icns" Condition="'$(Config)'=='Debug'">
+        <DeployFile Include="DelphiNodeEditor.Artwork\Windows\AppIcon.icns" Condition="'$(Config)'=='Debug'">
             <RemoteDir>DelphiNodeEditor.app\Contents\Resources\</RemoteDir>
             <RemoteName>DelphiNodeEditor.icns</RemoteName>
             <DeployClass>ProjectOSXResource</DeployClass>
