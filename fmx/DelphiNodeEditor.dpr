@@ -69,7 +69,10 @@ uses
   NodeEditor.Inspector.Item.Int in 'NodeEditor.Inspector.Item.Int.pas' {FrameInspectorItemInt: TFrame},
   NodeEditor.Inspector.Item.Bitmap in 'NodeEditor.Inspector.Item.Bitmap.pas' {FrameInspectorItemBitmap: TFrame},
   NodeEditor.Inspector.Item.Color in 'NodeEditor.Inspector.Item.Color.pas' {FrameInspectorItemColor: TFrame},
-  NodeEditor.Inspector.Item.Bool in 'NodeEditor.Inspector.Item.Bool.pas' {FrameInspectorItemBool: TFrame};
+  NodeEditor.Inspector.Item.Bool in 'NodeEditor.Inspector.Item.Bool.pas' {FrameInspectorItemBool: TFrame},
+  FMX.NodeEditor.Node.JSON in '..\src\FMX.NodeEditor.Node.JSON.pas',
+  NodeEditor.Inspector.Item.Memo in 'NodeEditor.Inspector.Item.Memo.pas' {FrameInspectorItemMemo: TFrame},
+  NodeEditor.Frame.Progress in 'NodeEditor.Frame.Progress.pas' {FrameProgress: TFrame};
 
 {$R *.res}
 

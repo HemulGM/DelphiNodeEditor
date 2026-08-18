@@ -3,8 +3,8 @@
 interface
 
 uses
-  System.Classes, System.SysUtils, System.Math, System.Types, System.UITypes,
-  FMX.Graphics, System.Math.Vectors, System.NetEncoding;
+  System.Classes, System.SysUtils, System.Math, System.Types, System.Rtti,
+  System.UITypes, FMX.Graphics, System.Math.Vectors, System.NetEncoding;
 
 {$SCOPEDENUMS ON}
 
@@ -39,13 +39,17 @@ type
 
   TNodeValueKind = (Null, Float, Integer, &String, Boolean, JSON, Bitmap, Color, Point);
 
+  TNodeValueKindHelper = record helper for TNodeValueKind
+    function ToString: string;
+  end;
+
   { Pins }
 
   TPinDirection = (Input, Output);
 
-  TNodePinTypeFlag = (Any, &Array, List, Map, &Object, Nullable, Optional, Generic, Wildcard);
+  TPinTypeFlag = (Any, &Array, List, Map, &Object, Nullable, Optional, Generic, Wildcard);
 
-  TNodePinTypeFlags = set of TNodePinTypeFlag;
+  TPinTypeFlags = set of TPinTypeFlag;
 
   TPinKind = (Data, Exec);
 
@@ -84,9 +88,9 @@ function NodeValueKindToStr(AKind: TNodeValueKind): string;
 
 function StrToNodeValueKind(const S: string): TNodeValueKind;
 
-function IntToTypeFlags(AValue: integer): TNodePinTypeFlags;
+function IntToTypeFlags(AValue: integer): TPinTypeFlags;
 
-function TypeFlagsToInt(AFlags: TNodePinTypeFlags): integer;
+function TypeFlagsToInt(AFlags: TPinTypeFlags): integer;
 
 //
 
@@ -140,6 +144,38 @@ function BitmapToBase64(Bitmap: IBitmapNodeObject): string;
 
 function Base64ToBitmap(const Base64: string): IBitmapNodeObject;
 
+//
+
+function NodeValueToFloatDef(const AValue: TValue; const ADefault: Double = 0.0): Double;
+
+function NodeValueToStringDef(const AValue: TValue; const ADefault: string = ''): string;
+
+function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
+
+function NodeValueToBoolDef(const AValue: TValue; const ADefault: Boolean = False): Boolean;
+
+function NodeValueToPointDef(const AValue: TValue; const ADefault: TPointF): TPointF;
+
+function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
+
+function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64 = 0): Int64;
+
+//
+
+function MakeFloatValue(const AValue: Double): TValue;
+
+function MakeColorValue(const AValue: TAlphaColor): TValue;
+
+function MakeBoolValue(const AValue: Boolean): TValue;
+
+function MakeIntValue(const AValue: int64): TValue;
+
+function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
+
+function MakeStringValue(const AValue: string): TValue;
+
+function MakePointValue(const AValue: TPointF): TValue;
+
 var
   CachePathObject: TPathData;
 
@@ -147,7 +183,176 @@ implementation
 
 uses
   FMX.Types;
-//
+
+function MakeFloatValue(const AValue: double): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakeColorValue(const AValue: TAlphaColor): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakeBoolValue(const AValue: boolean): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakeIntValue(const AValue: int64): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
+begin
+  Result := TValue.From<IBitmapNodeObject>(AValue);
+end;
+
+function MakeStringValue(const AValue: string): TValue;
+begin
+  Result := AValue;
+end;
+
+function MakePointValue(const AValue: TPointF): TValue;
+begin
+  Result := TValue.From<TPointF>(AValue);
+end;
+
+function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  if AValue.IsType<IBitmapNodeObject>then
+    Result := AValue.AsType<IBitmapNodeObject>
+  else
+    Result := ADefault;
+end;
+
+function NodeValueToPointDef(const AValue: TValue; const ADefault: TPointF): TPointF;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  if AValue.IsType<TPointF>then
+    Result := AValue.AsType<TPointF>
+  else
+    Result := ADefault;
+end;
+
+function NodeValueToBoolDef(const AValue: TValue; const ADefault: Boolean): Boolean;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  case AValue.Kind of
+    tkInteger:
+      Result := AValue.AsInteger <> 0;
+    tkInt64:
+      Result := AValue.AsInt64 <> 0;
+    tkFloat:
+      Result := Abs(AValue.AsExtended) > 1e-12;
+    tkString, tkLString, tkWString, tkUString:
+      begin
+        var S := AValue.AsString.ToLower.Trim;
+        Result := (S = 'true') or (S = '1') or (S = 'yes');
+      end;
+  else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      Exit(B);
+    Result := ADefault;
+  end;
+end;
+
+function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64): Int64;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  case AValue.Kind of
+    tkInteger:
+      Result := AValue.AsInteger;
+    tkInt64:
+      Result := AValue.AsInt64;
+    tkFloat:
+      Result := Trunc(AValue.AsExtended);
+    tkString, tkLString, tkWString, tkUString:
+      begin
+        if not TryStrToInt64(AValue.AsString, Result) then
+          Result := ADefault;
+      end;
+  else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      if B then
+        Exit(1)
+      else
+        Exit(0);
+    Result := ADefault;
+  end;
+end;
+
+function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  if AValue.IsType<TAlphaColor>then
+    Result := AValue.AsType<TAlphaColor>
+  else
+    Result := ADefault;
+end;
+
+function NodeValueToFloatDef(const AValue: TValue; const ADefault: Double): Double;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  case AValue.Kind of
+    tkFloat:
+      Result := AValue.AsExtended;
+    tkInteger:
+      Result := AValue.AsInteger;
+    tkInt64:
+      Result := AValue.AsInt64;
+    tkLString, tkWString, tkUString, tkString:
+      begin
+        if not TryStrToFloat(AValue.AsString, Result, FormatSettings) then
+          Result := ADefault;
+      end;
+  else
+    Result := ADefault;
+  end;
+end;
+
+function NodeValueToStringDef(const AValue: TValue; const ADefault: string): string;
+begin
+  if AValue.IsEmpty then
+    Exit(ADefault);
+
+  case AValue.Kind of
+    tkString, tkLString, tkWString, tkUString:
+      Result := AValue.AsString;
+    tkInteger:
+      Result := AValue.AsInteger.ToString;
+    tkInt64:
+      Result := AValue.AsInt64.ToString;
+    tkChar:
+      Result := AValue.AsString;
+    tkFloat:
+      Result := AValue.AsExtended.ToString;
+  else
+    var B: Boolean;
+    if AValue.TryAsType<Boolean>(B, False) then
+      if B then
+        Exit('True')
+      else
+        Exit('False');
+    Result := ADefault;
+  end;
+end;
 
 function BitmapToBase64(Bitmap: IBitmapNodeObject): string;
 begin
@@ -320,18 +525,18 @@ begin
     Result := TNodeValueKind.Null;
 end;
 
-function TypeFlagsToInt(AFlags: TNodePinTypeFlags): Integer;
+function TypeFlagsToInt(AFlags: TPinTypeFlags): Integer;
 begin
   Result := 0;
-  for var F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
+  for var F := Low(TPinTypeFlag) to High(TPinTypeFlag) do
     if F in AFlags then
       Result := Result or (1 shl Ord(F));
 end;
 
-function IntToTypeFlags(AValue: integer): TNodePinTypeFlags;
+function IntToTypeFlags(AValue: integer): TPinTypeFlags;
 begin
   Result := [];
-  for var F := Low(TNodePinTypeFlag) to High(TNodePinTypeFlag) do
+  for var F := Low(TPinTypeFlag) to High(TPinTypeFlag) do
     if (AValue and (1 shl Ord(F))) <> 0 then
       Include(Result, F);
 end;
@@ -487,6 +692,13 @@ procedure TBitmapObject.SetBitmap(Bitmap: TBitmap);
 begin
   FBitmap.Free;
   FBitmap := Bitmap;
+end;
+
+{ TNodeValueKindHelper }
+
+function TNodeValueKindHelper.ToString: string;
+begin
+  Result := NodeValueKindToStr(Self);
 end;
 
 initialization

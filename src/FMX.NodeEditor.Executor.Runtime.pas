@@ -80,19 +80,23 @@ type
     procedure SetPinState(APin: TNodePin; AState: TNodeValueState);
 
     function TryGetVariable(const AName: string; out AValue: TValue): Boolean;
+    function GetVariableValue(const AName: string): TValue;
     procedure SetVariable(const AName: string; const AValue: TValue);
 
-    function GetVariableValue(const AName: string): TValue;
     function GetVariableStr(const AName, ADefault: string): string;
     function GetVariableFloat(const AName: string; const ADefault: Double = 0.0): Double;
+    function GetVariableInteger(const AName: string; const ADefault: Integer = 0): Integer;
     function GetVariableBool(const AName: string; const ADefault: Boolean = False): Boolean;
+    function GetVariableColor(const AName: string; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
 
     procedure SetVariableStr(const AName, AValue: string);
     procedure SetVariableFloat(const AName: string; const AValue: Double);
+    procedure SetVariableInteger(const AName: string; const AValue: Integer);
     procedure SetVariableBool(const AName: string; const AValue: Boolean);
+    procedure SetVariableColor(const AName: string; const AValue: TAlphaColor);
 
     function GetInputValue(APin: TNodePin): TValue;
-    function GetInputValueOrVar(APin: TNodePin; const VarName: string): TValue;
+    function GetInputValueOrVar(APin: TNodePin; const VarName: string = ''): TValue;
     procedure SetOutputValue(APin: TNodePin; const AValue: TValue);
 
     procedure RaiseEvent(const AEventName: string; const AData: TValue);
@@ -118,191 +122,13 @@ type
     function ExecuteDataFlow(AContext: TNodeExecutionContext = nil): boolean;
     function FindExecOutgoingLinks(APin: TNodePin; AList: TList<TNodeLink>): integer;
     function FindFirstConnectedExecOutput(ANode: TCustomNode): TNodePin;
-    function ExecuteExecPin(APin: TNodePin; AContext: TNodeExecutionContext): boolean;
-    function ExecuteFromNode(ANode: TCustomNode; AContext: TNodeExecutionContext): boolean;
+    function ExecuteExecPin(APin: TNodePin; AContext: TNodeExecutionContext): Boolean;
+    function ExecuteFromNode(ANode: TCustomNode; AContext: TNodeExecutionContext): Boolean;
   end;
-
-function NodeValueToFloatDef(const AValue: TValue; const ADefault: double = 0.0): double;
-
-function NodeValueToStringDef(const AValue: TValue; const ADefault: string = ''): string;
-
-function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
-
-function MakeFloatValue(const AValue: double): TValue;
-
-function MakeColorValue(const AValue: TAlphaColor): TValue;
-
-function MakeBoolValue(const AValue: boolean): TValue;
-
-function MakeIntValue(const AValue: int64): TValue;
-
-function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
-
-function MakeStringValue(const AValue: string): TValue;
-
-function NodeValueToBoolDef(const AValue: TValue; const ADefault: boolean = False): boolean;
-
-function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
-
-function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64 = 0): Int64;
 
 procedure CheckThreadStopped;
 
 implementation
-
-function NodeValueToColorDef(const AValue: TValue; const ADefault: TAlphaColor = TAlphaColors.Null): TAlphaColor;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  if AValue.IsType<TAlphaColor>then
-    Result := AValue.AsType<TAlphaColor>
-  else
-    Result := ADefault;
-end;
-
-function NodeValueToFloatDef(const AValue: TValue; const ADefault: double): double;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  case AValue.Kind of
-    tkFloat:
-      Result := AValue.AsExtended;
-    tkInteger:
-      Result := AValue.AsInteger;
-    tkInt64:
-      Result := AValue.AsInt64;
-    tkLString, tkWString, tkUString, tkString:
-      begin
-        if not TryStrToFloat(AValue.AsString, Result, FormatSettings) then
-          Result := ADefault;
-      end;
-  else
-    Result := ADefault;
-  end;
-end;
-
-function NodeValueToStringDef(const AValue: TValue; const ADefault: string): string;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  case AValue.Kind of
-    tkString, tkLString, tkWString, tkUString:
-      Result := AValue.AsString;
-    tkInteger:
-      Result := AValue.AsInteger.ToString;
-    tkInt64:
-      Result := AValue.AsInt64.ToString;
-    tkChar:
-      Result := AValue.AsString;
-    tkFloat:
-      Result := AValue.AsExtended.ToString;
-  else
-    var B: Boolean;
-    if AValue.TryAsType<Boolean>(B, False) then
-      if B then
-        Exit('True')
-      else
-        Exit('False');
-    Result := ADefault;
-  end;
-end;
-
-function MakeFloatValue(const AValue: double): TValue;
-begin
-  Result := AValue;
-end;
-
-function MakeColorValue(const AValue: TAlphaColor): TValue;
-begin
-  Result := AValue;
-end;
-
-function MakeBoolValue(const AValue: boolean): TValue;
-begin
-  Result := AValue;
-end;
-
-function MakeIntValue(const AValue: int64): TValue;
-begin
-  Result := AValue;
-end;
-
-function MakeBitmapValue(const AValue: IBitmapNodeObject): TValue;
-begin
-  Result := TValue.From<IBitmapNodeObject>(AValue);
-end;
-
-function MakeStringValue(const AValue: string): TValue;
-begin
-  Result := AValue;
-end;
-
-function NodeValueToBitmapDef(const AValue: TValue; const ADefault: IBitmapNodeObject = nil): IBitmapNodeObject;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  if AValue.IsType<IBitmapNodeObject>then
-    Result := AValue.AsType<IBitmapNodeObject>
-  else
-    Result := ADefault;
-end;
-
-function NodeValueToBoolDef(const AValue: TValue; const ADefault: boolean): boolean;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  case AValue.Kind of
-    tkInteger:
-      Result := AValue.AsInteger <> 0;
-    tkInt64:
-      Result := AValue.AsInt64 <> 0;
-    tkFloat:
-      Result := Abs(AValue.AsExtended) > 1e-12;
-    tkString, tkLString, tkWString, tkUString:
-      begin
-        var S := Trim(LowerCase(AValue.AsString));
-        Result := (S = 'true') or (S = '1') or (S = 'yes');
-      end;
-  else
-    var B: Boolean;
-    if AValue.TryAsType<Boolean>(B, False) then
-      Exit(B);
-    Result := ADefault;
-  end;
-end;
-
-function NodeValueToIntDef(const AValue: TValue; const ADefault: Int64): Int64;
-begin
-  if AValue.IsEmpty then
-    Exit(ADefault);
-
-  case AValue.Kind of
-    tkInteger:
-      Result := AValue.AsInteger;
-    tkInt64:
-      Result := AValue.AsInt64;
-    tkFloat:
-      Result := Trunc(AValue.AsExtended);
-    tkString, tkLString, tkWString, tkUString:
-      begin
-        if not TryStrToInt64(AValue.AsString, Result) then
-          Result := ADefault;
-      end;
-  else
-    var B: Boolean;
-    if AValue.TryAsType<Boolean>(B, False) then
-      if B then
-        Exit(1)
-      else
-        Exit(0);
-    Result := ADefault;
-  end;
-end;
 
 procedure CheckThreadStopped;
 begin
@@ -453,28 +279,19 @@ begin
   Result := NodeValueToFloatDef(GetVariableValue(AName), ADefault);
 end;
 
+function TNodeExecutionContext.GetVariableInteger(const AName: string; const ADefault: Integer): Integer;
+begin
+  Result := NodeValueToIntDef(GetVariableValue(AName), ADefault);
+end;
+
 function TNodeExecutionContext.GetVariableBool(const AName: string; const ADefault: Boolean): Boolean;
 begin
-  var V := GetVariableValue(AName);
-  if V.IsEmpty then
-    Exit(ADefault);
+  Result := NodeValueToBoolDef(GetVariableValue(AName), ADefault);
+end;
 
-  case V.Kind of
-    tkInteger:
-      Result := V.AsInteger <> 0;
-    tkInt64:
-      Result := V.AsInt64 <> 0;
-    tkFloat:
-      Result := Abs(V.AsExtended) > 1e-12;
-    tkLString, tkWString, tkUString:
-      begin
-        var S := Trim(LowerCase(V.AsString));
-        Result := (S = 'true') or (S = '1') or (S = 'yes');
-      end;
-  else
-    if not V.TryAsType<Boolean>(Result) then
-      Result := ADefault;
-  end;
+function TNodeExecutionContext.GetVariableColor(const AName: string; const ADefault: TAlphaColor): TAlphaColor;
+begin
+  Result := NodeValueToColorDef(GetVariableValue(AName), ADefault);
 end;
 
 procedure TNodeExecutionContext.SetVariableStr(const AName, AValue: string);
@@ -487,9 +304,19 @@ begin
   SetVariable(AName, MakeFloatValue(AValue));
 end;
 
+procedure TNodeExecutionContext.SetVariableInteger(const AName: string; const AValue: Integer);
+begin
+  SetVariable(AName, MakeIntValue(AValue));
+end;
+
 procedure TNodeExecutionContext.SetVariableBool(const AName: string; const AValue: Boolean);
 begin
   SetVariable(AName, MakeBoolValue(AValue));
+end;
+
+procedure TNodeExecutionContext.SetVariableColor(const AName: string; const AValue: TAlphaColor);
+begin
+  SetVariable(AName, MakeColorValue(AValue));
 end;
 
 function TNodeExecutionContext.GetInputValue(APin: TNodePin): TValue;
@@ -507,7 +334,8 @@ begin
     Result := FValue
   else
   begin
-    var VFrom := APin.OwnerNode.FindValue(VarName);
+    var VName := if VarName.IsEmpty then APin.Name else VarName;
+    var VFrom := APin.OwnerNode.FindValue(VName);
     if VFrom <> nil then
     begin
       case VFrom.Kind of
@@ -657,15 +485,15 @@ begin
 
   if Trim(APin.DefaultValue) <> '' then
   begin
-    if SameText(APin.DataType, 'float') then
+    if APin.PinType.TypeId = TNodeValueKind.Float then
     begin
       var DefValue: Double;
       if TryStrToFloat(APin.DefaultValue, DefValue, FormatSettings) then
         Exit(MakeFloatValue(DefValue));
     end
-    else if SameText(APin.DataType, 'string') then
+    else if APin.PinType.TypeId = TNodeValueKind.string then
       Exit(MakeStringValue(APin.DefaultValue))
-    else if SameText(APin.DataType, 'bool') then
+    else if APin.PinType.TypeId = TNodeValueKind.Boolean then
       Exit(MakeBoolValue(SameText(APin.DefaultValue, 'true') or
           (APin.DefaultValue = '1')));
   end;

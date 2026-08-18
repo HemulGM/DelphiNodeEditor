@@ -1,0 +1,30 @@
+inherited FrameInspectorItemMemo: TFrameInspectorItemMemo
+  Size.Height = 140.000000000000000000
+  inherited PanelBG: TPanel
+    Size.Height = 136.000000000000000000
+  end
+  inherited LayoutDesc: TLayout
+    Size.Height = 140.000000000000000000
+    inherited LabelPropName: TLabel
+      Size.Height = 124.000000000000000000
+    end
+  end
+  inherited LayoutControl: TLayout
+    Padding.Left = 4.000000000000000000
+    Padding.Top = 4.000000000000000000
+    Padding.Bottom = 4.000000000000000000
+    Size.Height = 140.000000000000000000
+    object MemoValue: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      OnChangeTracking = MemoValueChangeTracking
+      Align = Client
+      Size.Width = 126.000000000000000000
+      Size.Height = 132.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Viewport.Width = 122.000000000000000000
+      Viewport.Height = 128.000000000000000000
+    end
+  end
+end

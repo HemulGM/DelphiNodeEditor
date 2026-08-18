@@ -126,8 +126,8 @@ type
     function IsPinIdUnique(const AId: string; AExcept: TNodePin = nil): boolean;
 
     function TopologicalSortDataNodes(AList: TList<TCustomNode>): integer;
-    function AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
-    function AddDynamicOutputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddDynamicInputPin(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddDynamicOutputPin(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemoveDynamicPin(APin: TNodePin): boolean;
     procedure DoGraphChanged;
 
@@ -282,7 +282,7 @@ begin
   if ANode = nil then
     Exit;
 
-  if SkipChecking then
+  if not SkipChecking then
     if FNodes.Contains(ANode) then
       Exit;
 
@@ -779,10 +779,7 @@ begin
     Exit;
   end;
 
-  Result :=
-    SameText(OutPin.DataType, InPin.DataType) or SameText(OutPin.DataType, 'any') or
-    SameText(InPin.DataType, 'any') or (OutPin.DataType = '') or
-    (InPin.DataType = '');
+  Result := (OutPin.PinType.TypeId = InPin.PinType.TypeId) or OutPin.PinType.IsAny or InPin.PinType.IsAny;
 end;
 
 function TNodeGraph.LinkExists(FromPin, ToPin: TNodePin): Boolean;
@@ -1210,7 +1207,7 @@ begin
   end;
 end;
 
-function TNodeGraph.AddDynamicInputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeGraph.AddDynamicInputPin(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 var
   BeforeJSON, AfterJSON: string;
 begin
@@ -1220,14 +1217,14 @@ begin
     Exit;
 
   BeforeJSON := CaptureJSONText;
-  Result := ANode.AddInputPin(AName, ADataType, AKind);
+  Result := ANode.AddInputPin(AName, ADataType, AAny, AKind);
   AfterJSON := CaptureJSONText;
 
   ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, 'Add input pin');
   DoGraphChanged;
 end;
 
-function TNodeGraph.AddDynamicOutputPin(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeGraph.AddDynamicOutputPin(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 var
   BeforeJSON, AfterJSON: string;
 begin
@@ -1237,7 +1234,7 @@ begin
     Exit;
 
   BeforeJSON := CaptureJSONText;
-  Result := ANode.AddOutputPin(AName, ADataType, AKind);
+  Result := ANode.AddOutputPin(AName, ADataType, AAny, AKind);
   AfterJSON := CaptureJSONText;
 
   ExecuteJSONSnapshotCommand(BeforeJSON, AfterJSON, 'Add output pin');
@@ -1379,8 +1376,7 @@ begin
   if (N.InputCount > 0) and (N.OutputCount > 0) then
   begin
     N.GetInput(0).Kind := OldFrom.Kind;
-    N.GetInput(0).DataType := OldFrom.DataType;
-    N.GetInput(0).SetTypeId(OldFrom.DataType);
+    N.GetInput(0).SetTypeId(OldFrom.PinType.IsAny, OldFrom.PinType.TypeId);
 
     if OldFrom.PinType <> nil then
     begin
@@ -1389,8 +1385,7 @@ begin
     end;
 
     N.GetOutput(0).Kind := OldFrom.Kind;
-    N.GetOutput(0).DataType := OldFrom.DataType;
-    N.GetOutput(0).SetTypeId(OldFrom.DataType);
+    N.GetOutput(0).SetTypeId(OldFrom.PinType.IsAny, OldFrom.PinType.TypeId);
 
     if OldFrom.PinType <> nil then
     begin

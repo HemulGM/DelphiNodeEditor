@@ -70,7 +70,9 @@ type
 
   TJsonNodeEditor = class(TGraphParser)
   private
+    FNodeProgressCnt, FNodeProgressIdx: Int64;
     FNodeEditor: TNodeEditor;
+    FLoading: Boolean;
     procedure RegisterJsonNodes;
     function JsonKindToNodeType(AData: TJSONValue): string;
     function CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer; Direct: Boolean): TJsonNode;
@@ -168,7 +170,7 @@ end;
 
 function TJsonNode.AddJsonInput: TNodePin;
 begin
-  Result := AddInputPin('In', 'json', TPinKind.Data);
+  Result := AddInputPin('In', TNodeValueKind.JSON, False, TPinKind.Data);
   Result.DisplayName := 'In';
   //Result.PinType.Color := $FFFFAA44;
 end;
@@ -178,14 +180,14 @@ begin
   if OutputCount > 0 then
     Result := GetOutput(0)
   else
-    Result := AddOutputPin('Value', 'json', TPinKind.Data);
+    Result := AddOutputPin('Value', TNodeValueKind.JSON, False, TPinKind.Data);
 
   //Result.PinType.Color := $FFFFAA44;
 end;
 
 function TJsonNode.AddJsonChildOutput(const AName: string): TNodePin;
 begin
-  Result := AddOutputPin(AName, 'json', TPinKind.Data);
+  Result := AddOutputPin(AName, TNodeValueKind.JSON, False, TPinKind.Data);
   Result.DisplayName := AName;
   //Result.PinType.Color := $FFFFAA44;
 end;
@@ -220,7 +222,7 @@ procedure TJsonObjectNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Object', 'json', TPinKind.Data);
+  AddOutputPin('Object', TNodeValueKind.JSON, False, TPinKind.Data);
 end;
 
 { TJsonArrayNode }
@@ -239,7 +241,7 @@ procedure TJsonArrayNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Array', 'json', TPinKind.Data);
+  AddOutputPin('Array', TNodeValueKind.JSON, False, TPinKind.Data);
 end;
 
 { TJsonStringNode }
@@ -260,7 +262,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('String', 'json', TPinKind.Data);
+  AddOutputPin('String', TNodeValueKind.JSON, False, TPinKind.Data);
 
   V := AddValue('value', TNodeValueKind.string);
   V.StringValue := '';
@@ -284,7 +286,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Number', 'json', TPinKind.Data);
+  AddOutputPin('Number', TNodeValueKind.JSON, False, TPinKind.Data);
 
   V := AddValue('value', TNodeValueKind.Float);
   V.FloatValue := 0;
@@ -308,7 +310,7 @@ var
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Boolean', 'json', TPinKind.Data);
+  AddOutputPin('Boolean', TNodeValueKind.JSON, False, TPinKind.Data);
 
   V := AddValue('value', TNodeValueKind.Boolean);
   V.BooleanValue := False;
@@ -330,7 +332,7 @@ procedure TJsonNullNode.SetupPins;
 begin
   ClearPins;
   AddJsonInput;
-  AddOutputPin('Null', 'json', TPinKind.Data);
+  AddOutputPin('Null', TNodeValueKind.JSON, False, TPinKind.Data);
 end;
 
 { TJsonNodeEditor }
@@ -437,13 +439,8 @@ begin
 end;
 
 function TJsonNodeEditor.CreateNodeFromJSONData(const AName: string; AData: TJSONValue; const Position: TPointF; ADepth, AIndex: integer; Direct: Boolean): TJsonNode;
-var
-  NodeType: string;
-  V: TNodeValue;
-  TitleText: string;
 begin
-  NodeType := JsonKindToNodeType(AData);
-
+  var TitleText: string;
   if AName <> '' then
     TitleText := AName
   else if ADepth = 0 then
@@ -451,7 +448,7 @@ begin
   else
     TitleText := '[' + AIndex.ToString + ']';
 
-  Result := TJsonNode(FNodeEditor.Graph.Registry.CreateNode(NodeType, Position));
+  Result := FNodeEditor.Graph.Registry.CreateNode(JsonKindToNodeType(AData), Position) as TJsonNode;
   Result.JsonName := AName;
 
   case Result.JsonKind of
@@ -465,14 +462,14 @@ begin
     TJSONNodeKind.string:
       begin
         Result.Title := TitleText + ': String';
-        V := Result.FindValue('value');
+        var V := Result.FindValue('value');
         if V <> nil then
           V.StringValue := TJSONString(AData).Value;
       end;
     TJSONNodeKind.Number:
       begin
         Result.Title := TitleText + ': Number';
-        V := Result.FindValue('value');
+        var V := Result.FindValue('value');
         if V <> nil then
         try
           V.FloatValue := TJSONNumber(AData).AsDouble;
@@ -483,7 +480,7 @@ begin
     TJSONNodeKind.Boolean:
       begin
         Result.Title := TitleText + ': Boolean';
-        V := Result.FindValue('value');
+        var V := Result.FindValue('value');
         if V <> nil then
           V.BooleanValue := TJSONBool(AData).AsBoolean;
       end;
@@ -499,64 +496,57 @@ begin
 end;
 
 procedure TJsonNodeEditor.BuildGraphFromJSONData(AParent: TJsonNode; AData: TJSONValue; ADepth: integer; var ARow: integer);
-var
-  Obj: TJSONObject;
-  Arr: TJSONArray;
-  I: integer;
-  ChildData: TJSONValue;
-  ChildNode: TJsonNode;
-  ParentOut: TNodePin;
-  ChildIn: TNodePin;
-  FieldName: string;
-  X, Y: single;
 begin
   if (AParent = nil) or (AData = nil) then
     Exit;
 
   if AData is TJSONObject then
   begin
-    Obj := TJSONObject(AData);
+    var Obj := TJSONObject(AData);
+    Inc(FNodeProgressCnt, Obj.Count);
 
-    for I := 0 to Obj.Count - 1 do
+    for var i := 0 to Obj.Count - 1 do
     begin
-      FieldName := Obj.Pairs[I].JsonString.Value;
-      ChildData := Obj.Pairs[I].JsonValue;
+      var FieldName := Obj.Pairs[i].JsonString.Value;
+      var ChildData := Obj.Pairs[i].JsonValue;
 
-      X := 80 + ADepth * 350;
-      Y := 60 + ARow * 140;
+      var X: Single := 80 + ADepth * 350;
+      var Y: Single := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I, True);
+      Inc(FNodeProgressIdx);
+      SetProgress(FNodeProgressIdx / FNodeProgressCnt - 0.1, 'Graph building');
 
-      ParentOut := AParent.AddJsonChildOutput(FieldName);
-      ChildIn := ChildNode.GetInput(0);
-
-      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), True);
+      var ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, i, True);
+      var ParentOut := AParent.AddJsonChildOutput(FieldName);
+      var ChildIn := ChildNode.GetInput(0);
+      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), False);
 
       BuildGraphFromJSONData(ChildNode, ChildData, ADepth + 1, ARow);
     end;
   end
   else if AData is TJSONArray then
   begin
-    Arr := TJSONArray(AData);
+    var Arr := TJSONArray(AData);
+    Inc(FNodeProgressCnt, Arr.Count);
 
-    for I := 0 to Arr.Count - 1 do
+    for var i := 0 to Arr.Count - 1 do
     begin
-      FieldName := 'Item ' + I.ToString;
-      ChildData := Arr.Items[I];
+      var FieldName := 'Item ' + i.ToString;
+      var ChildData := Arr.Items[i];
 
-      X := 80 + ADepth * 350;
-      Y := 60 + ARow * 140;
+      var X: Single := 80 + ADepth * 350;
+      var Y: Single := 60 + ARow * 140;
       Inc(ARow);
 
-      ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, I, True);
+      Inc(FNodeProgressIdx);
+      SetProgress(FNodeProgressIdx / FNodeProgressCnt - 0.1, 'Graph building');
 
-      ParentOut := AParent.AddJsonChildOutput(FieldName);
-      ParentOut.DisplayName := '[Item ' + I.ToString + ']';
-
-      ChildIn := ChildNode.GetInput(0);
-
-      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), True);
+      var ChildNode := CreateNodeFromJSONData(FieldName, ChildData, PointF(X, Y), ADepth + 1, i, True);
+      var ParentOut := AParent.AddJsonChildOutput(FieldName);
+      ParentOut.DisplayName := '[Item ' + i.ToString + ']';
+      var ChildIn := ChildNode.GetInput(0);
+      FNodeEditor.Graph.AddLink(TNodeLink.Create(ParentOut, ChildIn), False);
 
       BuildGraphFromJSONData(ChildNode, ChildData, ADepth + 1, ARow);
     end;
@@ -565,30 +555,53 @@ begin
 end;
 
 procedure TJsonNodeEditor.LoadFromString(const Value: string);
-var
-  Data: TJSONValue;
-  RootNode: TJsonNode;
-  Row: integer;
 begin
-  Clear;
-
-  if Value.Trim.IsEmpty then
+  if FLoading then
     Exit;
-
-  Data := TJSONValue.ParseJSONValue(Value);
+  FLoading := True;
   try
-    Row := 0;
-
-    RootNode := CreateNodeFromJSONData('root', Data, PointF(40, 60), 0, 0, True);
-    FNodeEditor.Graph.BeginUpdate;
-    try
-      BuildGraphFromJSONData(RootNode, Data, 1, Row);
-    finally
-      FNodeEditor.Graph.EndUpdate;
+    FNodeProgressCnt := 0;
+    FNodeProgressIdx := 0;
+    SetProgress(0, 'Starting');
+    if Value.Trim.IsEmpty then
+    begin
+      SetProgress(1, 'Done');
+      Exit;
     end;
-    FNodeEditor.ResetView;
+    SetProgress(0.05, 'Clear');
+    TThread.Synchronize(nil, Clear);
+
+    SetProgress(0.1, 'JSON parsing');
+    var Data := TJSONValue.ParseJSONValue(Value);
+    try
+      var RootNode := CreateNodeFromJSONData('root', Data, PointF(40, 60), 0, 0, True);
+      TThread.Synchronize(nil,
+        procedure
+        begin
+          FNodeEditor.BeginUpdate;
+          FNodeEditor.Graph.BeginUpdate;
+          FNodeEditor.Controller.BeginUpdate;
+        end);
+      try
+        var Row := 0;
+        SetProgress(0.15, 'Graph building');
+        BuildGraphFromJSONData(RootNode, Data, 1, Row);
+      finally
+        TThread.Synchronize(nil,
+          procedure
+          begin
+            FNodeEditor.Graph.EndUpdate;
+            FNodeEditor.Controller.EndUpdate;
+            FNodeEditor.EndUpdate;
+          end);
+      end;
+      SetProgress(1, 'Done');
+      TThread.Synchronize(nil, FNodeEditor.ResetView);
+    finally
+      Data.Free;
+    end;
   finally
-    Data.Free;
+    FLoading := False;
   end;
 end;
 

@@ -11,10 +11,9 @@ type
   ENodeEditorControllerException = class(ENodeEditorException);
 
   TNodeEditorController = class
-    FDragStartWorldPos: TPointF;
-    FShowDragCoordinates: boolean;
   private
     FGraph: TNodeGraph;
+    FUpdates: Integer;
     FSelection: TNodeSelectionModel;
     FOnChanged: TNotifyEvent;
     FOnSelectionChanged: TNotifyEvent;
@@ -68,6 +67,9 @@ type
     function CanPaste: Boolean;
     procedure DuplicateSelection(const Position: TPointF);
 
+    procedure BeginUpdate;
+    procedure EndUpdate;
+
     function SaveToJSONText(AZoom: Double; AOffsetX, AOffsetY: Double): string;
     procedure LoadFromJSONText(const JSON: string; var AZoom, AOffsetX, AOffsetY: Double);
     procedure SaveToFile(const AFileName: string; AZoom: Double; AOffsetX, AOffsetY: Double);
@@ -75,8 +77,8 @@ type
 
     function ValidateGraphToStrings(AStrings: TStrings): Boolean;
 
-    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
-    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddInputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddOutputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemovePinFromNode(APin: TNodePin): Boolean;
 
     function CreateCompatibleNodeForPin(APin: TNodePin; const Position: TPointF): TCustomNode;
@@ -125,7 +127,6 @@ procedure TNodeEditorController.AddNode(ANode: TCustomNode; Silent: Boolean);
 begin
   if ANode = nil then
     Exit;
-
   ExecuteCommand(TAddNodeCommand.Create(FGraph, ANode), Silent);
 end;
 
@@ -135,6 +136,11 @@ begin
     Exit;
 
   ExecuteCommand(TAlignNodesCommand.Create(FGraph, FSelection.Nodes, Mode));
+end;
+
+procedure TNodeEditorController.BeginUpdate;
+begin
+  Inc(FUpdates);
 end;
 
 procedure TNodeEditorController.BringNodeToFront(ANode: TCustomNode);
@@ -179,6 +185,8 @@ end;
 
 procedure TNodeEditorController.DoChanged;
 begin
+  if FUpdates > 0 then
+    Exit;
   if Assigned(FOnChanged) then
     FOnChanged(Self);
 end;
@@ -333,14 +341,14 @@ begin
   end;
 end;
 
-function TNodeEditorController.AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeEditorController.AddInputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 begin
   Result := nil;
 
   if ANode = nil then
     Exit;
 
-  Result := FGraph.AddDynamicInputPin(ANode, AName, ADataType, AKind);
+  Result := FGraph.AddDynamicInputPin(ANode, AName, ADataType, AAny, AKind);
 
   DoChanged;
 end;
@@ -355,14 +363,14 @@ begin
   DoChanged;
 end;
 
-function TNodeEditorController.AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeEditorController.AddOutputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 begin
   Result := nil;
 
   if ANode = nil then
     Exit;
 
-  Result := FGraph.AddDynamicOutputPin(ANode, AName, ADataType, AKind);
+  Result := FGraph.AddDynamicOutputPin(ANode, AName, ADataType, AAny, AKind);
 
   DoChanged;
 end;
@@ -422,7 +430,7 @@ begin
         for var j := 0 to TestNode.InputCount - 1 do
         begin
           var TestPin := TestNode.GetInput(j);
-          if FGraph.CanConnect(APin, TestPin) and (TestPin.DataType <> 'any') then
+          if FGraph.CanConnect(APin, TestPin) and (not TestPin.PinType.IsAny) then
             if Result = nil then
             begin
               Result := FGraph.Registry.CreateNode(It.NodeType, Position);
@@ -440,7 +448,7 @@ begin
         for var j := 0 to TestNode.OutputCount - 1 do
         begin
           var TestPin := TestNode.GetOutput(j);
-          if FGraph.CanConnect(TestPin, APin) and (TestPin.DataType <> 'any') then
+          if FGraph.CanConnect(TestPin, APin) and (not TestPin.PinType.IsAny) then
             if Result = nil then
             begin
               Result := FGraph.Registry.CreateNode(It.NodeType, Position);
@@ -570,6 +578,16 @@ begin
   FSelection.SelectNode(Result, False);
 
   DoChanged;
+end;
+
+procedure TNodeEditorController.EndUpdate;
+begin
+  Dec(FUpdates);
+  if FUpdates <= 0 then
+  begin
+    FUpdates := 0;
+    DoChanged;
+  end;
 end;
 
 procedure TNodeEditorController.ExecuteCommand(ACmd: TGraphCommand; Silent: Boolean);

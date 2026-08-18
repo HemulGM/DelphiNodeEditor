@@ -44,6 +44,19 @@ type
     procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
   end;
 
+  TPrintColorNode = class(TExecutableNode)
+  private
+    FValuePin: TNodePin;
+    FExecIn: TNodePin;
+  protected
+    FExecutedValue: TAlphaColor;
+  public
+    procedure SetupPins; override;
+    constructor Create; override;
+    procedure Execute(AContext: TNodeExecutionContext); override;
+    procedure Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom: Double; OffsetX, OffsetY: Double; Opacity: Single); override;
+  end;
+
   TLoopNode = class(TExecutableNode)
   private
     FConditionPin: TNodePin;
@@ -259,6 +272,11 @@ begin
     'Show message and indicate with value',
     'print,value,bool,logic', '',
     TPrintLogicNode, TAlphaColors.Null);
+
+  Registry.RegisterNodeEx('printcolorvalue', 'Indicate color', 'Common',
+    'Show message and indicate with value',
+    'print,value,color', '',
+    TPrintColorNode, TAlphaColors.Null);
 end;
 
 { TBranchNode }
@@ -277,10 +295,10 @@ end;
 procedure TBranchNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FConditionPin := AddInputPin('Condition', 'bool', TPinKind.Data);
-  FTrueExecPin := AddOutputPin('True', 'exec', TPinKind.Exec);
-  FFalseExecPin := AddOutputPin('False', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FConditionPin := AddInputPin('Condition', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FTrueExecPin := AddOutputPin('True', TNodeValueKind.Null, False, TPinKind.Exec);
+  FFalseExecPin := AddOutputPin('False', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TBranchNode.Execute(AContext: TNodeExecutionContext);
@@ -312,13 +330,13 @@ end;
 procedure TLoopNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Enter', 'exec', TPinKind.Exec);
-  FConditionPin := AddInputPin('Condition', 'bool', TPinKind.Data);
-  FBodyExecPin := AddOutputPin('Body', 'exec', TPinKind.Exec);
-  FExitExecPin := AddOutputPin('Exit', 'exec', TPinKind.Exec);
-  FIndexPin := AddOutputPin('Index', 'integer', TPinKind.Data);
-  FFirstIterationPin := AddOutputPin('First', 'bool', TPinKind.Data);
-  FLastIterationPin := AddOutputPin('Last', 'bool', TPinKind.Data);
+  AddInputPin('Enter', TNodeValueKind.Null, False, TPinKind.Exec);
+  FConditionPin := AddInputPin('Condition', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBodyExecPin := AddOutputPin('Body', TNodeValueKind.Null, False, TPinKind.Exec);
+  FExitExecPin := AddOutputPin('Exit', TNodeValueKind.Null, False, TPinKind.Exec);
+  FIndexPin := AddOutputPin('Index', TNodeValueKind.Integer, False, TPinKind.Data);
+  FFirstIterationPin := AddOutputPin('First', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FLastIterationPin := AddOutputPin('Last', TNodeValueKind.Boolean, False, TPinKind.Data);
 end;
 
 procedure TLoopNode.Execute(AContext: TNodeExecutionContext);
@@ -370,13 +388,13 @@ end;
 procedure TForLoopNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Enter', 'exec', TPinKind.Exec);
-  FStartPin := AddInputPin('Start', 'integer', TPinKind.Data);
-  FEndPin := AddInputPin('End', 'integer', TPinKind.Data);
-  FStepPin := AddInputPin('Step', 'integer', TPinKind.Data);
-  FBodyExecPin := AddOutputPin('Body', 'exec', TPinKind.Exec);
-  FExitExecPin := AddOutputPin('Exit', 'exec', TPinKind.Exec);
-  FIndexPin := AddOutputPin('Index', 'integer', TPinKind.Data);
+  AddInputPin('Enter', TNodeValueKind.Null, False, TPinKind.Exec);
+  FStartPin := AddInputPin('Start', TNodeValueKind.Integer, False, TPinKind.Data);
+  FEndPin := AddInputPin('End', TNodeValueKind.Integer, False, TPinKind.Data);
+  FStepPin := AddInputPin('Step', TNodeValueKind.Integer, False, TPinKind.Data);
+  FBodyExecPin := AddOutputPin('Body', TNodeValueKind.Null, False, TPinKind.Exec);
+  FExitExecPin := AddOutputPin('Exit', TNodeValueKind.Null, False, TPinKind.Exec);
+  FIndexPin := AddOutputPin('Index', TNodeValueKind.Integer, False, TPinKind.Data);
 end;
 
 procedure TForLoopNode.Execute(AContext: TNodeExecutionContext);
@@ -431,12 +449,12 @@ procedure TSequenceNode.SetupPins;
 begin
   ClearPins;
   SetLength(FSteps, 0);
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TSequenceNode.AddStep;
 begin
-  var NewPin := AddOutputPin('Step ' + IntToStr(Length(FSteps) + 1), 'exec', TPinKind.Exec);
+  var NewPin := AddOutputPin('Step ' + IntToStr(Length(FSteps) + 1), TNodeValueKind.Null, False, TPinKind.Exec);
   SetLength(FSteps, Length(FSteps) + 1);
   FSteps[High(FSteps)] := NewPin;
 end;
@@ -484,7 +502,7 @@ end;
 procedure TBreakNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TBreakNode.Execute(AContext: TNodeExecutionContext);
@@ -507,7 +525,7 @@ end;
 procedure TContinueNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TContinueNode.Execute(AContext: TNodeExecutionContext);
@@ -532,9 +550,9 @@ procedure TSwitchNode.SetupPins;
 begin
   ClearPins;
   SetLength(FCases, 0);
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FValuePin := AddInputPin('Value', 'any', TPinKind.Data);
-  FDefaultExecPin := AddOutputPin('Default', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Null, True, TPinKind.Data);
+  FDefaultExecPin := AddOutputPin('Default', TNodeValueKind.Null, False, TPinKind.Exec);
   AddCase;
   AddCase;
 end;
@@ -543,8 +561,8 @@ procedure TSwitchNode.AddCase;
 begin
   var Idx := Length(FCases);
   SetLength(FCases, Idx + 1);
-  FCases[Idx].ValuePin := AddInputPin('CaseValue' + IntToStr(Idx), 'any', TPinKind.Data);
-  FCases[Idx].ExecPin := AddOutputPin('Case' + IntToStr(Idx), 'exec', TPinKind.Exec);
+  FCases[Idx].ValuePin := AddInputPin('CaseValue' + IntToStr(Idx), TNodeValueKind.Null, True, TPinKind.Data);
+  FCases[Idx].ExecPin := AddOutputPin('Case' + IntToStr(Idx), TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TSwitchNode.Execute(AContext: TNodeExecutionContext);
@@ -585,9 +603,17 @@ end;
 procedure TWaitNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FDurationPin := AddInputPin('Duration (ms)', 'float', TPinKind.Data);
-  FDoneExecPin := AddOutputPin('Done', 'exec', TPinKind.Exec);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FDurationPin := AddInputPin('Duration (ms)', TNodeValueKind.Float, False, TPinKind.Data);
+  FDoneExecPin := AddOutputPin('Done', TNodeValueKind.Null, False, TPinKind.Exec);
+
+  if FindValue('Duration') = nil then
+  begin
+    var V := AddValue('Duration', TNodeValueKind.Float);
+    V.FloatValue := 0;
+    V.Min := 0;
+    V.Max := 9999999999;
+  end;
 end;
 
 procedure TWaitNode.Execute(AContext: TNodeExecutionContext);
@@ -595,7 +621,7 @@ begin
   if AContext = nil then
     Exit;
 
-  var Duration := NodeValueToFloatDef(AContext.GetInputValue(FDurationPin), 0);
+  var Duration := NodeValueToFloatDef(AContext.GetInputValueOrVar(FDurationPin, 'Duration'), 0);
   if Duration > 0 then
   begin
     CheckThreadStopped;
@@ -622,7 +648,7 @@ end;
 procedure TEventNode.SetupPins;
 begin
   ClearPins;
-  FTriggerExecPin := AddOutputPin('Trigger', 'exec', TPinKind.Exec);
+  FTriggerExecPin := AddOutputPin('Trigger', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 procedure TEventNode.Trigger(AContext: TNodeExecutionContext);
@@ -654,9 +680,9 @@ end;
 procedure TEventCallNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FEventNamePin := AddInputPin('Event Name', 'string', TPinKind.Data);
-  FDataPin := AddInputPin('Data', 'any', TPinKind.Data);
+  AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FEventNamePin := AddInputPin('Event Name', TNodeValueKind.string, False, TPinKind.Data);
+  FDataPin := AddInputPin('Data', TNodeValueKind.Null, True, TPinKind.Data);
 end;
 
 procedure TEventCallNode.Execute(AContext: TNodeExecutionContext);
@@ -688,10 +714,10 @@ end;
 procedure TEventListenerNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('Activate', 'exec', TPinKind.Exec);
-  FEventNamePin := AddInputPin('Event Name', 'string', TPinKind.Data);
-  FTriggeredExecPin := AddOutputPin('Triggered', 'exec', TPinKind.Exec);
-  FDataOutputPin := AddOutputPin('Data', 'any', TPinKind.Data);
+  AddInputPin('Activate', TNodeValueKind.Null, False, TPinKind.Exec);
+  FEventNamePin := AddInputPin('Event Name', TNodeValueKind.string, False, TPinKind.Data);
+  FTriggeredExecPin := AddOutputPin('Triggered', TNodeValueKind.Null, False, TPinKind.Exec);
+  FDataOutputPin := AddOutputPin('Data', TNodeValueKind.Null, True, TPinKind.Data);
 end;
 
 procedure TEventListenerNode.Execute(AContext: TNodeExecutionContext);
@@ -739,8 +765,8 @@ procedure TPrintNode.SetupPins;
 begin
   inherited;
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FValuePin := AddInputPin('Value', 'any', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Null, True, TPinKind.Data);
 end;
 
 { TPrintLogicNode }
@@ -786,8 +812,52 @@ procedure TPrintLogicNode.SetupPins;
 begin
   inherited;
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FValuePin := AddInputPin('Value', 'bool', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Boolean, False, TPinKind.Data);
+end;
+
+{ TPrintColorNode }
+
+constructor TPrintColorNode.Create;
+begin
+  inherited;
+  Width := 200;
+  Height := 120;
+  HeaderColor := $FFA73E84;
+  NodeType := 'printcolorvalue';
+  IconPath := 'm441 336.2l-.06-.05c-9.93-9.18-22.78-11.34-32.16-12.92l-.69-.12c-9.05-1.49-10.48-2.5-14.58-6.17c-2.44-2.17-5.35-5.65-5.35-9.94s2.91-7.77 5.34-9.94l30.28-26.87c25.92-22.91 40.2-53.66 40.2-86.59s-14.25-63.68-40.2-86.6c-35.89-31.59-85-49-138.37-49C223.72 48 162 71.37 116 112.11c-43.87 38.77-68 90.71-68 146.24s24.16 107.47 68 146.23c21.75 19.24 47.49 34.18 76.52 44.42a266.2 266.2 0 0 0 86.87 15h1.81c61 0 119.09-20.57 159.39-56.4c9.7-8.56 15.15-20.83 15.34-34.56c.21-14.17-5.37-27.95-14.93-36.84M112 208a32 32 0 1 1 32 32a32 32 0 0 1-32-32m40 135a32 32 0 1 1 32-32a32 32 0 0 1-32 32m40-199a32 32 0 1 1 32 32a32 32 0 0 1-32-32m64 271a48 48 0 1 1 48-48a48 48 0 0 1-48 48m72-239a32 32 0 1 1 32-32a32 32 0 0 1-32 32';
+end;
+
+procedure TPrintColorNode.Execute(AContext: TNodeExecutionContext);
+begin
+  inherited;
+  var Value := NodeValueToColorDef(AContext.GetInputValue(FValuePin), TAlphaColors.Null);
+  FExecutedValue := Value;
+  AContext.SetVariableColor('PrintColor_' + Id, Value);
+end;
+
+procedure TPrintColorNode.Paint(Canvas: TCanvas; const NodeBounds: TRectF; Zoom, OffsetX, OffsetY: Double; Opacity: Single);
+begin
+  inherited;
+  var ScaledHeaderHeight := HeaderHeight * Zoom;
+  var NodeHead := RectF(NodeBounds.Left, NodeBounds.Top, NodeBounds.Right, NodeBounds.Top + ScaledHeaderHeight);
+  var NodeBody := RectF(NodeBounds.Left, NodeBounds.Top + ScaledHeaderHeight, NodeBounds.Right, NodeBounds.Bottom);
+
+  NodeBody.Left := NodeBody.Left + NodeBody.Width / 2;
+  var R := RectF(0, 0, 20 * Zoom, 20 * Zoom);
+  R.SetLocation(NodeBody.Right - R.Width - 10 * Zoom, NodeBody.CenterPoint.Y - R.Height / 2);
+
+  Canvas.Fill.Kind := TBrushKind.Solid;
+  Canvas.Fill.Color := FExecutedValue;
+  Canvas.FillEllipse(R, Opacity);
+end;
+
+procedure TPrintColorNode.SetupPins;
+begin
+  inherited;
+  ClearPins;
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Color, False, TPinKind.Data);
 end;
 
 { TSequence3Node }

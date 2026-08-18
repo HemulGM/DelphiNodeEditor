@@ -17,16 +17,11 @@ uses
   NodeEditor.Inspector.Item.Float, NodeEditor.Inspector.Item.Color,
   NodeEditor.Inspector.Item, NodeEditor.Inspector.Item.Bitmap,
   NodeEditor.Inspector.Item.Text, NodeEditor.Inspector.Item.Int,
-  NodeEditor.Inspector.Item.Bool;
+  NodeEditor.Inspector.Item.Bool, NodeEditor.Inspector.Item.Memo;
 
 type
   {$SCOPEDENUMS ON}
   TLogKind = (None, Info, Warn, Error, Succ);
-
-  TTrackBar = class(FMX.StdCtrls.TTrackBar)
-  protected
-    procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean); override;
-  end;
 
   TFormMain = class(TWinUIForm)
     LayoutRender: TLayout;
@@ -395,29 +390,9 @@ type
     Button9: TButton;
     Button13: TButton;
     LabelNoData: TLabel;
-    PopupLinkNode: TPopup;
-    ListBoxFindNode: TListBox;
-    ListBoxGroupHeader4: TListBoxGroupHeader;
-    ListBoxItem14: TListBoxItem;
-    ListBoxItem15: TListBoxItem;
-    ListBoxItem16: TListBoxItem;
-    ListBoxItem17: TListBoxItem;
-    ListBoxGroupHeader5: TListBoxGroupHeader;
-    ListBoxItem18: TListBoxItem;
-    ListBoxItem19: TListBoxItem;
-    ListBoxItem20: TListBoxItem;
-    ListBoxItem21: TListBoxItem;
-    ListBoxGroupHeader6: TListBoxGroupHeader;
-    ListBoxItem22: TListBoxItem;
-    ListBoxItem23: TListBoxItem;
-    ListBoxItem24: TListBoxItem;
-    ListBoxItem25: TListBoxItem;
-    SearchBoxSearchNode: TSearchBox;
-    Panel1: TPanel;
-    Layout1: TLayout;
-    ButtonClosePopupFindNode: TButton;
     CheckBoxPanAnimation: TCheckBox;
     PathLabel4: TPathLabel;
+    TimerLoading: TTimer;
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure FormResize(Sender: TObject);
@@ -493,8 +468,7 @@ type
     procedure ButtonNodeInfoClick(Sender: TObject);
     procedure ButtonNodeDataClick(Sender: TObject);
     procedure ButtonColNaviClick(Sender: TObject);
-    procedure PopupLinkNodePopup(Sender: TObject);
-    procedure ButtonClosePopupFindNodeClick(Sender: TObject);
+    procedure TimerLoadingTimer(Sender: TObject);
   protected
     procedure PaintRects(const UpdateRects: array of TRectF); override;
   private
@@ -528,7 +502,7 @@ type
     procedure OnEditorCompatibleNodeRequest(Sender: TObject; ASourcePin: TNodePin; const Position: TPointF);
     function GetNodeRuntimeInfo(ANode: TExecutableNode): string;
     procedure InitDemoGraphExec;
-    procedure FOnSelectNewNodeForPin(Sender: TObject);
+    procedure FindNode(Position: TPointF; TargetPinType: TNodeValueKind);
   protected
     OverTheme: integer;
     OverAccentColor: TAlphaColor;
@@ -548,7 +522,9 @@ implementation
 uses
   System.Math, System.JSON, System.Messaging, WinUI3.Dialogs,
   FMX.NodeEditor.Node.Graphic, FMX.NodeEditor.Node.Engineering,
-  FMX.NodeEditor.Node.ControlFlow, WinUI3.Style, System.IOUtils;
+  FMX.NodeEditor.Form.Search, FMX.NodeEditor.Node.JSON, System.Threading,
+  FMX.NodeEditor.Node.ControlFlow, WinUI3.Style, System.IOUtils,
+  NodeEditor.Frame.Progress;
 
 {$R *.fmx}
 
@@ -657,11 +633,12 @@ end;
 
 procedure TFormMain.UpdateNodeRegistry;
 begin
+  FEditor.Graph.Registry.SortByCategory;
+
   ListBoxRegistry.BeginUpdate;
   try
     ListBoxRegistry.Clear;
     ListBoxRegistry.HitTest := False;
-    FEditor.Graph.Registry.SortByCategory;
     var CurCategory := '';
     for var Item in FEditor.Graph.Registry do
     begin
@@ -691,47 +668,6 @@ begin
   finally
     ListBoxRegistry.EndUpdate;
   end;
-  ListBoxFindNode.BeginUpdate;
-  try
-    ListBoxFindNode.Clear;
-    ListBoxFindNode.HitTest := False;
-    FEditor.Graph.Registry.SortByCategory;
-    var CurCategory := '';
-    for var Item in FEditor.Graph.Registry do
-    begin
-      if CurCategory <> Item.Category then
-      begin
-        var Header := TListBoxGroupHeader.Create(ListBoxFindNode);
-        Header.Text := Item.Category;
-        Header.HitTest := True;
-        Header.OnDragOver := FOnItemOver;
-        ListBoxFindNode.AddObject(Header);
-        CurCategory := Item.Category;
-      end;
-      var ListItem := TListBoxItem.Create(ListBoxFindNode);
-      ListItem.HitTest := True;
-      ListItem.StyleLookup := 'listboxitemstyle_node';
-      ListItem.OnClick := FOnSelectNewNodeForPin;
-      ListItem.Text := Item.Caption;
-      ListItem.TagString := Item.NodeType;
-      ListItem.StylesData['background.Fill.Color'] := ChangeAlpha(Item.Color, $64);
-      ListItem.StylesData['background.Stroke.Color'] := Item.Color;
-      ListItem.StylesData['icon_bg.Fill.Color'] := Item.Color;
-      ListItem.StylesData['path.Data.Data'] := Item.IconPath;
-      ListBoxFindNode.AddObject(ListItem);
-    end;
-  finally
-    ListBoxFindNode.EndUpdate;
-  end;
-end;
-
-procedure TFormMain.FOnSelectNewNodeForPin(Sender: TObject);
-begin
-  if Sender is not TListBoxItem then
-    Exit;
-  PopupLinkNode.ModalResult := mrOk;
-  PopupLinkNode.IsOpen := False;
-  FEditor.Controller.CreateNodeForLinkPin(TListBoxItem(Sender).TagString, FAppendSourcePinId, FAppendPosition);
 end;
 
 procedure TFormMain.FormResize(Sender: TObject);
@@ -859,11 +795,6 @@ end;
 procedure TFormMain.ButtonAlignVertClick(Sender: TObject);
 begin
   FEditor.Controller.AlignSelectedNodes(TAlignMode.CenterVertical);
-end;
-
-procedure TFormMain.ButtonClosePopupFindNodeClick(Sender: TObject);
-begin
-  PopupLinkNode.IsOpen := False;
 end;
 
 procedure TFormMain.ButtonCloseWorkHistoryClick(Sender: TObject);
@@ -1019,38 +950,7 @@ begin
           V.PointValue := Item.Value.AsType<TPointF>;
       end;
     end;
-       {
-  for var i := 0 to N.ValueCount - 1 do
-  begin
-    if i >= StringGridNodeValues.RowCount then
-      Continue;
-    var V := N.GetValue(i);
-    if V = nil then
-      Continue;
-    var VStr := StringGridNodeValues.Cells[2, i].Trim;
-
-    case V.Kind of
-      TNodeValueKind.Float:
-        V.FloatValue := StrToFloatDef(VStr, V.FloatValue);
-      TNodeValueKind.Integer:
-        V.IntegerValue := StrToInt64Def(VStr, V.IntegerValue);
-      TNodeValueKind.string:
-        V.StringValue := VStr;
-      TNodeValueKind.Boolean:
-        V.BooleanValue := SameText(VStr, 'true') or (VStr = '1');
-      TNodeValueKind.JSON:
-        V.JSONValue := VStr;
-      TNodeValueKind.Bitmap:
-        begin
-          if TFile.Exists(VStr) then
-          begin
-            var BMP := TBitmap.CreateFromFile(VStr);
-            V.BitmapValue := TBitmapObject.Create;
-            V.BitmapValue.SetBitmap(BMP);
-          end;
-        end;
-    end;
-  end;      }
+  N.UpdateNodeData;
   N.AutoLayoutPins;
 
   var NewObj := TJSONObject.Create;
@@ -1116,6 +1016,7 @@ begin
   if FEditor.ExecuteGraph then
   begin
     Log('Graph execution started...', TLogKind.Info);
+    ExpanderMessages.IsExpanded := True;
     FEditor.DebugViewMode := True;
   end
   else
@@ -1235,6 +1136,7 @@ begin
   RegisterEngineeringNodes(FEditor.Graph.Registry);
   RegisterControlFlowNodes(FEditor.Graph.Registry);
   RegisterGraphicNodes(FEditor.Graph.Registry);
+  RegisterJSONValueNodes(FEditor.Graph.Registry);
 end;
 
 procedure TFormMain.SpinBoxSizeChange(Sender: TObject);
@@ -1244,6 +1146,15 @@ begin
   begin
     FEditor.GridSize := V;
     UpdateStatus;
+  end;
+end;
+
+procedure TFormMain.TimerLoadingTimer(Sender: TObject);
+begin
+  if Assigned(FrameProgress) then
+  begin
+    FrameProgress.ProgressBarValue.Value := FJsonNodeEditor.GetProgress * 100;
+    FrameProgress.LabelMsg.Text := FJsonNodeEditor.GetProgressMsg;
   end;
 end;
 
@@ -1598,9 +1509,9 @@ begin
   var Msgs := TStringList.Create;
   try
     if FEditor.ValidateGraphToStrings(Msgs) then
-      ShowMessage('Graph is valid.' + #13#10#13#10 + Msgs.Text)
+      ShowUIMessage(Self, 'Graph Validate', Msgs.Text)
     else
-      ShowMessage(Msgs.Text);
+      ShowUIMessage(Self, 'Graph Validate', Msgs.Text);
   finally
     Msgs.Free;
   end;
@@ -1609,7 +1520,41 @@ end;
 procedure TFormMain.MenuItemJSONLoadClick(Sender: TObject);
 begin
   if OpenDialogJSON.Execute then
-    FJsonNodeEditor.LoadFromFile(OpenDialogJSON.FileName);
+  begin
+    var FileName := OpenDialogJSON.FileName;
+    FrameProgress := TFrameProgress.Create(Self);
+    try
+      var Proc: TProc<Integer> :=
+        procedure(Res: Integer)
+        begin
+          if Res <> MR_AUTOCLOSE then
+          begin
+            FrameProgress.Free;
+            FrameProgress := nil;
+          end;
+        end;
+      TWinUIDialog.ShowInline(Self, Proc, 'Loading...', FrameProgress, [], -1, -1, False);
+    except
+      FrameProgress.Free;
+      FrameProgress := nil;
+    end;
+    TimerLoading.Enabled := True;
+    TTask.Run(
+      procedure
+      begin
+        try
+          FJsonNodeEditor.LoadFromFile(FileName);
+        finally
+          TThread.ForceQueue(nil,
+            procedure
+            begin
+              TimerLoading.Enabled := False;
+              FrameProgress.Free;
+              FrameProgress := nil;
+            end);
+        end;
+      end);
+  end;
 end;
 
 procedure TFormMain.MenuItemJSONSaveClick(Sender: TObject);
@@ -1672,7 +1617,7 @@ begin
     while VertScrollBoxProps.Content.ControlsCount > 0 do
       VertScrollBoxProps.Content.Controls[0].Free;
     LabelNoData.Parent := VertScrollBoxProps;
-    LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
+    LayoutNodeData.Height := VertScrollBoxProps.ContentBounds.Height + 50;
     LabelNodeType.Text := 'Node (no selection)';
     EditNodeTitle.Text := '';
     SpinBoxNodeX.Value := 0;
@@ -1849,11 +1794,11 @@ begin
             end;
           TNodeValueKind.JSON:
             begin
-              var Frame := TFrameInspectorItemText.Create(VertScrollBoxProps);
+              var Frame := TFrameInspectorItemMemo.Create(VertScrollBoxProps);
               Frame.Position.Y := 100000;
               Frame.Align := TAlignLayout.Top;
               Frame.PropName := V.Name;
-              Frame.Value := V.StringValue;
+              Frame.Value := V.JSONValue;
               VertScrollBoxProps.AddObject(Frame);
             end;
           TNodeValueKind.Bitmap:
@@ -1874,7 +1819,7 @@ begin
 
     if VertScrollBoxProps.Content.ControlsCount <= 0 then
       LabelNoData.Parent := VertScrollBoxProps;
-    LayoutNodeData.Height := VertScrollBoxProps.Content.ControlsCount * 40 + 50;
+    LayoutNodeData.Height := VertScrollBoxProps.ContentBounds.Height + 50;
     PanelInspector.Enabled := True;
     ButtonNodeApply.Enabled := True;
     ButtonNodeRevert.Enabled := True;
@@ -1897,10 +1842,30 @@ procedure TFormMain.OnEditorCompatibleNodeRequest(Sender: TObject; ASourcePin: T
 begin
   FAppendSourcePinId := ASourcePin.Id;
   FAppendPosition := Position;
-  SearchBoxSearchNode.Text := '';
-  PopupLinkNode.Placement := TPlacement.Mouse;
-  PopupLinkNode.Popup(True);
-  BringToFront;
+  var LPinTypeId := ASourcePin.PinType.TypeId;
+
+  TThread.ForceQueue(nil,
+    procedure
+    begin
+      FindNode(FAppendPosition, LPinTypeId);
+    end);
+end;
+
+procedure TFormMain.FindNode(Position: TPointF; TargetPinType: TNodeValueKind);
+begin
+  var Form := TFormNodeEditorSearch.CreateSearch(Self, FEditor.Graph.Registry);
+  try
+    Form.Left := Screen.MousePos.Round.X;// Round(EnsureRange(Position.X - Form.Width / 2, 0, Screen.Width - Form.Width));
+    Form.Top := Screen.MousePos.Round.Y;// Round(EnsureRange(Position.Y - Form.Height / 2, 0, Screen.Height - Form.Height));
+    //Form.FilterValue(TPinDirection.Input, TargetPinType);
+
+    if (Form.ShowModal = mrOk) and (Form.SelectedNodeType <> '') then
+    begin
+      FEditor.Controller.CreateNodeForLinkPin(Form.SelectedNodeType, FAppendSourcePinId, FAppendPosition);
+    end;
+  finally
+    Form.Free;
+  end;
 end;
 
 procedure TFormMain.OnEditorExecutionFinished(Sender: TObject; Success: boolean; const ErrorMessage: string);
@@ -2054,11 +2019,6 @@ begin
   UpdateSystemBackdropType;
 end;
 
-procedure TFormMain.PopupLinkNodePopup(Sender: TObject);
-begin
-  SearchBoxSearchNode.SetFocus;
-end;
-
 procedure TFormMain.UpdateStatus;
 var
   SelStr: string;
@@ -2099,24 +2059,6 @@ begin
   LabelStat4.Text :=
     'Snap: ' + (if FEditor.SnapToGrid then 'ON' else 'OFF') +
     '  Grid: ' + IntToStr(FEditor.GridSize);
-end;
-
-{ TTrackBar }
-
-procedure TTrackBar.MouseWheel(Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
-var
-  LValue: Double;
-  OldValue: Double;
-  LInc: Double;
-begin
-  LInc := Frequency;
-  if LInc = 0 then
-    LInc := 1;
-  LInc := LInc * Sign(WheelDelta);
-  LValue := Value + LInc;
-  OldValue := Value;
-  Value := LValue;
-  Handled := not SameValue(Value, OldValue);
 end;
 
 initialization

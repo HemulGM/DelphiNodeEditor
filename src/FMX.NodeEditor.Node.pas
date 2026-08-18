@@ -15,16 +15,15 @@ type
 
   TNodePinType = class
   public
-    TypeId: string;
-    Category: string;
+    TypeId: TNodeValueKind;
     DisplayName: string;
     Color: TAlphaColor;
-    Flags: TNodePinTypeFlags;
+    Flags: TPinTypeFlags;
 
-    constructor Create(const ATypeId: string = 'any'; const ACategory: string = ''; AColor: TAlphaColor = $FF69CCF8);
+    constructor Create(AAny: Boolean; const ATypeId: TNodeValueKind = TNodeValueKind.Null; AColor: TAlphaColor = $FF69CCF8);
 
-    function IsAny: boolean;
-    function IsCompatibleWith(AOther: TNodePinType): boolean;
+    function IsAny: Boolean;
+    function IsCompatibleWith(AOther: TNodePinType): Boolean;
     function Clone: TNodePinType;
 
     procedure SaveToJSON(AObj: TJSONObject);
@@ -50,6 +49,7 @@ type
     constructor Create(const AName: string = ''; AKind: TNodeValueKind = TNodeValueKind.Null);
 
     destructor Destroy; override;
+    procedure SetValue(const Value: TValue);
     procedure SaveToJSON(AObj: TJSONObject);
     procedure LoadFromJSON(AObj: TJSONValue);
     function IsHaveMinMax: Boolean;
@@ -66,9 +66,6 @@ type
     Kind: TPinKind;
     Direction: TPinDirection;
     Selected: Boolean;
-
-    // Legacy
-    DataType: string;
 
     PinType: TNodePinType;
 
@@ -90,7 +87,7 @@ type
     function CanAcceptMoreConnections: Boolean;
     function EffectiveDisplayName: string; inline;
     function GetPinWorldPosition: TPointF; inline;
-    procedure SetTypeId(const ATypeId: string); inline;
+    procedure SetTypeId(AAny: Boolean; const ATypeId: TNodeValueKind); inline;
     procedure Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single; Opacity: Single); virtual;
   end;
 
@@ -175,11 +172,13 @@ type
     procedure SetupPins; virtual;
 
     procedure ClearPins;
-    function AddInputPin(const AName, ADataType: string; AKind: TPinKind = TPinKind.Data; ALocalY: integer = -1): TNodePin;
-    function AddOutputPin(const AName, ADataType: string; AKind: TPinKind = TPinKind.Data; ALocalY: integer = -1): TNodePin;
+    function AddInputPin(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin; overload;
+    function AddInputPinAndValue(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind; Default: TValue): TNodePin; overload;
+    function AddOutputPin(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
     function RemovePin(APin: TNodePin): Boolean; inline;
     procedure ReindexPins; inline;
     procedure AutoLayoutPins; virtual;
+    procedure UpdateNodeData; virtual;
 
     function InputCount: integer;
     function OutputCount: integer;
@@ -269,7 +268,7 @@ function NodeOrderCompare(const Item1, Item2: TCustomNode): Integer; inline;
 implementation
 
 uses
-  System.Math.Vectors, System.NetEncoding;
+  System.Math.Vectors, FMX.Forms, System.NetEncoding;
 
 function ComparePinsBySortIndex(const Item1, Item2: TNodePin): integer; inline;
 begin
@@ -417,15 +416,12 @@ begin
   APin.AllowMultipleConnections := AObj.GetValue('allowMultipleConnections', APin.AllowMultipleConnections);
   APin.SortIndex := AObj.GetValue('sortIndex', APin.SortIndex);
 
-  APin.SetTypeId(AObj.GetValue('dataType', APin.DataType));
-
   var PinTypeObj := AObj.GetValue<TJSONObject>('pinType', nil);
   if PinTypeObj <> nil then
   begin
     if APin.PinType = nil then
-      APin.PinType := TNodePinType.Create(APin.DataType);
+      APin.PinType := TNodePinType.Create(APin.PinType.IsAny, APin.PinType.TypeId);
     APin.PinType.LoadFromJSON(PinTypeObj, True);
-    APin.DataType := APin.PinType.TypeId;
   end;
 end;
 
@@ -443,13 +439,11 @@ begin
       var Dir := StrToPinDirection(PinObj.GetValue('direction', 'input'));
       var Kind := StrToPinKind(PinObj.GetValue('kind', 'data'));
       var Name := PinObj.GetValue('name', '');
-      var DataType := PinObj.GetValue('dataType', '');
-      var LocalY := PinObj.GetValue<Integer>('localY', 40);
 
       if Dir = TPinDirection.Input then
-        P := AddInputPin(Name, DataType, Kind, LocalY)
+        P := AddInputPin(Name, TNodeValueKind.Null, False, Kind)
       else
-        P := AddOutputPin(Name, DataType, Kind, LocalY);
+        P := AddOutputPin(Name, TNodeValueKind.Null, False, Kind);
     end;
 
     AssignPinFromJSON(P, PinObj);
@@ -515,6 +509,11 @@ begin
   FIconPathData.Data := IconPath;
 end;
 
+procedure TCustomNode.UpdateNodeData;
+begin
+
+end;
+
 procedure TCustomNode.SetIconPath(const Value: string);
 begin
   FIconPath := Value;
@@ -548,15 +547,26 @@ begin
   FOutputs.Clear;
 end;
 
-function TCustomNode.AddInputPin(const AName, ADataType: string; AKind: TPinKind; ALocalY: integer): TNodePin;
+function TCustomNode.AddInputPinAndValue(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind; Default: TValue): TNodePin;
 begin
-  if ALocalY < 0 then
-    ALocalY := (HeaderHeight + 16) + FInputs.Count * 26;
+  Result := AddInputPin(AName, ADataType, AAny, AKind);
 
-  Result := TNodePin.Create(AName, TPinDirection.Input, AKind, ALocalY);
+  if AKind = TPinKind.Data then
+  begin
+    if FindValue(AName) = nil then
+    begin
+      var V := AddValue(AName, ADataType);
+      V.SetValue(Default);
+    end;
+  end;
+end;
+
+function TCustomNode.AddInputPin(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
+begin
+  Result := TNodePin.Create(AName, TPinDirection.Input, AKind, 0);
   FInputs.Add(Result);
   Result.OwnerNode := Self;
-  Result.SetTypeId(ADataType);
+  Result.SetTypeId(AAny, ADataType);
   Result.AllowMultipleConnections := False;
   Result.SortIndex := FInputs.Count;
 
@@ -564,15 +574,12 @@ begin
   AutoLayoutPins;
 end;
 
-function TCustomNode.AddOutputPin(const AName, ADataType: string; AKind: TPinKind; ALocalY: integer): TNodePin;
+function TCustomNode.AddOutputPin(const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 begin
-  if ALocalY < 0 then
-    ALocalY := (HeaderHeight + 16) + FOutputs.Count * 26;
-
-  Result := TNodePin.Create(AName, TPinDirection.Output, AKind, ALocalY);
+  Result := TNodePin.Create(AName, TPinDirection.Output, AKind, 0);
   FOutputs.Add(Result);
   Result.OwnerNode := Self;
-  Result.SetTypeId(ADataType);
+  Result.SetTypeId(AAny, ADataType);
   Result.AllowMultipleConnections := True;
   Result.SortIndex := FOutputs.Count;
 
@@ -636,19 +643,19 @@ begin
 
   for var i := 0 to FInputs.Count - 1 do
     //if FInputs[i].Kind = TPinKind.Exec then
-    begin
-      FInputs[i].LocalY := Top + CntInExec * ItemH + 16;
-      TopData := Max(TopData, FInputs[i].LocalY);
-      Inc(CntInExec);
-    end;
+  begin
+    FInputs[i].LocalY := Top + CntInExec * ItemH + 16;
+    TopData := Max(TopData, FInputs[i].LocalY);
+    Inc(CntInExec);
+  end;
 
   for var i := 0 to FOutputs.Count - 1 do
     //if FOutputs[i].Kind = TPinKind.Exec then
-    begin
-      FOutputs[i].LocalY := Top + CntOutExec * ItemH + 16;
-      TopData := Max(TopData, FOutputs[i].LocalY);
-      Inc(CntOutExec);
-    end;
+  begin
+    FOutputs[i].LocalY := Top + CntOutExec * ItemH + 16;
+    TopData := Max(TopData, FOutputs[i].LocalY);
+    Inc(CntOutExec);
+  end;
          {
   var WorkH := Height - TopData - BottomPad;
 
@@ -1207,7 +1214,6 @@ begin
     PinObj.AddPair('kind', PinKindToStr(P.Kind));
     PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
     //PinObj.AddPair('side', Ord(P.Side));
-    PinObj.AddPair('dataType', P.DataType);
     PinObj.AddPair('localY', P.LocalY);
 
     PinObj.AddPair('isRequired', P.IsRequired);
@@ -1237,7 +1243,6 @@ begin
     PinObj.AddPair('kind', PinKindToStr(P.Kind));
     PinObj.AddPair('direction', PinDirectionToStr(P.Direction));
     //PinObj.AddPair('side', Ord(P.Side));
-    PinObj.AddPair('dataType', P.DataType);
     PinObj.AddPair('localY', P.LocalY);
 
     PinObj.AddPair('isRequired', P.IsRequired);
@@ -1327,29 +1332,26 @@ end;
 
 { TNodePinType }
 
-constructor TNodePinType.Create(const ATypeId: string; const ACategory: string; AColor: TAlphaColor);
+constructor TNodePinType.Create(AAny: Boolean; const ATypeId: TNodeValueKind; AColor: TAlphaColor);
 begin
   inherited Create;
 
-  TypeId := ATypeId.Trim.ToLower;
-  if TypeId = '' then
-    TypeId := 'any';
+  TypeId := ATypeId;
 
-  Category := ACategory;
-  DisplayName := TypeId;
+  DisplayName := NodeValueKindToStr(TypeId);
   Color := AColor;
   Flags := [];
 
-  if SameText(TypeId, 'any') then
-    Include(Flags, TNodePinTypeFlag.Any);
+  if AAny then
+    Include(Flags, TPinTypeFlag.Any);
 end;
 
-function TNodePinType.IsAny: boolean;
+function TNodePinType.IsAny: Boolean;
 begin
-  Result := SameText(TypeId, 'any') or (TNodePinTypeFlag.Any in Flags) or (TNodePinTypeFlag.Wildcard in Flags);
+  Result := (TPinTypeFlag.Any in Flags) or (TPinTypeFlag.Wildcard in Flags);
 end;
 
-function TNodePinType.IsCompatibleWith(AOther: TNodePinType): boolean;
+function TNodePinType.IsCompatibleWith(AOther: TNodePinType): Boolean;
 begin
   Result := False;
 
@@ -1359,25 +1361,25 @@ begin
   if IsAny or AOther.IsAny then
     Exit(True);
 
-  if SameText(TypeId, AOther.TypeId) then
+  if TypeId = AOther.TypeId then
     Exit(True);
 
-  if SameText(TypeId, 'integer') and SameText(AOther.TypeId, 'float') then
+  if (TypeId = TNodeValueKind.Integer) and (AOther.TypeId = TNodeValueKind.Float) then
     Exit(True);
 
-  if SameText(TypeId, 'float') and SameText(AOther.TypeId, 'integer') then
+  if (TypeId = TNodeValueKind.Float) and (AOther.TypeId = TNodeValueKind.Integer) then
     Exit(True);
 
-  if (TNodePinTypeFlag.Nullable in Flags) and SameText(TypeId, AOther.TypeId) then
+  if (TPinTypeFlag.Nullable in Flags) and (TypeId = AOther.TypeId) then
     Exit(True);
 
-  if (TNodePinTypeFlag.Nullable in AOther.Flags) and SameText(TypeId, AOther.TypeId) then
+  if (TPinTypeFlag.Nullable in AOther.Flags) and (TypeId = AOther.TypeId) then
     Exit(True);
 end;
 
 function TNodePinType.Clone: TNodePinType;
 begin
-  Result := TNodePinType.Create(TypeId, Category, Color);
+  Result := TNodePinType.Create(IsAny, TypeId, Color);
   Result.DisplayName := DisplayName;
   Result.Flags := Flags;
 end;
@@ -1387,10 +1389,9 @@ begin
   if AObj = nil then
     Exit;
 
-  AObj.AddPair('typeId', TypeId);
-  AObj.AddPair('category', Category);
+  AObj.AddPair('typeId', NodeValueKindToStr(TypeId));
   AObj.AddPair('displayName', DisplayName);
-  AObj.AddPair('color', Cardinal(Color));
+  //AObj.AddPair('color', Cardinal(Color));
   AObj.AddPair('flags', TypeFlagsToInt(Flags));
 end;
 
@@ -1400,16 +1401,12 @@ begin
     Exit;
 
   TypeId := AObj.GetValue('typeId', TypeId);
-  Category := AObj.GetValue('category', Category);
   DisplayName := AObj.GetValue('displayName', DisplayName);   {
   if UseAlphaColor then
     Color := TAlphaColor(AObj.GetValue('color', Cardinal(Color)))
   else
     Color := ColorToAlphaColor(AObj.GetValue('color', Integer(Color)));   }
   Flags := IntToTypeFlags(AObj.GetValue('flags', TypeFlagsToInt(Flags)));
-
-  if TypeId = '' then
-    TypeId := 'any';
 end;
 
 { TNodeValue }
@@ -1465,6 +1462,30 @@ begin
       AObj.AddPair('value', BitmapToBase64(BitmapValue));
   else
     AObj.AddPair('value', '');
+  end;
+end;
+
+procedure TNodeValue.SetValue(const Value: TValue);
+begin
+  case Kind of
+    TNodeValueKind.Null:
+      ;
+    TNodeValueKind.Float:
+      FloatValue := NodeValueToFloatDef(Value);
+    TNodeValueKind.Integer:
+      IntegerValue := NodeValueToIntDef(Value);
+    TNodeValueKind.string:
+      StringValue := NodeValueToStringDef(Value);
+    TNodeValueKind.Boolean:
+      BooleanValue := NodeValueToBoolDef(Value);
+    TNodeValueKind.JSON:
+      JSONValue := NodeValueToStringDef(Value);
+    TNodeValueKind.Bitmap:
+      BitmapValue := NodeValueToBitmapDef(Value);
+    TNodeValueKind.Color:
+      ColorValue := NodeValueToColorDef(Value);
+    TNodeValueKind.Point:
+      PointValue := NodeValueToPointDef(Value, TPointF.Zero);
   end;
 end;
 
@@ -1543,8 +1564,7 @@ begin
   Kind := AKind;
   LocalY := ALocalY;
 
-  DataType := '';
-  PinType := TNodePinType.Create('any', '');
+  PinType := TNodePinType.Create(True, TNodeValueKind.Null);
 
   OwnerNode := nil;
 
@@ -1575,7 +1595,7 @@ begin
     Result := DisplayName
   else
     Result := Name;
-  Result := Result + if Kind = TPinKind.Data then ': ' + DataType else '';
+  Result := Result + if Kind = TPinKind.Data then ': ' + PinType.TypeId.ToString else '';
 end;
 
 procedure TNodePin.Paint(Canvas: TCanvas; Zoom: Double; const Center: TPointF; Radius: Single; Opacity: Single);
@@ -1707,23 +1727,19 @@ begin
   Result := OwnerNode.GetPinWorldPosition(Self);
 end;
 
-procedure TNodePin.SetTypeId(const ATypeId: string);
+procedure TNodePin.SetTypeId(AAny: Boolean; const ATypeId: TNodeValueKind);
 begin
-  DataType := ATypeId;
-
   if PinType = nil then
-    PinType := TNodePinType.Create(ATypeId)
+    PinType := TNodePinType.Create(AAny, ATypeId)
   else
   begin
-    PinType.TypeId := LowerCase(Trim(ATypeId));
-    if PinType.TypeId = '' then
-      PinType.TypeId := 'any';
+    PinType.TypeId := ATypeId;
 
-    PinType.DisplayName := PinType.TypeId;
+    PinType.DisplayName := PinType.TypeId.ToString;
     PinType.Flags := [];
 
-    if SameText(PinType.TypeId, 'any') then
-      Include(PinType.Flags, TNodePinTypeFlag.Any);
+    if AAny then
+      Include(PinType.Flags, TPinTypeFlag.Any);
   end;
 end;
 
@@ -1879,8 +1895,8 @@ end;
 procedure TDefaultNode.SetupPins;
 begin
   ClearPins;
-  AddInputPin('In', 'float', TPinKind.Data, 45);
-  AddOutputPin('Out', 'float', TPinKind.Data, 45);
+  AddInputPin('In', TNodeValueKind.Float, False, TPinKind.Data);
+  AddOutputPin('Out', TNodeValueKind.Float, False, TPinKind.Data);
 end;
 
 { TRerouteNode }
@@ -1973,8 +1989,8 @@ end;
 procedure TRerouteNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('', 'any', TPinKind.Data, Height div 2);
-  AddInputPin('', 'any', TPinKind.Data, Height div 2);
+  AddOutputPin('', TNodeValueKind.Null, True, TPinKind.Data);
+  AddInputPin('', TNodeValueKind.Null, True, TPinKind.Data);
 
   if InputCount > 0 then
     GetInput(0).AllowMultipleConnections := False;

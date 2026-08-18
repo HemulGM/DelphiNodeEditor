@@ -311,10 +311,10 @@ begin
   inherited;
   CreateFilter;
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
-  FValueIn := AddInputPin('Original', 'bitmap', TPinKind.Data);
-  FValueOut := AddOutputPin('Result', 'bitmap', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValueIn := AddInputPin('Original', TNodeValueKind.Bitmap, False, TPinKind.Data);
+  FValueOut := AddOutputPin('Result', TNodeValueKind.Bitmap, False, TPinKind.Data);
 
   if FindValue('Original') = nil then
   begin
@@ -327,7 +327,7 @@ begin
     case FilterAttr.ValueType of
       TFilterValueType.Float:
         begin
-          AddInputPin(FilterAttr.Name, 'float');
+          AddInputPin(FilterAttr.Name, TNodeValueKind.Float, False, TPinKind.Data);
           if FindValue(FilterAttr.Name) = nil then
           begin
             var V := AddValue(FilterAttr.Name, TNodeValueKind.Float);
@@ -338,7 +338,7 @@ begin
         end;
       TFilterValueType.Point:
         begin
-          AddInputPin(FilterAttr.Name + '.X', 'float');
+          AddInputPin(FilterAttr.Name + '.X', TNodeValueKind.Float, False, TPinKind.Data);
           if FindValue(FilterAttr.Name + '.X') = nil then
           begin
             var V := AddValue(FilterAttr.Name + '.X', TNodeValueKind.Float);
@@ -346,7 +346,7 @@ begin
             V.FloatValue := X;
           end;
 
-          AddInputPin(FilterAttr.Name + '.Y', 'float');
+          AddInputPin(FilterAttr.Name + '.Y', TNodeValueKind.Float, False, TPinKind.Data);
           if FindValue(FilterAttr.Name + '.Y') = nil then
           begin
             var V := AddValue(FilterAttr.Name + '.Y', TNodeValueKind.Float);
@@ -356,7 +356,7 @@ begin
         end;
       TFilterValueType.Color:
         begin
-          AddInputPin(FilterAttr.Name, 'color');
+          AddInputPin(FilterAttr.Name, TNodeValueKind.Color, False, TPinKind.Data);
           if FindValue(FilterAttr.Name) = nil then
           begin
             var V := AddValue(FilterAttr.Name, TNodeValueKind.Color);
@@ -365,7 +365,7 @@ begin
         end;
       TFilterValueType.Bitmap:
         begin
-          AddInputPin(FilterAttr.Name, 'bitmap');
+          AddInputPin(FilterAttr.Name, TNodeValueKind.Bitmap, False, TPinKind.Data);
           if FindValue(FilterAttr.Name) = nil then
           begin
             var V := AddValue(FilterAttr.Name, TNodeValueKind.Bitmap);
@@ -471,7 +471,7 @@ end;
 procedure TBitmapValueNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'bitmap', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Bitmap, False, TPinKind.Data);
 
   if FindValue('value') = nil then
   begin
@@ -549,8 +549,8 @@ procedure TBitmapPrintNode.SetupPins;
 begin
   inherited;
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FValuePin := AddInputPin('Value', 'bitmap', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Bitmap, False, TPinKind.Data);
 end;
 
 { TBitmapSaveToFileNode }
@@ -581,9 +581,9 @@ procedure TBitmapSaveToFileNode.SetupPins;
 begin
   inherited;
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FValuePin := AddInputPin('Value', 'bitmap', TPinKind.Data);
-  FFileName := AddInputPin('FileName', 'string', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Bitmap, False, TPinKind.Data);
+  FFileName := AddInputPin('FileName', TNodeValueKind.String, False, TPinKind.Data);
 
   if FindValue('filename') = nil then
   begin

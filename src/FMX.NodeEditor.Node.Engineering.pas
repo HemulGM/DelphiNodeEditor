@@ -4,8 +4,8 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Math, System.Rtti, System.UITypes,
-  FMX.NodeEditor.Types, FMX.NodeEditor.Node, FMX.NodeEditor.Executor.Runtime,
-  FMX.NodeEditor.Graph;
+  FMX.Types, FMX.NodeEditor.Types, FMX.NodeEditor.Node,
+  FMX.NodeEditor.Executor.Runtime, FMX.NodeEditor.Graph;
 
 type
   TExecMathNode = class(TExecutableNode)
@@ -49,7 +49,6 @@ type
   TFloatConstNode = class(TExecutableNode)
   private
     FValueOut: TNodePin;
-  protected
   public
     procedure SetupPins; override;
     constructor Create; override;
@@ -59,6 +58,20 @@ type
   TColorConstNode = class(TExecutableNode)
   private
     FValueOut: TNodePin;
+  protected
+  public
+    procedure SetupPins; override;
+    constructor Create; override;
+    procedure Execute(AContext: TNodeExecutionContext); override;
+  end;
+
+  TColorRGBAConstNode = class(TExecutableNode)
+  private
+    FValueOut: TNodePin;
+    FValueR: TNodePin;
+    FValueG: TNodePin;
+    FValueB: TNodePin;
+    FValueA: TNodePin;
   protected
   public
     procedure SetupPins; override;
@@ -452,8 +465,8 @@ implementation
 
 procedure TExecMathNode.AddExecPins;
 begin
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
 end;
 
 { TIntRandomNode }
@@ -470,8 +483,8 @@ end;
 
 procedure TIntRandomNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var FFrom := AContext.GetInputValueOrVar(FFrom, 'from');
-  var FTo := AContext.GetInputValueOrVar(FTo, 'to');
+  var FFrom := AContext.GetInputValueOrVar(FFrom);
+  var FTo := AContext.GetInputValueOrVar(FTo);
 
   if not FFrom.IsEmpty and not FTo.IsEmpty then
     AContext.SetOutputValue(FValueOut, MakeIntValue(RandomRange(FFrom.AsInteger, FTo.AsInteger)))
@@ -482,18 +495,13 @@ end;
 procedure TIntRandomNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'integer', TPinKind.Data);
-  FFrom := AddInputPin('From', 'integer', TPinKind.Data);
-  FTo := AddinputPin('To', 'integer', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Integer, False, TPinKind.Data);
+  FFrom := AddInputPinAndValue('From', TNodeValueKind.Integer, False, TPinKind.Data, 1);
+  FTo := AddinputPin('To', TNodeValueKind.Integer, False, TPinKind.Data);
 
-  if FindValue('from') = nil then
+  if FindValue('To') = nil then
   begin
-    var V := AddValue('from', TNodeValueKind.Integer);
-    V.IntegerValue := 0;
-  end;
-  if FindValue('to') = nil then
-  begin
-    var V := AddValue('to', TNodeValueKind.Integer);
+    var V := AddValue('To', TNodeValueKind.Integer);
     V.IntegerValue := 100;
   end;
 end;
@@ -513,18 +521,18 @@ end;
 procedure TIntConstNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'integer', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Integer, False, TPinKind.Data);
 
-  if FindValue('value') = nil then
+  if FindValue('Value') = nil then
   begin
-    var V := AddValue('value', TNodeValueKind.Integer);
+    var V := AddValue('Value', TNodeValueKind.Integer);
     V.IntegerValue := 0;
   end;
 end;
 
 procedure TIntConstNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := FindValue('value');
+  var V := FindValue('Value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeIntValue(V.IntegerValue))
   else
@@ -551,7 +559,7 @@ end;
 procedure TFloatRandomNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'float', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
 end;
 
 { TFloatConstNode }
@@ -568,7 +576,7 @@ end;
 
 procedure TFloatConstNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := FindValue('value');
+  var V := FindValue('Value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeFloatValue(V.FloatValue))
   else
@@ -578,11 +586,11 @@ end;
 procedure TFloatConstNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'float', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
 
-  if FindValue('value') = nil then
+  if FindValue('Value') = nil then
   begin
-    var V := AddValue('value', TNodeValueKind.Float);
+    var V := AddValue('Value', TNodeValueKind.Float);
     V.FloatValue := 0;
   end;
 end;
@@ -596,12 +604,12 @@ begin
   Height := 110;
   NodeType := 'colorconst';
   HeaderColor := $FFA73E84;
-  IconPath := 'M276.625 384v-36.938q52.688-48.375 80.25-78.937q25.313-27.938 34.875-44.813q9.75-16.875 9.75-33.187q0-17.25-11.813-27.563q-13.312-11.436-33.562-11.437q-27.75 0-63.75 20.063l-11.25-38.626q39.562-18.561 80.062-18.562q39.375 0 62.25 17.812q24.938 19.5 24.938 55.688q0 24.375-11.438 46.5q-11.437 22.125-40.687 54q-25.688 28.313-58.313 58.5h112.5V384zm-155.167 0V169.875L72.896 202.5L53.02 165.938l73.5-47.626h40.125V384zm117.209-41.667q-7.5-7.666-18.834-7.666q-11.166 0-18.833 7.5q-7.5 7.5-7.5 18.666q0 11.834 7.333 19.5q7.5 7.5 19.167 7.5q11.166 0 18.667-7.5q7.5-7.667 7.5-19.166q0-11.334-7.5-18.834';
+  IconPath := 'm441 336.2l-.06-.05c-9.93-9.18-22.78-11.34-32.16-12.92l-.69-.12c-9.05-1.49-10.48-2.5-14.58-6.17c-2.44-2.17-5.35-5.65-5.35-9.94s2.91-7.77 5.34-9.94l30.28-26.87c25.92-22.91 40.2-53.66 40.2-86.59s-14.25-63.68-40.2-86.6c-35.89-31.59-85-49-138.37-49C223.72 48 162 71.37 116 112.11c-43.87 38.77-68 90.71-68 146.24s24.16 107.47 68 146.23c21.75 19.24 47.49 34.18 76.52 44.42a266.2 266.2 0 0 0 86.87 15h1.81c61 0 119.09-20.57 159.39-56.4c9.7-8.56 15.15-20.83 15.34-34.56c.21-14.17-5.37-27.95-14.93-36.84M112 208a32 32 0 1 1 32 32a32 32 0 0 1-32-32m40 135a32 32 0 1 1 32-32a32 32 0 0 1-32 32m40-199a32 32 0 1 1 32 32a32 32 0 0 1-32-32m64 271a48 48 0 1 1 48-48a48 48 0 0 1-48 48m72-239a32 32 0 1 1 32-32a32 32 0 0 1-32 32';
 end;
 
 procedure TColorConstNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := FindValue('value');
+  var V := FindValue('Value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeColorValue(V.ColorValue))
   else
@@ -611,12 +619,77 @@ end;
 procedure TColorConstNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'color', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Color, False, TPinKind.Data);
 
-  if FindValue('value') = nil then
+  if FindValue('Value') = nil then
   begin
-    var V := AddValue('value', TNodeValueKind.Color);
+    var V := AddValue('Value', TNodeValueKind.Color);
     V.ColorValue := TAlphaColors.Null;
+  end;
+end;
+
+{ TColorRGBAConstNode }
+
+constructor TColorRGBAConstNode.Create;
+begin
+  inherited;
+  Width := 180;
+  Height := 180;
+  NodeType := 'colorrgbaconst';
+  HeaderColor := $FFA73E84;
+  IconPath := 'm441 336.2l-.06-.05c-9.93-9.18-22.78-11.34-32.16-12.92l-.69-.12c-9.05-1.49-10.48-2.5-14.58-6.17c-2.44-2.17-5.35-5.65-5.35-9.94s2.91-7.77 5.34-9.94l30.28-26.87c25.92-22.91 40.2-53.66 40.2-86.59s-14.25-63.68-40.2-86.6c-35.89-31.59-85-49-138.37-49C223.72 48 162 71.37 116 112.11c-43.87 38.77-68 90.71-68 146.24s24.16 107.47 68 146.23c21.75 19.24 47.49 34.18 76.52 44.42a266.2 266.2 0 0 0 86.87 15h1.81c61 0 119.09-20.57 159.39-56.4c9.7-8.56 15.15-20.83 15.34-34.56c.21-14.17-5.37-27.95-14.93-36.84M112 208a32 32 0 1 1 32 32a32 32 0 0 1-32-32m40 135a32 32 0 1 1 32-32a32 32 0 0 1-32 32m40-199a32 32 0 1 1 32 32a32 32 0 0 1-32-32m64 271a48 48 0 1 1 48-48a48 48 0 0 1-48 48m72-239a32 32 0 1 1 32-32a32 32 0 0 1-32 32';
+end;
+
+procedure TColorRGBAConstNode.Execute(AContext: TNodeExecutionContext);
+begin
+  var R := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValueR), 1);
+  var G := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValueG), 1);
+  var B := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValueB), 1);
+  var A := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValueA), 1);
+
+  AContext.SetOutputValue(FValueOut, MakeColorValue(TAlphaColorF.Create(R, G, B, A).ToAlphaColor));
+end;
+
+procedure TColorRGBAConstNode.SetupPins;
+begin
+  ClearPins;
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Color, False, TPinKind.Data);
+
+  FValueR := AddInputPin('Red', TNodeValueKind.Float, False, TPinKind.Data);
+  FValueG := AddInputPin('Green', TNodeValueKind.Float, False, TPinKind.Data);
+  FValueB := AddInputPin('Blue', TNodeValueKind.Float, False, TPinKind.Data);
+  FValueA := AddInputPin('Alpha', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Red') = nil then
+  begin
+    var V := AddValue('Red', TNodeValueKind.Float);
+    V.FloatValue := 1;
+    V.Min := 0;
+    V.Max := 1;
+  end;
+
+  if FindValue('Green') = nil then
+  begin
+    var V := AddValue('Green', TNodeValueKind.Float);
+    V.FloatValue := 1;
+    V.Min := 0;
+    V.Max := 1;
+  end;
+
+  if FindValue('Blue') = nil then
+  begin
+    var V := AddValue('Blue', TNodeValueKind.Float);
+    V.FloatValue := 1;
+    V.Min := 0;
+    V.Max := 1;
+  end;
+
+  if FindValue('Alpha') = nil then
+  begin
+    var V := AddValue('Alpha', TNodeValueKind.Float);
+    V.FloatValue := 1;
+    V.Min := 0;
+    V.Max := 1;
   end;
 end;
 
@@ -635,18 +708,18 @@ end;
 procedure TBoolConstNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'bool', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Boolean, False, TPinKind.Data);
 
-  if FindValue('value') = nil then
+  if FindValue('Value') = nil then
   begin
-    var V := AddValue('value', TNodeValueKind.Boolean);
+    var V := AddValue('Value', TNodeValueKind.Boolean);
     V.BooleanValue := False;
   end;
 end;
 
 procedure TBoolConstNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := FindValue('value');
+  var V := FindValue('Value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeBoolValue(V.BooleanValue))
   else
@@ -668,18 +741,18 @@ end;
 procedure TStringConstNode.SetupPins;
 begin
   ClearPins;
-  FValueOut := AddOutputPin('Value', 'string', TPinKind.Data);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.string, False, TPinKind.Data);
 
-  if FindValue('value') = nil then
+  if FindValue('Value') = nil then
   begin
-    var V := AddValue('value', TNodeValueKind.string);
+    var V := AddValue('Value', TNodeValueKind.string);
     V.StringValue := '';
   end;
 end;
 
 procedure TStringConstNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := FindValue('value');
+  var V := FindValue('Value');
   if V <> nil then
     AContext.SetOutputValue(FValueOut, MakeStringValue(V.StringValue))
   else
@@ -701,15 +774,21 @@ end;
 procedure TSetVariableNode.SetupPins;
 begin
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FNamePin := AddInputPin('Name', 'string', TPinKind.Data);
-  FValuePin := AddInputPin('Value', 'any', TPinKind.Data);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FNamePin := AddInputPin('Name', TNodeValueKind.string, False, TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Null, True, TPinKind.Data);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+
+  if FindValue('Name') = nil then
+  begin
+    var V := AddValue('Name', TNodeValueKind.string);
+    V.StringValue := '';
+  end;
 end;
 
 procedure TSetVariableNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
+  var N := NodeValueToStringDef(AContext.GetInputValueOrVar(FNamePin), '');
   var V := AContext.GetInputValue(FValuePin);
   if N <> '' then
     AContext.SetVariable(N, V);
@@ -731,15 +810,21 @@ end;
 procedure TGetVariableNode.SetupPins;
 begin
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FNamePin := AddInputPin('Name', 'string', TPinKind.Data);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
-  FValueOut := AddOutputPin('Value', 'any', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FNamePin := AddInputPin('Name', TNodeValueKind.string, False, TPinKind.Data);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValueOut := AddOutputPin('Value', TNodeValueKind.Null, True, TPinKind.Data);
+
+  if FindValue('Name') = nil then
+  begin
+    var V := AddValue('Name', TNodeValueKind.string);
+    V.StringValue := '';
+  end;
 end;
 
 procedure TGetVariableNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var N := NodeValueToStringDef(AContext.GetInputValue(FNamePin), '');
+  var N := NodeValueToStringDef(AContext.GetInputValueOrVar(FNamePin), '');
   AContext.SetOutputValue(FValueOut, AContext.GetVariableValue(N));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -760,16 +845,28 @@ procedure TAddExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TAddExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) +
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) +
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -790,16 +887,28 @@ procedure TSubExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TSubExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) -
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) -
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -820,16 +929,28 @@ procedure TMulExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TMulExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) *
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) *
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -850,18 +971,30 @@ procedure TDivExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TDivExecNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var B := NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0);
+  var B := NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0);
   if Abs(B) < 1e-12 then
     raise ENodeExecutionError.Create('Division by zero');
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) / B
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) / B
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -883,15 +1016,27 @@ procedure TModExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'integer', TPinKind.Data);
-  FB := AddInputPin('B', 'integer', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'integer', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Integer, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Integer, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Integer, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Integer);
+    V.IntegerValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Integer);
+    V.IntegerValue := 0;
+  end;
 end;
 
 procedure TModExecNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var AInt := NodeValueToIntDef(AContext.GetInputValue(FA), 0);
-  var BInt := NodeValueToIntDef(AContext.GetInputValue(FB), 1);
+  var AInt := NodeValueToIntDef(AContext.GetInputValueOrVar(FA), 0);
+  var BInt := NodeValueToIntDef(AContext.GetInputValueOrVar(FB), 1);
   if BInt = 0 then
     raise ENodeExecutionError.Create('Modulo by zero');
   AContext.SetOutputValue(FResult, MakeIntValue(AInt mod BInt));
@@ -914,13 +1059,19 @@ procedure TPowExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FBasePin := AddInputPin('Base', 'float', TPinKind.Data);
-  FExpPin := AddInputPin('Exponent', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FBasePin := AddInputPin('Base', TNodeValueKind.Float, False, TPinKind.Data);
+  FExpPin := AddInputPin('Exponent', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
 
-  if FindValue('exponent') = nil then
+  if FindValue('Base') = nil then
   begin
-    var V := AddValue('exponent', TNodeValueKind.Float);
+    var V := AddValue('Base', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('Exponent') = nil then
+  begin
+    var V := AddValue('Exponent', TNodeValueKind.Float);
     V.FloatValue := 2;
   end;
 end;
@@ -929,8 +1080,8 @@ procedure TPowExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
       Power(
-        NodeValueToFloatDef(AContext.GetInputValue(FBasePin), 0.0),
-        NodeValueToFloatDef(AContext.GetInputValueOrVar(FExpPin, 'exponent'), 0.0)
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FBasePin), 0.0),
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FExpPin), 0.0)
       )
     ));
   AContext.SelectExecOutput(FExecOut);
@@ -951,7 +1102,7 @@ end;
 procedure TNegativeExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      -NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0)
+      -NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -960,8 +1111,14 @@ procedure TNegativeExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('-Value', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('-Value', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 { TSinExecNode }
@@ -980,14 +1137,20 @@ procedure TSinExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Radians', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Radians', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Radians') = nil then
+  begin
+    var V := AddValue('Radians', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TSinExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      Sin(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Sin(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1008,14 +1171,20 @@ procedure TCosExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Radians', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Radians', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Radians') = nil then
+  begin
+    var V := AddValue('Radians', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TCosExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      Cos(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Cos(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1036,14 +1205,20 @@ procedure TTanExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Radians', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Radians', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Radians') = nil then
+  begin
+    var V := AddValue('Radians', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TTanExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      Tan(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Tan(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1064,13 +1239,19 @@ procedure TSqrtExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TSqrtExecNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0);
   if V < 0 then
     raise ENodeExecutionError.Create('SQRT from negative number');
   AContext.SetOutputValue(FResult, MakeFloatValue(Sqrt(V)));
@@ -1094,14 +1275,20 @@ procedure TAbsExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TAbsExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeFloatValue(
-      Abs(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Abs(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1122,13 +1309,19 @@ procedure TLogExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TLogExecNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 1.0);
   if V <= 0 then
     raise ENodeExecutionError.Create('LOG10 argument must be > 0');
   AContext.SetOutputValue(FResult, MakeFloatValue(Log10(V)));
@@ -1151,13 +1344,19 @@ procedure TLnExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'float', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Float, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TLnExecNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var V := NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 1.0);
+  var V := NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 1.0);
   if V <= 0 then
     raise ENodeExecutionError.Create('LN argument must be > 0');
   AContext.SetOutputValue(FResult, MakeFloatValue(Ln(V)));
@@ -1180,14 +1379,20 @@ procedure TFloorExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'integer', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Integer, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TFloorExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeIntValue(
-      Floor(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Floor(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1209,14 +1414,20 @@ procedure TCeilExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'integer', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Integer, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TCeilExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeIntValue(
-      Ceil(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Ceil(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1238,14 +1449,20 @@ procedure TRoundExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'integer', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Integer, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TRoundExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeIntValue(
-      Round(NodeValueToFloatDef(AContext.GetInputValue(FValuePin), 0.0))
+      Round(NodeValueToFloatDef(AContext.GetInputValueOrVar(FValuePin), 0.0))
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1266,16 +1483,28 @@ procedure TGreaterNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TGreaterNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) >
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) >
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1295,8 +1524,8 @@ end;
 procedure TGreaterOrEqualNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) >=
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) >=
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1305,9 +1534,21 @@ procedure TGreaterOrEqualNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 { TLessOrEqualNode }
@@ -1325,8 +1566,8 @@ end;
 procedure TLessOrEqualNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) <=
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) <=
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1335,9 +1576,21 @@ procedure TLessOrEqualNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 { TLessNode }
@@ -1356,16 +1609,28 @@ procedure TLessNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TLessNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
-      NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0) <
-      NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0)
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0) <
+      NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0)
     ));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1386,17 +1651,29 @@ procedure TEqualNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 procedure TEqualNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
       SameValue(
-        NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0),
-        NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0),
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0),
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0),
         1e-9
       )
     ));
@@ -1419,8 +1696,8 @@ procedure TNotEqualNode.Execute(AContext: TNodeExecutionContext);
 begin
   AContext.SetOutputValue(FResult, MakeBoolValue(
       not SameValue(
-        NodeValueToFloatDef(AContext.GetInputValue(FA), 0.0),
-        NodeValueToFloatDef(AContext.GetInputValue(FB), 0.0),
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FA), 0.0),
+        NodeValueToFloatDef(AContext.GetInputValueOrVar(FB), 0.0),
         1e-9
       )
     ));
@@ -1431,9 +1708,21 @@ procedure TNotEqualNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FA := AddInputPin('A', 'float', TPinKind.Data);
-  FB := AddInputPin('B', 'float', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FA := AddInputPin('A', TNodeValueKind.Float, False, TPinKind.Data);
+  FB := AddInputPin('B', TNodeValueKind.Float, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Float);
+    V.FloatValue := 0;
+  end;
 end;
 
 { TIsPrimeFlagNode }
@@ -1451,15 +1740,21 @@ end;
 procedure TIsPrimeFlagNode.SetupPins;
 begin
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FIndexPin := AddInputPin('Index', 'integer', TPinKind.Data);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
-  FValueOut := AddOutputPin('IsPrime', 'bool', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FIndexPin := AddInputPin('Index', TNodeValueKind.Integer, False, TPinKind.Data);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+  FValueOut := AddOutputPin('IsPrime', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('Index') = nil then
+  begin
+    var V := AddValue('Index', TNodeValueKind.Integer);
+    V.IntegerValue := 0;
+  end;
 end;
 
 procedure TIsPrimeFlagNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
+  var Idx := NodeValueToIntDef(AContext.GetInputValueOrVar(FIndexPin), 0);
   var B := AContext.GetVariableBool('prime_' + IntToStr(Idx), False);
 
   AContext.SetVariable('last_prime_check_index', MakeIntValue(Idx));
@@ -1484,16 +1779,28 @@ end;
 procedure TSetPrimeFlagNode.SetupPins;
 begin
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FIndexPin := AddInputPin('Index', 'integer', TPinKind.Data);
-  FValuePin := AddInputPin('Value', 'bool', TPinKind.Data);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FIndexPin := AddInputPin('Index', TNodeValueKind.Integer, False, TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+
+  if FindValue('Index') = nil then
+  begin
+    var V := AddValue('Index', TNodeValueKind.Integer);
+    V.IntegerValue := 0;
+  end;
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Boolean);
+    V.BooleanValue := True;
+  end;
 end;
 
 procedure TSetPrimeFlagNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var Idx := NodeValueToIntDef(AContext.GetInputValue(FIndexPin), 0);
-  var B := NodeValueToBoolDef(AContext.GetInputValue(FValuePin), False);
+  var Idx := NodeValueToIntDef(AContext.GetInputValueOrVar(FIndexPin), 0);
+  var B := NodeValueToBoolDef(AContext.GetInputValueOrVar(FValuePin), False);
 
   AContext.SetVariable('last_set_prime_index', MakeIntValue(Idx));
   AContext.SetVariableBool('last_set_prime_value', B);
@@ -1517,15 +1824,21 @@ end;
 procedure TCollectPrimeNode.SetupPins;
 begin
   ClearPins;
-  FExecIn := AddInputPin('Exec', 'exec', TPinKind.Exec);
-  FPrimePin := AddInputPin('Prime', 'integer', TPinKind.Data);
-  FExecOut := AddOutputPin('Next', 'exec', TPinKind.Exec);
-  FListOut := AddOutputPin('List', 'string', TPinKind.Data);
+  FExecIn := AddInputPin('Exec', TNodeValueKind.Null, False, TPinKind.Exec);
+  FPrimePin := AddInputPin('Prime', TNodeValueKind.Integer, False, TPinKind.Data);
+  FExecOut := AddOutputPin('Next', TNodeValueKind.Null, False, TPinKind.Exec);
+  FListOut := AddOutputPin('List', TNodeValueKind.string, False, TPinKind.Data);
+
+  if FindValue('Prime') = nil then
+  begin
+    var V := AddValue('Prime', TNodeValueKind.Integer);
+    V.IntegerValue := 0;
+  end;
 end;
 
 procedure TCollectPrimeNode.Execute(AContext: TNodeExecutionContext);
 begin
-  var P := NodeValueToIntDef(AContext.GetInputValue(FPrimePin), 0);
+  var P := NodeValueToIntDef(AContext.GetInputValueOrVar(FPrimePin), 0);
   var S := AContext.GetVariableStr('primes', '');
 
   S := if S = '' then P.ToString else S + ', ' + P.ToString;
@@ -1552,7 +1865,7 @@ procedure TNotExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   var Value :=
     not
-    NodeValueToBoolDef(AContext.GetInputValue(FValuePin), False);
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FValuePin), False);
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
   AContext.SelectExecOutput(FExecOut);
 end;
@@ -1561,8 +1874,14 @@ procedure TNotExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FValuePin := AddInputPin('Value', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FValuePin := AddInputPin('Value', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('Value') = nil then
+  begin
+    var V := AddValue('Value', TNodeValueKind.Boolean);
+    V.BooleanValue := True;
+  end;
 end;
 
 { TAndExecNode }
@@ -1580,9 +1899,9 @@ end;
 procedure TAndExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   var Value :=
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     and
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False);
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False);
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
   AContext.SelectExecOutput(FExecOut);
@@ -1592,9 +1911,21 @@ procedure TAndExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 { TNotAndExecNode }
@@ -1614,9 +1945,9 @@ begin
   var Value :=
     not
     (
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     and
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False)
     );
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
@@ -1627,9 +1958,21 @@ procedure TNotAndExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 { TOrExecNode }
@@ -1647,9 +1990,9 @@ end;
 procedure TOrExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   var Value :=
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     or
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False);
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False);
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
   AContext.SelectExecOutput(FExecOut);
@@ -1659,9 +2002,21 @@ procedure TOrExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 { TNotOrExecNode }
@@ -1681,9 +2036,9 @@ begin
   var Value :=
     not
     (
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     or
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False)
     );
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
@@ -1694,9 +2049,21 @@ procedure TNotOrExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 { TXOrExecNode }
@@ -1714,9 +2081,9 @@ end;
 procedure TXOrExecNode.Execute(AContext: TNodeExecutionContext);
 begin
   var Value :=
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     xor
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False);
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False);
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
   AContext.SelectExecOutput(FExecOut);
@@ -1726,9 +2093,21 @@ procedure TXOrExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 { TXNotOrExecNode }
@@ -1749,9 +2128,9 @@ begin
   var Value :=
     not
     (
-    NodeValueToBoolDef(AContext.GetInputValue(FAPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FAPin), False)
     xor
-    NodeValueToBoolDef(AContext.GetInputValue(FBPin), False)
+    NodeValueToBoolDef(AContext.GetInputValueOrVar(FBPin), False)
     );
 
   AContext.SetOutputValue(FResult, MakeBoolValue(Value));
@@ -1762,9 +2141,21 @@ procedure TXNotOrExecNode.SetupPins;
 begin
   ClearPins;
   AddExecPins;
-  FAPin := AddInputPin('A', 'bool', TPinKind.Data);
-  FBPin := AddInputPin('B', 'bool', TPinKind.Data);
-  FResult := AddOutputPin('Result', 'bool', TPinKind.Data);
+  FAPin := AddInputPin('A', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FBPin := AddInputPin('B', TNodeValueKind.Boolean, False, TPinKind.Data);
+  FResult := AddOutputPin('Result', TNodeValueKind.Boolean, False, TPinKind.Data);
+
+  if FindValue('A') = nil then
+  begin
+    var V := AddValue('A', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
+
+  if FindValue('B') = nil then
+  begin
+    var V := AddValue('B', TNodeValueKind.Boolean);
+    V.BooleanValue := False;
+  end;
 end;
 
 procedure RegisterEngineeringNodes(ARegistry: TNodeRegistry);
@@ -1782,6 +2173,8 @@ begin
     'String constant node', 'string,text,constant', '', TStringConstNode, TAlphaColors.Null);
   ARegistry.RegisterNodeEx('colorconst', 'Color Constant', 'Variable',
     'Color constant node', 'color,constant', '', TColorConstNode, TAlphaColors.Null);
+  ARegistry.RegisterNodeEx('colorrgbaconst', 'Color RGBA Constant', 'Variable',
+    'Color rgba constant node', 'color,constant,rgba', '', TColorRGBAConstNode, TAlphaColors.Null);
 
   ARegistry.RegisterNodeEx('intrandom', 'Int Random', 'Variable',
     'Integer random node', 'int,random,number', '', TIntRandomNode, TAlphaColors.Null);

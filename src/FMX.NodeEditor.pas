@@ -444,8 +444,8 @@ type
     procedure PasteFromClipboard;
     procedure DuplicateSelection;
 
-    function AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
-    function AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddInputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
+    function AddOutputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind = TPinKind.Data): TNodePin;
     function RemovePinFromNode(APin: TNodePin): Boolean;
 
     function ValidateGraphToStrings(AStrings: TStrings): Boolean;
@@ -2655,9 +2655,9 @@ begin
   FController.DuplicateSelection(SnapWorldPoint(W));
 end;
 
-function TNodeEditor.AddInputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeEditor.AddInputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 begin
-  Result := FController.AddInputPinToNode(ANode, AName, ADataType, AKind);
+  Result := FController.AddInputPinToNode(ANode, AName, ADataType, AAny, AKind);
 
   if (Result <> nil) and Assigned(FOnNodeChanged) then
     FOnNodeChanged(Self, ANode);
@@ -2665,9 +2665,9 @@ begin
   Repaint;
 end;
 
-function TNodeEditor.AddOutputPinToNode(ANode: TCustomNode; const AName, ADataType: string; AKind: TPinKind): TNodePin;
+function TNodeEditor.AddOutputPinToNode(ANode: TCustomNode; const AName: string; ADataType: TNodeValueKind; AAny: Boolean; AKind: TPinKind): TNodePin;
 begin
-  Result := FController.AddOutputPinToNode(ANode, AName, ADataType, AKind);
+  Result := FController.AddOutputPinToNode(ANode, AName, ADataType, AAny, AKind);
 
   if (Result <> nil) and Assigned(FOnNodeChanged) then
     FOnNodeChanged(Self, ANode);
@@ -2829,14 +2829,16 @@ begin
     Form.Left := Round(EnsureRange(Position.X - Form.Width / 2, 0, Screen.Width - Form.Width));
     Form.Top := Round(EnsureRange(Position.Y - Form.Height / 2, 0, Screen.Height - Form.Height));
 
-    if Form.ShowModal = mrOk then
+    if (Form.ShowModal = mrOk) and (Form.SelectedNodeType <> '') then
     begin
-      if Form.SelectedNodeType <> '' then
-      begin
-        var N := FGraph.Registry.CreateNode(Form.SelectedNodeType, SnapWorldPoint(WorldPosition));
+      var N := FGraph.Registry.CreateNode(Form.SelectedNodeType, SnapWorldPoint(WorldPosition));
+      try
         FController.AddNode(N);
-        SelectNodeInternal(N, False);
+      except
+        N.Free;
+        raise;
       end;
+      SelectNodeInternal(N, False);
     end;
   finally
     Form.Free;

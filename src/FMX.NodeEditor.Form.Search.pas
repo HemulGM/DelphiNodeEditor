@@ -7,7 +7,7 @@ uses
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Layouts,
   FMX.ListBox, FMX.NodeEditor, System.Actions, FMX.ActnList,
   FMX.Controls.Presentation, FMX.Edit, FMX.SearchBox, FMX.NodeEditor.Graph,
-  WinUI3.Form, FMX.StdCtrls;
+  FMX.NodeEditor.Types, WinUI3.Form, FMX.StdCtrls;
 
 type
   TFormNodeEditorSearch = class(TWinUIForm)
@@ -30,6 +30,7 @@ type
     procedure DoOnSettingChange; override;
   public
     SelectedNodeType: string;
+    procedure FilterValue(PinDirection: TPinDirection; PinKind: TNodeValueKind);
     constructor CreateSearch(AOwner: TComponent; ARegistry: TNodeRegistry); reintroduce;
   end;
 
@@ -67,12 +68,28 @@ begin
   try
     ListBoxItems.Items.Clear;
 
+    var CurCategory := '';
     for var Item in FRegistry do
     begin
+      if CurCategory <> Item.Category then
+      begin
+        var Header := TListBoxGroupHeader.Create(ListBoxItems);
+        Header.Text := Item.Category;
+        ListBoxItems.AddObject(Header);
+        CurCategory := Item.Category;
+      end;
       var ListItem := TListBoxItem.Create(ListBoxItems);
       ListItem.TagString := Item.NodeType;
-      ListItem.Text := Item.Caption + ' [' + Item.NodeType + ']';
+      //ListItem.Text := Item.Caption + ' [' + Item.NodeType + ']';
       ListItem.ItemData.Detail := Item.Description;
+
+      ListItem.StyleLookup := 'listboxitemstyle_nodedetail';
+      ListItem.Text := Item.Caption;
+      ListItem.StylesData['background.Fill.Color'] := ChangeAlpha(Item.Color, $64);
+      ListItem.StylesData['background.Stroke.Color'] := Item.Color;
+      ListItem.StylesData['icon_bg.Fill.Color'] := Item.Color;
+      ListItem.StylesData['path.Data.Data'] := Item.IconPath;
+
       ListBoxItems.AddObject(ListItem);
     end;
 
@@ -81,6 +98,11 @@ begin
   finally
     ListBoxItems.Items.EndUpdate;
   end;
+end;
+
+procedure TFormNodeEditorSearch.FilterValue(PinDirection: TPinDirection; PinKind: TNodeValueKind);
+begin
+
 end;
 
 procedure TFormNodeEditorSearch.FormShow(Sender: TObject);

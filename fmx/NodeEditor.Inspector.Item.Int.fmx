@@ -1,5 +1,5 @@
 inherited FrameInspectorItemInt: TFrameInspectorItemInt
-  inherited LayoutDesc: TLayout [0]
+  inherited LayoutDesc: TLayout
     inherited PathLabelIcon: TPathLabel
       Data.Path = {
         3700000000000000000080400000884101000000000080400000104101000000
@@ -25,7 +25,7 @@ inherited FrameInspectorItemInt: TFrameInspectorItemInt
         010000000000204100007041030000000000604100007041}
     end
   end
-  inherited LayoutControl: TLayout [1]
+  inherited LayoutControl: TLayout
     Padding.Left = 4.000000000000000000
     Padding.Top = 4.000000000000000000
     Padding.Bottom = 4.000000000000000000
@@ -41,7 +41,5 @@ inherited FrameInspectorItemInt: TFrameInspectorItemInt
       Size.PlatformDefault = False
       OnChangeTracking = SpinBoxValueChangeTracking
     end
-  end
-  inherited PanelBG: TPanel [2]
   end
 end

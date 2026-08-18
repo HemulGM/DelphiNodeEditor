@@ -1,5 +1,5 @@
 inherited FrameInspectorItemText: TFrameInspectorItemText
-  inherited LayoutDesc: TLayout [0]
+  inherited LayoutDesc: TLayout
     inherited PathLabelIcon: TPathLabel
       Data.Path = {
         37000000000000000000C0400000304102000000A258E3400000304102000000
@@ -25,7 +25,7 @@ inherited FrameInspectorItemText: TFrameInspectorItemText
         010000000000404100005041030000000000404100007041}
     end
   end
-  inherited LayoutControl: TLayout [1]
+  inherited LayoutControl: TLayout
     Padding.Left = 4.000000000000000000
     Padding.Top = 4.000000000000000000
     Padding.Bottom = 4.000000000000000000
@@ -38,7 +38,5 @@ inherited FrameInspectorItemText: TFrameInspectorItemText
       Size.PlatformDefault = False
       OnChangeTracking = EditValueChangeTracking
     end
-  end
-  inherited PanelBG: TPanel [2]
   end
 end

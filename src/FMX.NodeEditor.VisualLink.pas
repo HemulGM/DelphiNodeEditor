@@ -10,6 +10,8 @@ type
   TLinkVisualObjectClass = class of TLinkVisualObject;
 
   TLinkVisualObject = class
+    class var
+      DrawShadow: Boolean;
   protected
     class function DistancePointToSegment(const P, A, B: TPointF): Single; inline; static;
     class function LineIntersectsRectF(const P1, P2: TPointF; const R: TRectF): Boolean; inline; static;
@@ -100,7 +102,25 @@ begin
     CachePathObject.LineTo(Cur);
     Prev := Cur;
   end;
-  Canvas.DrawPath(CachePathObject, Opacity);
+
+  if DrawShadow then
+  begin
+    var Old := TStrokeBrush.Create(TBrushKind.Solid, TAlphaColors.Null);
+    try
+      Old.Assign(Canvas.Stroke);
+      Canvas.Stroke.Thickness := Canvas.Stroke.Thickness * 1.5;
+      Canvas.Stroke.Kind := TBrushKind.Solid;
+      Canvas.Stroke.Color := $33000000;
+      Canvas.DrawPath(CachePathObject, Opacity);
+
+      Canvas.Stroke.Assign(Old);
+      Canvas.DrawPath(CachePathObject, Opacity);
+    finally
+      Old.Free;
+    end;
+  end
+  else
+    Canvas.DrawPath(CachePathObject, Opacity);
 
   // analogue
   {
@@ -211,7 +231,25 @@ begin
   CachePathObject.LineTo(P1);
   CachePathObject.LineTo(P2);
   CachePathObject.LineTo(P3);
-  Canvas.DrawPath(CachePathObject, Opacity);
+
+  if DrawShadow then
+  begin
+    var Old := TStrokeBrush.Create(TBrushKind.Solid, TAlphaColors.Null);
+    try
+      Old.Assign(Canvas.Stroke);
+      Canvas.Stroke.Thickness := Canvas.Stroke.Thickness * 1.5;
+      Canvas.Stroke.Kind := TBrushKind.Solid;
+      Canvas.Stroke.Color := $33000000;
+      Canvas.DrawPath(CachePathObject, Opacity);
+
+      Canvas.Stroke.Assign(Old);
+      Canvas.DrawPath(CachePathObject, Opacity);
+    finally
+      Old.Free;
+    end;
+  end
+  else
+    Canvas.DrawPath(CachePathObject, Opacity);
 end;
 
 class procedure TLinkVisualPolyLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
@@ -285,7 +323,25 @@ begin
   CachePathObject.LineTo(P1);
   CachePathObject.LineTo(P2);
   CachePathObject.LineTo(P3);
-  Canvas.DrawPath(CachePathObject, Opacity);
+
+  if DrawShadow then
+  begin
+    var Old := TStrokeBrush.Create(TBrushKind.Solid, TAlphaColors.Null);
+    try
+      Old.Assign(Canvas.Stroke);
+      Canvas.Stroke.Thickness := Canvas.Stroke.Thickness * 1.5;
+      Canvas.Stroke.Kind := TBrushKind.Solid;
+      Canvas.Stroke.Color := $33000000;
+      Canvas.DrawPath(CachePathObject, Opacity);
+
+      Canvas.Stroke.Assign(Old);
+      Canvas.DrawPath(CachePathObject, Opacity);
+    finally
+      Old.Free;
+    end;
+  end
+  else
+    Canvas.DrawPath(CachePathObject, Opacity);
 end;
 
 class procedure TLinkVisualRect.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
@@ -442,6 +498,25 @@ end;
 class procedure TLinkVisualLine.DrawLink(Canvas: TCanvas; const P0, P1, P2, P3: TPointF; Opacity: Single);
 begin
   Canvas.DrawLine(P0, P3, Opacity);
+
+  if DrawShadow then
+  begin
+    var Old := TStrokeBrush.Create(TBrushKind.Solid, TAlphaColors.Null);
+    try
+      Old.Assign(Canvas.Stroke);
+      Canvas.Stroke.Thickness := Canvas.Stroke.Thickness * 1.5;
+      Canvas.Stroke.Kind := TBrushKind.Solid;
+      Canvas.Stroke.Color := $33000000;
+      Canvas.DrawLine(P0, P3, Opacity);
+
+      Canvas.Stroke.Assign(Old);
+      Canvas.DrawLine(P0, P3, Opacity);
+    finally
+      Old.Free;
+    end;
+  end
+  else
+    Canvas.DrawLine(P0, P3, Opacity);
 end;
 
 class procedure TLinkVisualLine.GetLinkWorldPoints(Zoom: Double; const PFrom, PTo: TPointF; out P0, P1, P2, P3: TPointF; RTL: Boolean);
@@ -486,6 +561,9 @@ begin
   if LineIntersectsRectF(P0, P3, R) then
     Exit(True);
 end;
+
+initialization
+  TLinkVisualObject.DrawShadow := True;
 
 end.
 

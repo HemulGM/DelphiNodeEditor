@@ -1,5 +1,5 @@
 inherited FrameInspectorItemFloat: TFrameInspectorItemFloat
-  inherited LayoutDesc: TLayout [0]
+  inherited LayoutDesc: TLayout
     inherited PathLabelIcon: TPathLabel
       Data.Path = {
         4B0000000000000000508A430000C0430100000000508A43F087AD4302000000
@@ -33,7 +33,7 @@ inherited FrameInspectorItemFloat: TFrameInspectorItemFloat
         C0AA6E43A02AAB43}
     end
   end
-  inherited LayoutControl: TLayout [1]
+  inherited LayoutControl: TLayout
     Padding.Left = 4.000000000000000000
     Padding.Top = 4.000000000000000000
     Padding.Bottom = 4.000000000000000000
@@ -47,12 +47,15 @@ inherited FrameInspectorItemFloat: TFrameInspectorItemFloat
       ValueType = Float
       Increment = 0.050000000745058060
       KeyboardType = NumbersAndPunctuation
+      PopupMenu = PopupMenu1
       Size.Width = 126.000000000000000000
       Size.Height = 32.000000000000000000
       Size.PlatformDefault = False
       OnChangeTracking = SpinBoxValueChangeTracking
     end
   end
-  inherited PanelBG: TPanel [2]
+  object PopupMenu1: TPopupMenu
+    Left = 152
+    Top = 8
   end
 end

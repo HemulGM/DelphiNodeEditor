@@ -151,8 +151,8 @@ end;
 procedure TRerouteExecNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('', 'any', TPinKind.Exec, Height div 2);
-  AddInputPin('', 'any', TPinKind.Exec, Height div 2);
+  AddOutputPin('', TNodeValueKind.Null, True, TPinKind.Exec);
+  AddInputPin('', TNodeValueKind.Null, True, TPinKind.Exec);
 
   if InputCount > 0 then
     GetInput(0).AllowMultipleConnections := False;
@@ -279,8 +279,8 @@ end;
 procedure TRerouteDataNode.SetupPins;
 begin
   ClearPins;
-  AddOutputPin('', 'any', TPinKind.Data, Height div 2);
-  AddInputPin('', 'any', TPinKind.Data, Height div 2);
+  AddOutputPin('', TNodeValueKind.Null, True, TPinKind.Data);
+  AddInputPin('', TNodeValueKind.Null, True, TPinKind.Data);
 
   if InputCount > 0 then
     GetInput(0).AllowMultipleConnections := False;

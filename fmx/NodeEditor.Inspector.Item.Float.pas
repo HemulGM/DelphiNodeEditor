@@ -6,11 +6,12 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Graphics, FMX.Controls, FMX.Forms, FMX.Dialogs, FMX.StdCtrls,
   NodeEditor.Inspector.Item, FMX.Controls.Presentation, FMX.Layouts, FMX.Edit,
-  FMX.EditBox, FMX.SpinBox, System.Rtti;
+  FMX.EditBox, FMX.SpinBox, System.Rtti, FMX.Edit.Style.New, FMX.Menus;
 
 type
   TFrameInspectorItemFloat = class(TFrameInspectorItem)
     SpinBoxValue: TSpinBox;
+    PopupMenu1: TPopupMenu;
     procedure SpinBoxValueChangeTracking(Sender: TObject);
   protected
     function GetValue: TValue; override;
