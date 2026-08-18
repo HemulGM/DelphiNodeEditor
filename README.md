@@ -27,6 +27,10 @@ Perfect for creating visual scripting tools, shader editors, game logic editors,
 - **Execute/Debug** system
 - **Highly extensible** — easy to register your own node classes
 - **Cross-platform** (Delphi, FMX)
+- **Graphic nodes** (transforming, transition, distortion, composite)
+- **Math nodes** (base, geometry)
+- **Logic nodes** (comparers, logic math)
+- **Flow nodes** (loops, sequences, switch)
 
 ---
 
