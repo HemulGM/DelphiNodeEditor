@@ -146,7 +146,7 @@ object FormMain: TFormMain
               Size.Width = 156.000000000000000000
               Size.Height = 40.000000000000000000
               Size.PlatformDefault = False
-              StyleLookup = 'Transform'
+              StyleLookup = 'labelstyle_bodystrong'
               Text = 'Transform'
               TabOrder = 1
             end
@@ -356,6 +356,7 @@ object FormMain: TFormMain
               Size.Height = 40.000000000000000000
               Size.PlatformDefault = False
               StyleLookup = 'labelstyle_bodystrong'
+              TextSettings.WordWrap = False
               Text = 'Node'
               TabOrder = 1
             end
